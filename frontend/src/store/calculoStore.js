@@ -66,7 +66,7 @@ const dadosIniciais = {
   observacoes: '',
 
   // Histórico salarial (múltiplos históricos com múltiplas rubricas)
-  historicosSalariais: [], // [{ id, titulo, tipo: 'reclamante'|'paradigma', entradas: [{ competencia, rubrica, valor }] }]
+  historicosSalariais: [], // [{ id, titulo, entradas: [{ inicio, fim, rubrica, valor }] }]
 
   // Verbas excluídas
   verbasExcluidas: [],
