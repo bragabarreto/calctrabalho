@@ -144,8 +144,7 @@ export default function DadosContrato() {
         </button>
         {mostrarHistorico && (
           <div className="px-6 pb-6 space-y-4">
-            <HistoricoSalarial tipo="reclamante" titulo="Histórico — Reclamante" />
-            <HistoricoSalarial tipo="paradigma" titulo="Histórico — Paradigma (equiparação salarial)" />
+            <HistoricoSalarial />
           </div>
         )}
       </div>

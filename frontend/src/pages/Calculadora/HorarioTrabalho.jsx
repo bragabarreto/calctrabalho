@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Calendar, Clock } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
-import { useSimular, useSimularMultiplo } from '../../hooks/useCalculo.js';
 import { useMutation } from '@tanstack/react-query';
 
 const CAMPOS_PERCENTUAL = new Set(['adicionalHoraExtra', 'adicionalHoraNoturna']);
@@ -28,9 +27,7 @@ async function calcularCartaoPonto(payload) {
 }
 
 export default function HorarioTrabalho() {
-  const { dados, setDados, setStep, setResultado, setResultadosTriplos, setCarregando, setErro, tipoFluxo } = useCalculoStore();
-  const { mutateAsync: simular } = useSimular();
-  const { mutateAsync: simularMultiplo } = useSimularMultiplo();
+  const { dados, setDados, setStep, tipoFluxo } = useCalculoStore();
   const { mutateAsync: calcularPonto, isPending: calculandoPonto } = useMutation({ mutationFn: calcularCartaoPonto });
 
   // Modo de apuração de horas extras
@@ -107,31 +104,13 @@ export default function HorarioTrabalho() {
     }
   }
 
-  async function calcular() {
-    // Salva o modo e dados da jornada no store antes de calcular
+  function proximoStep() {
     setDados({
       modoHorasExtras: modoHE,
       jornadaDefinida: modoHE === 'jornada_definida' ? jornada : null,
       periodoAfastamento: afastamentos,
     });
-    setCarregando(true);
-    setErro(null);
-    try {
-      if (tipoFluxo === 'verbas_rescisórias' || tipoFluxo === 'verbas_e_parcelas') {
-        const resultados = await simularMultiplo({ dados });
-        setResultadosTriplos(resultados);
-        setStep(7);
-      } else {
-        const resultado = await simular({ dados, modalidade: dados.modalidade || 'sem_justa_causa' });
-        setResultado(resultado);
-        setStep(7);
-      }
-    } catch (e) {
-      setErro(e.message);
-      alert('Erro ao calcular: ' + e.message);
-    } finally {
-      setCarregando(false);
-    }
+    setStep(7);
   }
 
   const pctHE = ((dados.adicionalHoraExtra || 0.5) * 100).toFixed(0);
@@ -333,7 +312,7 @@ export default function HorarioTrabalho() {
           onClick={() => setStep(7)}>
           Pular (sem jornada extra) →
         </button>
-        <button type="button" className="btn-primario" onClick={calcular}>
+        <button type="button" className="btn-primario" onClick={proximoStep}>
           Calcular Verbas →
         </button>
       </div>

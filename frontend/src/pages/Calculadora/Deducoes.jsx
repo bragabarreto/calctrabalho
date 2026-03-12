@@ -175,7 +175,7 @@ export default function Deducoes() {
 
       <div className="flex justify-between">
         <button type="button" className="btn-secundario"
-          onClick={() => setStep(tipoFluxo === 'apenas_parcelas' ? 5 : 6)}>
+          onClick={() => setStep(tipoFluxo === 'apenas_parcelas' ? 5 : tipoFluxo === 'verbas_rescisórias' ? 3 : 6)}>
           ← Anterior
         </button>
         <button type="button" className="btn-primario" onClick={salvarEAvancar}>

@@ -42,7 +42,7 @@ export default function Resultado() {
     return (
       <div className="text-center py-12">
         <p className="text-gray-500">Nenhum resultado disponível. Volte e calcule.</p>
-        <button className="btn-primario mt-4" onClick={() => setStep(4)}>← Voltar</button>
+        <button className="btn-primario mt-4" onClick={() => setStep(8)}>← Voltar</button>
       </div>
     );
   }

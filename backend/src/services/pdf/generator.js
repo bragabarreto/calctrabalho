@@ -79,10 +79,21 @@ async function gerarPDF(simulacao, verbas) {
   const subtotal = verbasFormatadas.reduce((a, v) => a + v.valor, 0);
   const fgtsDepositado = parseFloat(simulacao.fgts_depositado) || 0;
   const valorPago = parseFloat(simulacao.valor_pago) || 0;
-  const total = Math.max(0, subtotal - fgtsDepositado - valorPago);
+
+  // Usa total_liquido salvo no banco; caso não exista (simulações antigas), recalcula
+  const total = parseFloat(simulacao.total_liquido) || Math.max(0, subtotal - fgtsDepositado - valorPago);
+
   const pctHonorarios = parseFloat(simulacao.percentual_honorarios) || 0;
-  const honorarios = total * pctHonorarios;
-  const totalComHonorarios = total + honorarios;
+
+  // Usa valores persistidos no banco (Migration 007); cai de volta ao cálculo local para dados antigos
+  const honorarios        = parseFloat(simulacao.honorarios_valor)              || total * pctHonorarios;
+  const honorariosPericiais = parseFloat(simulacao.honorarios_periciais_calculado) || 0;
+  const custas            = parseFloat(simulacao.custas_valor)                  || 0;
+  const totalComHonorarios = parseFloat(simulacao.total_com_honorarios)
+                             || Math.max(0, total + honorarios + honorariosPericiais + custas);
+  const juros             = parseFloat(simulacao.juros_selic_valor)             || 0;
+  const totalDevidoReclamado = parseFloat(simulacao.total_devido_reclamado)
+                               || totalComHonorarios + juros;
 
   const dados = {
     nome: simulacao.nome,
@@ -109,7 +120,14 @@ async function gerarPDF(simulacao, verbas) {
     honorarios: honorarios > 0,
     honorariosFmt: formatBRL(honorarios),
     pctHonorarios: (pctHonorarios * 100).toFixed(0),
+    honorariosPericiais: honorariosPericiais > 0,
+    honorariosPericiaisFmt: formatBRL(honorariosPericiais),
+    custas: custas > 0,
+    custasFmt: formatBRL(custas),
     totalComHonorarios: formatBRL(totalComHonorarios),
+    juros: juros > 0,
+    jurosFmt: formatBRL(juros),
+    totalDevidoReclamado: formatBRL(totalDevidoReclamado),
   };
 
   const html = renderTemplate(template, dados);

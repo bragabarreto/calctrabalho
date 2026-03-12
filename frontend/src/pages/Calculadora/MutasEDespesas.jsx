@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Scale } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
+import { useSimular, useSimularMultiplo } from '../../hooks/useCalculo.js';
 
 // Verbas disponíveis como base da multa art. 467
 const VERBAS_467 = [
@@ -17,7 +18,9 @@ const VERBAS_467 = [
 ];
 
 export default function MutasEDespesas() {
-  const { dados, setDados, setStep, tipoFluxo } = useCalculoStore();
+  const { dados, setDados, setStep, tipoFluxo, setResultado, setResultadosTriplos, setCarregando, setErro } = useCalculoStore();
+  const { mutateAsync: simular } = useSimular();
+  const { mutateAsync: simularMultiplo } = useSimularMultiplo();
 
   // Honorários advocatícios
   const [pctHonorarios, setPctHonorarios] = useState(
@@ -56,7 +59,8 @@ export default function MutasEDespesas() {
     );
   }
 
-  function salvarEAvancar() {
+  async function salvarEAvancar() {
+    // Salva no store primeiro
     setDados({
       percentualHonorarios: Number(pctHonorarios) / 100,
       aplicarHonorariosPericiais: aplicarPericiais,
@@ -68,7 +72,39 @@ export default function MutasEDespesas() {
       multasProcessuaisPercentual: aplicarMultasProcessuais && tipoMultaProc === 'percentual' ? Number(pctMultaProc) / 100 : 0,
       multasProcessuaisBase: baseMultaProc,
     });
-    setStep(9); // Resultado
+
+    // Chama a API DEPOIS de salvar os dados no store.
+    // Monta dadosFinais diretamente pois o store não atualiza de forma síncrona.
+    const dadosFinais = {
+      ...dados,
+      percentualHonorarios: Number(pctHonorarios) / 100,
+      aplicarHonorariosPericiais: aplicarPericiais,
+      honorariosPericiaisValor: aplicarPericiais ? Number(valorPericiais) || 0 : 0,
+      aplicarCustas,
+      aplicarMulta467: aplicar467,
+      multa467BaseVerbas: aplicar467 ? base467 : [],
+      multasProcessuaisValor: aplicarMultasProcessuais && tipoMultaProc === 'fixo' ? Number(valorMultaProc) || 0 : 0,
+      multasProcessuaisPercentual: aplicarMultasProcessuais && tipoMultaProc === 'percentual' ? Number(pctMultaProc) / 100 : 0,
+      multasProcessuaisBase: baseMultaProc,
+    };
+
+    setCarregando(true);
+    setErro(null);
+    try {
+      if (tipoFluxo === 'verbas_rescisórias' || tipoFluxo === 'verbas_e_parcelas') {
+        const resultados = await simularMultiplo({ dados: dadosFinais });
+        setResultadosTriplos(resultados);
+      } else {
+        const resultado = await simular({ dados: dadosFinais, modalidade: dados.modalidade || 'sem_justa_causa' });
+        setResultado(resultado);
+      }
+      setStep(9);
+    } catch (e) {
+      setErro(e.message);
+      alert('Erro ao calcular: ' + e.message);
+    } finally {
+      setCarregando(false);
+    }
   }
 
   return (
@@ -204,6 +240,18 @@ export default function MutasEDespesas() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Nota para fluxo apenas_parcelas */}
+      {!temVerbaRescisoria && (
+        <div className="card p-6 mb-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" />
+            <p className="text-sm text-amber-700">
+              Multas rescisórias (art. 467 e 477) não se aplicam ao cálculo de apenas parcelas.
+            </p>
+          </div>
         </div>
       )}
 

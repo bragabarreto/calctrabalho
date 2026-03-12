@@ -19,8 +19,9 @@ export default function Verbas() {
   }
 
   function proximaEtapa() {
-    // Step 4 = Parcelas personalizadas OU Adicionais (ambos são step 4 no index)
-    setStep(4);
+    // verbas_rescisórias: pula Adicionais e Jornada → vai direto para Deduções (7)
+    // verbas_e_parcelas: vai para Adicionais (4)
+    setStep(tipoFluxo === 'verbas_rescisórias' ? 7 : 4);
   }
 
   return (

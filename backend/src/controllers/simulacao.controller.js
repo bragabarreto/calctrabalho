@@ -25,10 +25,14 @@ async function criar(req, res, next) {
         adicional_hora_noturna, qtde_horas_noturnas_mensais,
         adicional_insalubridade_percentual, adicional_periculosidade_percentual,
         fgts_depositado, valor_pago, percentual_honorarios,
-        meses_afastamento, verbas_excluidas, numero_processo, vara_numero, observacoes, tags
+        meses_afastamento, verbas_excluidas, numero_processo, vara_numero, observacoes, tags,
+        aplicar_honorarios_periciais, honorarios_periciais_valor, aplicar_custas,
+        total_liquido, honorarios_valor, honorarios_periciais_calculado, custas_valor,
+        total_com_honorarios, juros_selic_valor, total_devido_reclamado
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35
+        $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,
+        $36,$37,$38,$39,$40,$41,$42,$43,$44,$45
       )`,
       [
         id, nome, descricao || null, modalidade,
@@ -44,7 +48,18 @@ async function criar(req, res, next) {
         dados.adicionalInsalubridadePercentual || 0, dados.adicionalPericulosidadePercentual || 0,
         dados.fgtsDepositado || 0, dados.valorPago || 0, dados.percentualHonorarios || 0.15,
         dados.mesesAfastamento || 0, dados.verbasExcluidas || [],
-        numeroProcesso || null, varaNome || null, observacoes || null, tags || []
+        numeroProcesso || null, varaNome || null, observacoes || null, tags || [],
+        // Campos de despesas e totais — persistidos para geração correta do PDF
+        dados.aplicarHonorariosPericiais || false,
+        dados.honorariosPericiaisValor || 0,
+        dados.aplicarCustas || false,
+        resultado.total || 0,
+        resultado.honorarios || 0,
+        resultado.honorariosPericiais || 0,
+        resultado.custas || 0,
+        resultado.totalComHonorarios || 0,
+        resultado.juros?.valor || 0,
+        resultado.totalComHonorarios + (resultado.juros?.valor || 0),
       ]
     );
 

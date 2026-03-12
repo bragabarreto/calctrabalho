@@ -16,15 +16,15 @@ import ResultadoTriplo from './ResultadoTriplo.jsx';
  *   1 = DadosContrato
  *   2 = TipoCalculo
  *   3 = Verbas/Férias/13o       (verbas_rescisórias, verbas_e_parcelas)
- *   4 = Adicionais              (verbas_rescisórias, verbas_e_parcelas)
+ *   4 = Adicionais              (verbas_e_parcelas apenas)
  *   5 = Parcelas                (verbas_e_parcelas, apenas_parcelas)
- *   6 = Jornada/HE             (verbas_rescisórias, verbas_e_parcelas)
+ *   6 = Jornada/HE             (verbas_e_parcelas apenas)
  *   7 = Deduções               (todos os fluxos)
  *   8 = Multas e Despesas      (todos os fluxos)
  *   9 = Resultado              (todos os fluxos)
  *
  * Navegação por fluxo:
- *   verbas_rescisórias:  1→2→3→4→6→7→8→9
+ *   verbas_rescisórias:  1→2→3→7→8→9  (sem Adicionais nem Jornada)
  *   verbas_e_parcelas:   1→2→3→4→5→6→7→8→9
  *   apenas_parcelas:     1→2→5→7→8→9
  */
@@ -34,8 +34,6 @@ const STEPS_POR_FLUXO = {
     { num: 1, label: 'Contrato' },
     { num: 2, label: 'Tipo' },
     { num: 3, label: 'Verbas' },
-    { num: 4, label: 'Adicionais' },
-    { num: 6, label: 'Jornada' },
     { num: 7, label: 'Deduções' },
     { num: 8, label: 'Despesas' },
     { num: 9, label: 'Resultado' },
