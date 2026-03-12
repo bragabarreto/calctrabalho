@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCalculoStore } from '../../store/calculoStore.js';
+import HistoricoSalarial from './HistoricoSalarial.jsx';
 
 const MODALIDADES = [
   { value: 'sem_justa_causa', label: 'Dispensa sem Justa Causa' },
@@ -11,6 +12,7 @@ const MODALIDADES = [
 
 export default function DadosContrato() {
   const { dados, setDados, setStep } = useCalculoStore();
+  const [mostrarHistorico, setMostrarHistorico] = useState(false);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -125,6 +127,27 @@ export default function DadosContrato() {
             <input type="text" name="numeroProcesso" value={dados.numeroProcesso} onChange={handleChange} className="campo-input" placeholder="0001234-56.2026.5.02.0001" />
           </div>
         </div>
+      </div>
+
+      {/* Histórico Salarial (colapsível) */}
+      <div className="card mb-4">
+        <button
+          type="button"
+          onClick={() => setMostrarHistorico(!mostrarHistorico)}
+          className="w-full flex items-center justify-between p-6 text-left"
+        >
+          <div>
+            <h3 className="font-titulo text-lg text-primaria">Histórico Salarial (opcional)</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Registre evolução salarial para análise comparativa</p>
+          </div>
+          <span className="text-gray-400 text-lg">{mostrarHistorico ? '▲' : '▼'}</span>
+        </button>
+        {mostrarHistorico && (
+          <div className="px-6 pb-6 space-y-4">
+            <HistoricoSalarial tipo="reclamante" titulo="Histórico — Reclamante" />
+            <HistoricoSalarial tipo="paradigma" titulo="Histórico — Paradigma (equiparação salarial)" />
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end">

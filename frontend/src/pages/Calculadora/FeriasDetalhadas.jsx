@@ -149,29 +149,44 @@ export default function FeriasDetalhadas() {
 
               {/* Campos extras para "gozadas" */}
               {ehGozadas && !ehProporcional && (
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-gray-100">
-                  <div>
-                    <label className="campo-label">Data de Início do Gozo</label>
-                    <input
-                      type="date"
-                      value={p.dataGozo || ''}
-                      onChange={(e) => atualizar(idx, 'dataGozo', e.target.value)}
-                      className="campo-input"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Se após o fim do período concessivo, será dobro.</p>
-                  </div>
-                  <div>
-                    <label className="campo-label">Dias Efetivamente Gozados</label>
-                    <input
-                      type="number"
-                      value={p.diasGozados || ''}
-                      onChange={(e) => atualizar(idx, 'diasGozados', Number(e.target.value) || null)}
-                      className="campo-input"
-                      min="0"
-                      max="30"
-                      placeholder="30 (período integral)"
-                    />
-                    <p className="text-xs text-gray-400 mt-1">Deixe em branco para 30 dias completos.</p>
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded px-3 py-2 mb-3">
+                    <strong>Gozo presumido:</strong> Se as datas de gozo não forem preenchidas, o sistema presume que as férias foram integralmente gozadas (30 dias) — nenhuma indenização é devida por este período.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="campo-label">Data de Início do Gozo</label>
+                      <input
+                        type="date"
+                        value={p.dataGozo || ''}
+                        onChange={(e) => atualizar(idx, 'dataGozo', e.target.value)}
+                        className="campo-input"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Se após o concessivo → dobro.</p>
+                    </div>
+                    <div>
+                      <label className="campo-label">Data de Fim do Gozo</label>
+                      <input
+                        type="date"
+                        value={p.dataGozoFim || ''}
+                        onChange={(e) => atualizar(idx, 'dataGozoFim', e.target.value)}
+                        className="campo-input"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Opcional — calcula dias automaticamente.</p>
+                    </div>
+                    <div>
+                      <label className="campo-label">Dias Efetivamente Gozados</label>
+                      <input
+                        type="number"
+                        value={p.diasGozados || ''}
+                        onChange={(e) => atualizar(idx, 'diasGozados', Number(e.target.value) || null)}
+                        className="campo-input"
+                        min="0"
+                        max="30"
+                        placeholder="30 (integral)"
+                      />
+                      <p className="text-xs text-gray-400 mt-1">Se em branco → 30 dias.</p>
+                    </div>
                   </div>
                 </div>
               )}

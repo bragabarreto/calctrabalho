@@ -66,7 +66,8 @@ const dadosIniciais = {
   observacoes: '',
 
   // Histórico salarial
-  historicoSalarial: [], // [{ data: 'YYYY-MM', valor: 0 }]
+  historicoSalarial: [],          // [{ competencia: 'YYYY-MM', salario: 0, observacao: '' }]
+  historicoSalarialParadigma: [], // histórico do paradigma (equiparação salarial)
 
   // Verbas excluídas
   verbasExcluidas: [],
