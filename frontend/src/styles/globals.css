@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cor-primaria: #1a3a5c;
+  --cor-primaria-hover: #0f2540;
+  --cor-secundaria: #c8a96e;
+  --cor-acento: #2d6a4f;
+  --fundo-pagina: #f4f1eb;
+  --fundo-card: #ffffff;
+  --fundo-sidebar: #1a3a5c;
+  --texto-primario: #1a1a2e;
+  --texto-secundario: #4a5568;
+  --texto-monetario: #1a3a5c;
+  --cor-positivo: #2d6a4f;
+  --cor-negativo: #c53030;
+  --cor-neutro: #718096;
+  --cor-aviso: #c8a96e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Source Sans Pro', sans-serif;
+  background-color: var(--fundo-pagina);
+  color: var(--texto-primario);
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Playfair Display', serif;
+}
+
+.valor-monetario {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--texto-monetario);
+}
+
+/* Tabela de memória de cálculo */
+.tabela-memoria {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.tabela-memoria th {
+  background-color: var(--cor-primaria);
+  color: white;
+  padding: 10px 12px;
+  text-align: left;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tabela-memoria td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.tabela-memoria tr:hover td {
+  background-color: #f0f4f8;
+}
+
+.tabela-memoria tr.subtotal td {
+  font-weight: 600;
+  background-color: #e8ecf0;
+  border-top: 2px solid var(--cor-primaria);
+}
+
+.tabela-memoria tr.total-final td {
+  font-weight: 700;
+  background-color: var(--cor-primaria);
+  color: white;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.tabela-memoria tr.deducao td {
+  color: var(--cor-negativo);
+}
+
+/* Botões */
+.btn-primario {
+  background-color: var(--cor-primaria);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primario:hover {
+  background-color: var(--cor-primaria-hover);
+}
+
+.btn-secundario {
+  background-color: transparent;
+  color: var(--cor-primaria);
+  border: 2px solid var(--cor-primaria);
+  padding: 8px 18px;
+  border-radius: 4px;
+  font-family: 'Source Sans Pro', sans-serif;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secundario:hover {
+  background-color: var(--cor-primaria);
+  color: white;
+}
+
+/* Cards */
+.card {
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Sidebar */
+.sidebar {
+  background-color: var(--cor-primaria);
+  color: white;
+  min-height: 100vh;
+  width: 240px;
+  flex-shrink: 0;
+}
+
+/* Formulário */
+.campo-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.campo-input {
+  width: 100%;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  font-family: 'Source Sans Pro', sans-serif;
+  transition: border-color 0.2s;
+}
+
+.campo-input:focus {
+  outline: none;
+  border-color: var(--cor-primaria);
+  box-shadow: 0 0 0 3px rgba(26, 58, 92, 0.1);
+}
+
+/* Step indicator */
+.step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border: 2px solid #cbd5e0;
+  color: #718096;
+}
+
+.step-dot.ativo {
+  background-color: var(--cor-primaria);
+  border-color: var(--cor-primaria);
+  color: white;
+}
+
+.step-dot.concluido {
+  background-color: var(--cor-acento);
+  border-color: var(--cor-acento);
+  color: white;
+}
+
+/* Avisos judiciais */
+.aviso-judicial {
+  background-color: #fff8e6;
+  border-left: 4px solid var(--cor-aviso);
+  padding: 12px 16px;
+  border-radius: 0 4px 4px 0;
+  font-size: 0.85rem;
+  color: #744210;
+}
+
+/* Comparação */
+.tabela-comparacao td.maior {
+  background-color: #f0fff4;
+  color: var(--cor-acento);
+  font-weight: 600;
+}
+
+.tabela-comparacao td.menor {
+  background-color: #fff5f5;
+  color: var(--cor-negativo);
+}
+
+/* Print / PDF */
+@media print {
+  .sidebar, .btn-primario, .btn-secundario, .no-print {
+    display: none !important;
+  }
+}

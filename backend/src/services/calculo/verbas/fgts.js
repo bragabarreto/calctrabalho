@@ -1,0 +1,60 @@
+'use strict';
+
+const { round2, nonNegative } = require('../../../utils/formatacao');
+const { FGTS_ALIQUOTA, MULTA_FGTS_SJC, MULTA_FGTS_RECIPROCA } = require('../../../config/constants');
+
+/**
+ * FGTS — período imprescrito (com aviso projetado)
+ */
+function calcularFGTS(dados, temporal) {
+  if (dados.verbasExcluidas?.includes('fgts_imprescrito')) {
+    return { valor: 0, excluida: true, fgtsBruto: 0, memoria: { motivo: 'Excluída do cálculo' } };
+  }
+
+  const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  const meses = temporal.lapsoComAviso.meses;
+  const fgtsBruto = round2(base * FGTS_ALIQUOTA * meses);
+  const depositado = dados.fgtsDepositado || 0;
+  const valor = nonNegative(round2(fgtsBruto - depositado));
+
+  return {
+    valor,
+    excluida: false,
+    fgtsBruto,
+    depositado,
+    memoria: {
+      formula: `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) − R$ ${depositado.toFixed(2)} (depositado) = R$ ${valor.toFixed(2)}`,
+      base,
+      meses,
+      aliquota: '8%',
+    },
+  };
+}
+
+/**
+ * Multa FGTS conforme modalidade
+ * SJC/Rescisão Indireta: 40% | Culpa Recíproca: 20% | Pedido Demissão/JC: 0%
+ */
+function calcularMultaFGTS(fgtsBruto, modalidade) {
+  const percentuais = {
+    sem_justa_causa: MULTA_FGTS_SJC,
+    rescisao_indireta: MULTA_FGTS_SJC,
+    culpa_reciproca: MULTA_FGTS_RECIPROCA,
+    pedido_demissao: 0,
+    justa_causa: 0,
+  };
+  const percentual = percentuais[modalidade] || 0;
+  const valor = round2(fgtsBruto * percentual);
+
+  return {
+    valor,
+    excluida: percentual === 0,
+    percentual,
+    memoria: {
+      formula: `R$ ${fgtsBruto.toFixed(2)} × ${(percentual * 100).toFixed(0)}% = R$ ${valor.toFixed(2)}`,
+      modalidade,
+    },
+  };
+}
+
+module.exports = { calcularFGTS, calcularMultaFGTS };

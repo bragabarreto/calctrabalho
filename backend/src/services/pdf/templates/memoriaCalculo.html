@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Arial', sans-serif; font-size: 10pt; color: #1a1a2e; background: white; }
+    .header { background: #1a3a5c; color: white; padding: 20px 24px; margin-bottom: 16px; }
+    .header h1 { font-family: Georgia, serif; font-size: 16pt; margin-bottom: 4px; }
+    .header p { font-size: 9pt; color: #b3c6d9; }
+    .section { margin: 0 24px 14px; }
+    .section-title { font-size: 10pt; font-weight: bold; color: #1a3a5c; border-bottom: 2px solid #1a3a5c; padding-bottom: 4px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+    .grid-item label { display: block; font-size: 7.5pt; color: #666; text-transform: uppercase; }
+    .grid-item span { font-size: 9pt; font-family: Courier, monospace; }
+    table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+    th { background: #1a3a5c; color: white; padding: 6px 8px; text-align: left; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.04em; }
+    td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; }
+    tr:nth-child(even) td { background: #f8f9fa; }
+    .valor { font-family: Courier, monospace; text-align: right; }
+    .natureza-sal { background: #e8f0fe; color: #1a3a5c; padding: 1px 5px; border-radius: 3px; font-size: 7.5pt; }
+    .natureza-ind { background: #fef3c7; color: #92400e; padding: 1px 5px; border-radius: 3px; font-size: 7.5pt; }
+    .tr-subtotal td { background: #e8ecf0 !important; font-weight: bold; border-top: 2px solid #1a3a5c; }
+    .tr-deducao td { color: #c53030; }
+    .tr-total td { background: #1a3a5c !important; color: white !important; font-weight: bold; font-family: Courier, monospace; }
+    .tr-honorarios td { background: #2d6a4f !important; color: white !important; }
+    .tr-total-com td { background: #0f2540 !important; color: white !important; font-weight: bold; font-family: Courier, monospace; }
+    .formula { font-family: Courier, monospace; font-size: 8pt; background: #f8f9fa; padding: 3px 6px; border-left: 3px solid #c8a96e; margin-top: 2px; }
+    .aviso { background: #fff8e6; border-left: 4px solid #c8a96e; padding: 8px 12px; font-size: 8.5pt; color: #744210; margin: 12px 24px; }
+    .footer { text-align: center; font-size: 7.5pt; color: #999; border-top: 1px solid #e2e8f0; padding: 12px 24px; margin-top: 16px; }
+    @page { size: A4; margin: 15mm 12mm; }
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>MEMÓRIA DE CÁLCULO TRABALHISTA</h1>
+    <p>Simulação: {{nome}} &nbsp;|&nbsp; Processo: {{processo}} &nbsp;|&nbsp; Gerado em: {{dataGeracao}}</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Dados do Contrato</div>
+    <div class="grid">
+      <div class="grid-item"><label>Admissão</label><span>{{dataAdmissao}}</span></div>
+      <div class="grid-item"><label>Dispensa</label><span>{{dataDispensa}}</span></div>
+      <div class="grid-item"><label>Ajuizamento</label><span>{{dataAjuizamento}}</span></div>
+      <div class="grid-item"><label>Modalidade</label><span>{{modalidade}}</span></div>
+      <div class="grid-item"><label>Último Salário</label><span>{{ultimoSalario}}</span></div>
+      <div class="grid-item"><label>Aviso Prévio</label><span>{{avisoPrevio}}</span></div>
+      <div class="grid-item"><label>Marco Prescricional</label><span>{{marcoPrescricional}}</span></div>
+      <div class="grid-item"><label>Ajuizamento</label><span>{{dataAjuizamento}}</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Apuração dos Prazos</div>
+    <div class="grid">
+      <div class="grid-item"><label>Lapso c/ aviso</label><span>{{lapsoComAvisoMeses}} meses</span></div>
+      <div class="grid-item"><label>Lapso s/ aviso</label><span>{{lapsoSemAvisoMeses}} meses</span></div>
+      <div class="grid-item"><label>Dias úteis (6d)</label><span>{{diasUteis6d}}</span></div>
+      <div class="grid-item"><label>Dias úteis (5d)</label><span>{{diasUteis5d}}</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Verbas Trabalhistas</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:38%">Verba</th>
+          <th style="width:12%">Natureza</th>
+          <th style="width:7%" class="text-center">FGTS</th>
+          <th style="width:7%" class="text-center">INSS</th>
+          <th style="width:22%">Fórmula</th>
+          <th style="width:14%" class="valor">Valor (R$)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#verbas}}
+        {{#if valor}}
+        <tr>
+          <td>{{nome}}</td>
+          <td><span class="natureza-{{natureza}}">{{natureza}}</span></td>
+          <td style="text-align:center">{{incideFgts}}</td>
+          <td style="text-align:center">{{incideInss}}</td>
+          <td class="formula" style="font-size:7.5pt">{{formula}}</td>
+          <td class="valor">{{valorFormatado}}</td>
+        </tr>
+        {{/if}}
+        {{/verbas}}
+        <tr class="tr-subtotal">
+          <td colspan="5">Subtotal</td>
+          <td class="valor">{{subtotal}}</td>
+        </tr>
+        {{#if fgtsDepositado}}
+        <tr class="tr-deducao">
+          <td colspan="5">(-) FGTS Depositado</td>
+          <td class="valor">({{fgtsDepositadoFmt}})</td>
+        </tr>
+        {{/if}}
+        {{#if valorPago}}
+        <tr class="tr-deducao">
+          <td colspan="5">(-) Valor pago na rescisão</td>
+          <td class="valor">({{valorPagoFmt}})</td>
+        </tr>
+        {{/if}}
+        <tr class="tr-total">
+          <td colspan="5">TOTAL LÍQUIDO</td>
+          <td class="valor">{{total}}</td>
+        </tr>
+        {{#if honorarios}}
+        <tr class="tr-honorarios">
+          <td colspan="5">(+) Honorários Advocatícios ({{pctHonorarios}}%)</td>
+          <td class="valor">{{honorariosFmt}}</td>
+        </tr>
+        <tr class="tr-total-com">
+          <td colspan="5">TOTAL COM HONORÁRIOS</td>
+          <td class="valor">{{totalComHonorarios}}</td>
+        </tr>
+        {{/if}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="aviso">
+    <strong>Aviso Legal:</strong> Este documento é uma simulação gerada por ferramenta auxiliar de cálculo. Os valores calculados não substituem a liquidação judicial oficial. Verifique sempre a legislação e jurisprudência atualizadas.
+  </div>
+
+  <div class="footer">
+    Gerado em {{dataGeracao}} pelo sistema CalcTrabalho — Versão 1.0 · Uso interno · Ferramenta de simulação
+  </div>
+</body>
+</html>

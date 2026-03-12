@@ -1,0 +1,36 @@
+# Dependências
+node_modules/
+**/node_modules/
+
+# Build outputs
+frontend/dist/
+backend/public/
+backend/pdfs/
+
+# Variáveis de ambiente
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Testes
+coverage/
+
+# Temporários
+*.tmp
+*.temp
