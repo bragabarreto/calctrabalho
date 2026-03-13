@@ -15,6 +15,7 @@ const TIPO_VALOR = [
   { value: 'fixo', label: 'Valor fixo (R$)' },
   { value: 'percentual_salario', label: '% do último salário' },
   { value: 'percentual_sm', label: '% do salário mínimo' },
+  { value: 'percentual_historico', label: '% de histórico salarial' },
 ];
 
 const REFLEXOS_OPCOES = [
@@ -36,6 +37,8 @@ const INICIAL = {
   valorBase: '',
   percentualBase: '',
   percentualAdicional: 0,
+  baseHistoricoId: '',
+  baseParcelaId: '',
   geraReflexos: false,
   reflexosEm: [],
   incideInss: false,
@@ -45,8 +48,27 @@ const INICIAL = {
   aliquotaPrevidenciaPrivada: '',
 };
 
-export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 'Nova Parcela' }) {
-  const [form, setForm] = useState({ ...INICIAL, ...(parcela || {}) });
+/**
+ * @param {Object} parcela - existing parcela to edit (null = new)
+ * @param {Function} onSalvar
+ * @param {Function} onCancelar
+ * @param {string} titulo
+ * @param {Array} historicos - lista de históricos do cálculo atual para selecionar como base
+ */
+export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 'Nova Parcela', historicos = [] }) {
+  // Decompose baseHistoricoId into histId + parcelaId for the UI
+  function decomporBaseHistoricoId(id) {
+    if (!id) return { histId: '', parcelaId: '' };
+    const [histId, parcelaId = ''] = id.split(':');
+    return { histId, parcelaId };
+  }
+
+  const initial = { ...INICIAL, ...(parcela || {}) };
+  const { histId: initHistId, parcelaId: initParcelaId } = decomporBaseHistoricoId(initial.baseHistoricoId);
+
+  const [form, setForm] = useState(initial);
+  const [histSel, setHistSel] = useState(initHistId);
+  const [parcelaSel, setParcelaSel] = useState(initParcelaId);
 
   function set(campo, valor) {
     setForm((prev) => ({ ...prev, [campo]: valor }));
@@ -61,9 +83,29 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
     }));
   }
 
+  // Parcelas disponíveis no histórico selecionado
+  const histSelecionado = historicos.find((h) => h.id === histSel);
+  const parcelasDoHist = histSelecionado?.parcelas || [];
+
   function handleSubmit(e) {
     e.preventDefault();
     if (!form.nome.trim()) { alert('Nome da parcela é obrigatório.'); return; }
+
+    if (form.tipoValor === 'percentual_historico') {
+      if (!histSel) { alert('Selecione um histórico salarial como base.'); return; }
+      if (!form.percentualBase) { alert('Informe o percentual a aplicar sobre o histórico.'); return; }
+      const baseHistoricoId = parcelaSel ? `${histSel}:${parcelaSel}` : histSel;
+      onSalvar({
+        ...form,
+        valorBase: null,
+        percentualBase: Number(form.percentualBase) / 100,
+        percentualAdicional: Number(form.percentualAdicional) / 100,
+        baseHistoricoId,
+        aliquotaPrevidenciaPrivada: form.aliquotaPrevidenciaPrivada !== '' ? Number(form.aliquotaPrevidenciaPrivada) / 100 : null,
+      });
+      return;
+    }
+
     if (!form.valorBase && !form.percentualBase) {
       alert('Informe o valor base ou o percentual da parcela.'); return;
     }
@@ -72,6 +114,7 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
       valorBase: form.valorBase !== '' ? Number(form.valorBase) : null,
       percentualBase: form.percentualBase !== '' ? Number(form.percentualBase) / 100 : null,
       percentualAdicional: Number(form.percentualAdicional) / 100,
+      baseHistoricoId: null,
       aliquotaPrevidenciaPrivada: form.aliquotaPrevidenciaPrivada !== '' ? Number(form.aliquotaPrevidenciaPrivada) / 100 : null,
     });
   }
@@ -151,42 +194,104 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
             )}
           </div>
 
-          {/* Valor */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Base de Cálculo */}
+          <div className="space-y-3">
             <div>
-              <label className="campo-label">Tipo de Valor</label>
+              <label className="campo-label">Base de Cálculo</label>
               <select value={form.tipoValor} onChange={(e) => set('tipoValor', e.target.value)} className="campo-input">
                 {TIPO_VALOR.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
             </div>
-            <div>
-              {form.tipoValor === 'fixo' ? (
-                <>
-                  <label className="campo-label">Valor Base (R$)</label>
-                  <input type="number" value={form.valorBase} onChange={(e) => set('valorBase', e.target.value)} className="campo-input" step="0.01" min="0" placeholder="0.00" />
-                </>
-              ) : (
-                <>
-                  <label className="campo-label">Percentual (%)</label>
-                  <input type="number" value={form.percentualBase} onChange={(e) => set('percentualBase', e.target.value)} className="campo-input" step="0.1" min="0" placeholder="0.0" />
-                </>
-              )}
-            </div>
-            <div>
-              <label className="campo-label">Adicional sobre o valor (%)</label>
-              <input
-                type="number"
-                value={form.percentualAdicional}
-                onChange={(e) => set('percentualAdicional', e.target.value)}
-                className="campo-input"
-                step="1"
-                min="0"
-                placeholder="0"
-              />
-              <p className="text-xs text-gray-400 mt-1">Ex: 50 para adicionar 50% sobre o valor calculado</p>
-            </div>
+
+            {form.tipoValor === 'fixo' && (
+              <div>
+                <label className="campo-label">Valor Base (R$)</label>
+                <input type="number" value={form.valorBase} onChange={(e) => set('valorBase', e.target.value)} className="campo-input" step="0.01" min="0" placeholder="0.00" />
+              </div>
+            )}
+
+            {(form.tipoValor === 'percentual_salario' || form.tipoValor === 'percentual_sm') && (
+              <div>
+                <label className="campo-label">Percentual (%)</label>
+                <input type="number" value={form.percentualBase} onChange={(e) => set('percentualBase', e.target.value)} className="campo-input" step="0.1" min="0" placeholder="0.0" />
+                <p className="text-xs text-gray-400 mt-1">
+                  {form.tipoValor === 'percentual_sm'
+                    ? 'Aplicado sobre o salário mínimo de cada competência'
+                    : 'Aplicado sobre o último salário informado'}
+                </p>
+              </div>
+            )}
+
+            {form.tipoValor === 'percentual_historico' && (
+              <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div>
+                  <label className="campo-label">Histórico Salarial</label>
+                  {historicos.length === 0 ? (
+                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
+                      Nenhum histórico salarial disponível neste cálculo. Configure os históricos na etapa anterior.
+                    </p>
+                  ) : (
+                    <select
+                      value={histSel}
+                      onChange={(e) => { setHistSel(e.target.value); setParcelaSel(''); }}
+                      className="campo-input"
+                    >
+                      <option value="">Selecione o histórico...</option>
+                      {historicos.map((h) => (
+                        <option key={h.id} value={h.id}>{h.titulo}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {histSel && parcelasDoHist.length > 0 && (
+                  <div>
+                    <label className="campo-label">Parcela Específica (opcional)</label>
+                    <select
+                      value={parcelaSel}
+                      onChange={(e) => setParcelaSel(e.target.value)}
+                      className="campo-input"
+                    >
+                      <option value="">Todas as parcelas (soma)</option>
+                      {parcelasDoHist.map((p) => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">Deixe em branco para somar todas as parcelas do histórico.</p>
+                  </div>
+                )}
+
+                <div>
+                  <label className="campo-label">Percentual a aplicar (%)</label>
+                  <input
+                    type="number"
+                    value={form.percentualBase}
+                    onChange={(e) => set('percentualBase', e.target.value)}
+                    className="campo-input"
+                    step="0.1" min="0" placeholder="100"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Ex: 100 = valor integral do histórico; 30 = 30% do histórico</p>
+                </div>
+              </div>
+            )}
+
+            {form.tipoValor !== 'fixo' && (
+              <div>
+                <label className="campo-label">Adicional sobre o valor calculado (%)</label>
+                <input
+                  type="number"
+                  value={form.percentualAdicional}
+                  onChange={(e) => set('percentualAdicional', e.target.value)}
+                  className="campo-input"
+                  step="1"
+                  min="0"
+                  placeholder="0"
+                />
+                <p className="text-xs text-gray-400 mt-1">Ex: 50 para acrescentar 50% sobre o valor calculado</p>
+              </div>
+            )}
           </div>
 
           {/* Reflexos */}

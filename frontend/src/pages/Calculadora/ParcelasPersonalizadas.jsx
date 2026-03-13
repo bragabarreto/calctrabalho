@@ -95,6 +95,7 @@ export default function ParcelasPersonalizadas() {
         <ParcelaEditor
           parcela={parcelaEditando}
           titulo={parcelaEditando ? 'Editar Parcela' : 'Nova Parcela Personalizada'}
+          historicos={dados.historicosSalariais || []}
           onSalvar={(form) => {
             // Pergunta se quer salvar na biblioteca também
             if (!parcelaEditando && window.confirm('Salvar esta parcela na biblioteca para uso futuro?')) {

@@ -73,7 +73,7 @@ const schemaDadosContrato = Joi.object({
     periodoInicio: Joi.date().iso().allow(null, '').optional(),
     periodoFim: Joi.date().iso().allow(null, '').optional(),
     frequencia: Joi.string().valid('horaria', 'diaria_6d', 'diaria_5d', 'mensal', 'semestral', 'anual', 'calculada', 'unica').required(),
-    tipoValor: Joi.string().valid('fixo', 'percentual_salario', 'percentual_sm').default('fixo'),
+    tipoValor: Joi.string().valid('fixo', 'percentual_salario', 'percentual_sm', 'percentual_historico').default('fixo'),
     valorBase: Joi.number().min(0).allow(null).optional(),
     percentualBase: Joi.number().min(0).allow(null).optional(),
     percentualAdicional: Joi.number().min(0).default(0),
