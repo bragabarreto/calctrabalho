@@ -46,11 +46,16 @@ export default function FeriasDetalhadas() {
     const atual = periodos[idx];
     // Proporcional sempre é devido
     if (atual.tipo === 'proporcional') return;
-    atualizar(idx, 'status', status);
-    if (status !== 'gozadas') {
-      atualizar(idx, 'dataGozo', null);
-      atualizar(idx, 'diasGozados', null);
+    // Clicou no status já ativo → deseleciona (volta para pendente)
+    const novoStatus = atual.status === status ? 'pendente' : status;
+    const updates = { status: novoStatus };
+    if (novoStatus !== 'gozadas') {
+      updates.dataGozo = null;
+      updates.diasGozados = null;
     }
+    const novos = periodos.map((p, i) => i === idx ? { ...p, ...updates } : p);
+    setPeriodosLocal(novos);
+    setPeriodosFerias(novos);
   }
 
   if (carregando) {

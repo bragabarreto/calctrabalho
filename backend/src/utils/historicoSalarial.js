@@ -2,8 +2,8 @@
 
 /**
  * Utilitário para resolução de históricos salariais.
- * Cada histórico tem faixas com { inicio, fim, valor } no formato 'YYYY-MM'.
- * Quando há sobreposição, a faixa mais recente (maior inicio) prevalece.
+ * Estrutura: [{ id, titulo, fixo?, parcelas: [{ id, nome, faixas: [{ inicio, fim, valor }] }] }]
+ * baseHistoricoId pode ser "histId" (soma todas as parcelas) ou "histId:parcelaId" (parcela específica).
  */
 
 /**
@@ -37,15 +37,14 @@ function resolverFaixas(faixas) {
 }
 
 /**
- * Retorna o valor do histórico para uma competência específica.
+ * Retorna o valor de uma parcela (faixas) para uma competência específica.
  *
- * @param {Object} historico - { faixas: [{ inicio, fim, valor }] }
+ * @param {Array} faixas - [{ inicio, fim, valor }]
  * @param {string} competencia - 'YYYY-MM'
  * @returns {number} valor aplicável (0 se não houver faixa)
  */
-function valorParaCompetencia(historico, competencia) {
-  const resolvidas = resolverFaixas(historico.faixas || []);
-  // A última faixa que começa antes ou no mesmo mês e cujo fimEfetivo é nulo ou >= competencia
+function valorFaixasParaCompetencia(faixas, competencia) {
+  const resolvidas = resolverFaixas(faixas || []);
   for (let i = resolvidas.length - 1; i >= 0; i--) {
     const f = resolvidas[i];
     if (f.inicio <= competencia && (!f.fimEfetivo || f.fimEfetivo >= competencia)) {
@@ -56,16 +55,36 @@ function valorParaCompetencia(historico, competencia) {
 }
 
 /**
+ * Retorna o valor do histórico para uma competência específica.
+ * Se parcelaId fornecido, retorna apenas essa parcela; caso contrário soma todas.
+ *
+ * @param {Object} historico - { parcelas: [{ id, nome, faixas }] }
+ * @param {string} competencia - 'YYYY-MM'
+ * @param {string|null} parcelaId - ID da parcela específica (opcional)
+ * @returns {number} valor aplicável (0 se não houver)
+ */
+function valorParaCompetencia(historico, competencia, parcelaId = null) {
+  const parcelas = historico.parcelas || [];
+  if (parcelaId) {
+    const parcela = parcelas.find((p) => p.id === parcelaId);
+    return parcela ? valorFaixasParaCompetencia(parcela.faixas, competencia) : 0;
+  }
+  // Soma todas as parcelas
+  return parcelas.reduce((acc, p) => acc + valorFaixasParaCompetencia(p.faixas, competencia), 0);
+}
+
+/**
  * Calcula o total de uma parcela mensal ao longo de um período usando o histórico.
  * Itera mês a mês entre dataInicio e dataFim (formato 'YYYY-MM' ou 'YYYY-MM-DD').
  *
- * @param {Object} historico - { faixas: [...] }
+ * @param {Object} historico - { parcelas: [...] }
  * @param {string} dataInicio - início do período ('YYYY-MM' ou 'YYYY-MM-DD')
  * @param {string} dataFim    - fim do período ('YYYY-MM' ou 'YYYY-MM-DD')
  * @param {number} percentual - fator aplicado sobre o valor (padrão 1.0)
+ * @param {string|null} parcelaId - ID da parcela específica (opcional)
  * @returns {{ total: number, memoria: Array, meses: number }}
  */
-function calcularTotalPorHistorico(historico, dataInicio, dataFim, percentual = 1.0) {
+function calcularTotalPorHistorico(historico, dataInicio, dataFim, percentual = 1.0, parcelaId = null) {
   // Normaliza para 'YYYY-MM'
   const compInicio = String(dataInicio).substring(0, 7);
   const compFim = String(dataFim).substring(0, 7);
@@ -76,7 +95,7 @@ function calcularTotalPorHistorico(historico, dataInicio, dataFim, percentual = 
   let meses = 0;
 
   while (comp <= compFim) {
-    const valor = valorParaCompetencia(historico, comp);
+    const valor = valorParaCompetencia(historico, comp, parcelaId);
     const valorComPercentual = Math.round((valor * percentual) * 100) / 100;
     if (valor > 0) {
       memoria.push({ competencia: comp, valor, valorComPercentual });
@@ -109,9 +128,26 @@ function encontrarHistorico(historicosSalariais, id) {
   return (historicosSalariais || []).find((h) => h.id === id) || null;
 }
 
+/**
+ * Resolve baseHistoricoId que pode ser "histId" ou "histId:parcelaId".
+ * Retorna { historico, parcelaId } para uso em calcularTotalPorHistorico.
+ *
+ * @param {Array} historicosSalariais
+ * @param {string} baseHistoricoId
+ * @returns {{ historico: Object|null, parcelaId: string|null }}
+ */
+function resolverBaseHistoricoId(historicosSalariais, baseHistoricoId) {
+  if (!baseHistoricoId) return { historico: null, parcelaId: null };
+  const [histId, parcelaId] = baseHistoricoId.split(':');
+  const historico = encontrarHistorico(historicosSalariais, histId);
+  return { historico, parcelaId: parcelaId || null };
+}
+
 module.exports = {
   resolverFaixas,
+  valorFaixasParaCompetencia,
   valorParaCompetencia,
   calcularTotalPorHistorico,
   encontrarHistorico,
+  resolverBaseHistoricoId,
 };

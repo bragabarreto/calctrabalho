@@ -87,8 +87,8 @@ function calcularReflexosHE(heResult, dados, temporal, modalidade) {
   const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
   const ferias = round2(mediaHeMensal * (mesesFerias / 12) * (4 / 3));
 
-  // 13º proporcional
-  const meses13 = temporal.lapsoSemAviso.mesesRestantes + (temporal.lapsoSemAviso.diasRestantes >= 15 ? 1 : 0);
+  // 13º proporcional — OJ 82 SDI1 TST: aviso projeta para 13º
+  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
   const decimoTerceiro = round2((mediaHeMensal / 12) * meses13);
 
   // FGTS sobre HE + reflexos salariais

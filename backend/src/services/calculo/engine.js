@@ -18,7 +18,7 @@ const { calcularIntervaloIntrajornada } = require('./verbas/intervaloIntrajornad
 const { calcularParcelasGenericasSalariais, calcularParcelasGenericasIndenizatorias } = require('./verbas/parcelasGenericas');
 const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require('./verbas/inss');
 const { calcularJurosSelic } = require('./verbas/jurosSelic');
-const { calcularTotalPorHistorico, encontrarHistorico } = require('../../utils/historicoSalarial');
+const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
 
 /**
  * Motor Central de Cálculo Trabalhista
@@ -46,6 +46,12 @@ async function calcular(dados, modalidade) {
   verbas.comissoesAtrasadas = comAtrasadosMeses > 0
     ? { valor: round2((dados.comissoes || 0) * comAtrasadosMeses), excluida: false,
         memoria: { formula: `R$ ${dados.comissoes} × ${comAtrasadosMeses} meses` } }
+    : { valor: 0, excluida: false };
+
+  const gorjAtrasadosMeses = dados.gorjetasMesesAtrasados || 0;
+  verbas.gorjetasAtrasadas = gorjAtrasadosMeses > 0
+    ? { valor: round2((dados.gorjetas || 0) * gorjAtrasadosMeses), excluida: false,
+        memoria: { formula: 'R$ ' + (dados.gorjetas || 0) + ' × ' + gorjAtrasadosMeses + ' meses (Súmula 354 TST)' } }
     : { valor: 0, excluida: false };
 
   // ---- AVISO PRÉVIO ----
@@ -98,12 +104,12 @@ async function calcular(dados, modalidade) {
   const historicosSalariais = dados.historicosSalariais || [];
   const parcelasComHistorico = (dados.parcelasPersonalizadas || []).filter((p) => p.baseHistoricoId);
   for (const parcela of parcelasComHistorico) {
-    const historico = encontrarHistorico(historicosSalariais, parcela.baseHistoricoId);
+    const { historico, parcelaId } = resolverBaseHistoricoId(historicosSalariais, parcela.baseHistoricoId);
     if (!historico) continue;
     const periodoInicio = parcela.periodoInicio || dados.dataAdmissao;
     const periodoFim = parcela.periodoFim || dados.dataDispensa;
     const percentual = parcela.percentualBase ? (parcela.percentualBase / 100) : 1;
-    const { total, meses, memoria } = calcularTotalPorHistorico(historico, periodoInicio, periodoFim, percentual);
+    const { total, meses, memoria } = calcularTotalPorHistorico(historico, periodoInicio, periodoFim, percentual, parcelaId);
     verbas.parcelasHistorico.push({
       codigo: `hist_parcela_${parcela.id || parcela.nome}`,
       nome: parcela.nome,
@@ -234,6 +240,7 @@ function montarListaVerbas(verbas, reflexos) {
   add('saldo_salarial', 'Saldo Salarial', 'rescisoria', 'salarial', true, true, verbas.saldoSalarial);
   add('salarios_atrasados', 'Salários Atrasados', 'salarial', 'salarial', true, true, verbas.salariosAtrasados);
   add('comissoes_atrasadas', 'Comissões Atrasadas', 'salarial', 'salarial', true, true, verbas.comissoesAtrasadas);
+  add('gorjetas_atrasadas', 'Gorjetas Atrasadas', 'salarial', 'salarial', false, false, verbas.gorjetasAtrasadas);
   add('aviso_previo', 'Aviso Prévio Indenizado', 'rescisoria', 'salarial', true, true, verbas.avisoPrevio);
   add('ferias_dobradas', 'Férias Vencidas Dobradas + 1/3', 'rescisoria', 'salarial', false, false, verbas.feriasDobradas);
   add('ferias_integrais', 'Férias Integrais + 1/3', 'rescisoria', 'salarial', false, false, verbas.feriasIntegrais);

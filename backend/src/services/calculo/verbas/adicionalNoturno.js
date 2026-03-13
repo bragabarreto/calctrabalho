@@ -56,7 +56,8 @@ function calcularReflexosAN(anResult, dados, temporal, modalidade) {
   const mediaANMensal = meses > 0 ? anResult.valor / meses : 0;
   const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
   const ferias = round2(mediaANMensal * (mesesFerias / 12) * (4 / 3));
-  const meses13 = temporal.lapsoSemAviso.mesesRestantes + (temporal.lapsoSemAviso.diasRestantes >= 15 ? 1 : 0);
+  // OJ 82 SDI1 TST: aviso projeta para 13º
+  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
   const decimoTerceiro = round2((mediaANMensal / 12) * meses13);
   const fgts = round2((anResult.valor + rsr + ferias + decimoTerceiro) * 0.08);
   const pctMul = { sem_justa_causa: 0.40, rescisao_indireta: 0.40, culpa_reciproca: 0.20 }[modalidade] || 0;

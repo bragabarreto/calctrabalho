@@ -16,6 +16,7 @@ const dadosIniciais = {
   gorjetas: '',
   salariosMesesAtrasados: 0,
   comissoesMesesAtrasados: 0,
+  gorjetasMesesAtrasados: 0,
 
   // Jornada
   divisorJornada: 220,
@@ -65,8 +66,12 @@ const dadosIniciais = {
   varaNome: '',
   observacoes: '',
 
-  // Histórico salarial (múltiplos históricos com múltiplas rubricas)
-  historicosSalariais: [], // [{ id, titulo, entradas: [{ inicio, fim, rubrica, valor }] }]
+  // Histórico salarial com estrutura em dois níveis:
+  // [{ id, titulo, fixo?, parcelas: [{ id, nome, faixas: [{ inicio, fim, valor }] }] }]
+  // O histórico "Reclamante" (id='reclamante') é pré-seeded e não pode ser deletado.
+  historicosSalariais: [
+    { id: 'reclamante', titulo: 'Reclamante', fixo: true, parcelas: [] },
+  ],
 
   // Verbas excluídas
   verbasExcluidas: [],

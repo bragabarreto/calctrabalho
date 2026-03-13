@@ -17,6 +17,7 @@ const schemaDadosContrato = Joi.object({
   gorjetas: Joi.number().min(0).default(0),
   salariosMesesAtrasados: Joi.number().integer().min(0).default(0),
   comissoesMesesAtrasados: Joi.number().integer().min(0).default(0),
+  gorjetasMesesAtrasados: Joi.number().integer().min(0).default(0),
 
   // Férias e 13º
   qtdeFeriasVencidasDobradas: Joi.number().integer().min(0).default(0),
@@ -116,14 +117,20 @@ const schemaDadosContrato = Joi.object({
   honorariosPericiaisValor: Joi.number().min(0).default(0),
   aplicarCustas: Joi.boolean().default(false),
 
-  // Históricos salariais (base de cálculo de parcelas mensais)
+  // Históricos salariais — estrutura em dois níveis: history → parcelas → faixas
+  // baseHistoricoId em parcelasPersonalizadas usa formato "histId" ou "histId:parcelaId"
   historicosSalariais: Joi.array().items(Joi.object({
     id: Joi.string().required(),
     titulo: Joi.string().required(),
-    faixas: Joi.array().items(Joi.object({
-      inicio: Joi.string().pattern(/^\d{4}-\d{2}$/).required(),
-      fim: Joi.string().pattern(/^\d{4}-\d{2}$/).allow(null).optional(),
-      valor: Joi.number().min(0).required(),
+    fixo: Joi.boolean().default(false),
+    parcelas: Joi.array().items(Joi.object({
+      id: Joi.string().required(),
+      nome: Joi.string().required(),
+      faixas: Joi.array().items(Joi.object({
+        inicio: Joi.string().pattern(/^\d{4}-\d{2}$/).required(),
+        fim: Joi.string().pattern(/^\d{4}-\d{2}$/).allow(null).optional(),
+        valor: Joi.number().min(0).required(),
+      })).default([]),
     })).default([]),
   })).default([]),
 }).options({ allowUnknown: false });

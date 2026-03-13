@@ -21,6 +21,7 @@ export function prepararDadosContrato(dados) {
     gorjetas: toNum(dados.gorjetas, 0),
     salariosMesesAtrasados: toNum(dados.salariosMesesAtrasados, 0),
     comissoesMesesAtrasados: toNum(dados.comissoesMesesAtrasados, 0),
+    gorjetasMesesAtrasados: toNum(dados.gorjetasMesesAtrasados, 0),
 
     // Férias e 13º
     qtdeFeriasVencidasDobradas: toNum(dados.qtdeFeriasVencidasDobradas, 0),
@@ -93,14 +94,19 @@ export function prepararDadosContrato(dados) {
     honorariosPericiaisValor: toNum(dados.honorariosPericiaisValor, 0),
     aplicarCustas: Boolean(dados.aplicarCustas),
 
-    // Históricos salariais (base de cálculo de parcelas mensais)
+    // Históricos salariais (estrutura em dois níveis: history → parcelas → faixas)
     historicosSalariais: (dados.historicosSalariais || []).map((h) => ({
       id: h.id,
       titulo: h.titulo,
-      faixas: (h.faixas || []).map((f) => ({
-        inicio: f.inicio,
-        fim: f.fim || null,
-        valor: Number(f.valor) || 0,
+      fixo: Boolean(h.fixo),
+      parcelas: (h.parcelas || []).map((p) => ({
+        id: p.id,
+        nome: p.nome,
+        faixas: (p.faixas || []).map((faixa) => ({
+          inicio: faixa.inicio,
+          fim: faixa.fim || null,
+          valor: Number(faixa.valor) || 0,
+        })),
       })),
     })),
   };

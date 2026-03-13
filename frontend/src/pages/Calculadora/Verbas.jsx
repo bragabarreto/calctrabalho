@@ -60,6 +60,11 @@ export default function Verbas() {
                 <label className="campo-label">Comissões Atrasadas (meses)</label>
                 <input type="number" name="comissoesMesesAtrasados" value={dados.comissoesMesesAtrasados} onChange={handleChange} className="campo-input" min="0" step="1" />
               </div>
+              <div>
+                <label className="campo-label">Gorjetas Atrasadas (meses)</label>
+                <input type="number" name="gorjetasMesesAtrasados" value={dados.gorjetasMesesAtrasados} onChange={handleChange} className="campo-input" min="0" step="1" />
+                <p className="text-xs text-gray-400 mt-1">Súmula 354 TST: gorjetas integram a remuneração mas não base de AP, HE, AN, RSR.</p>
+              </div>
             </div>
           </div>
 

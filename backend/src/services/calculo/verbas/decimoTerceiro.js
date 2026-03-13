@@ -36,10 +36,11 @@ function calcularDecimoTerceiroProporcional(dados, temporal) {
     return { valor: 0, excluida: true, memoria: { motivo: 'Excluída do cálculo' } };
   }
 
-  const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0);
-  // Meses trabalhados no ano corrente (sem aviso, pois aviso projeta para férias mas não 13º)
-  const meses = temporal.lapsoSemAviso.mesesRestantes;
-  const dias = temporal.lapsoSemAviso.diasRestantes;
+  // Gorjetas integram base do 13º (Súmula 354 TST)
+  const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  // OJ 82 SDI1 TST: aviso prévio indenizado projeta para o 13º proporcional
+  const meses = temporal.lapsoComAviso.mesesRestantes;
+  const dias = temporal.lapsoComAviso.diasRestantes;
   const mesesEfetivos = dias >= 15 ? meses + 1 : meses;
 
   if (mesesEfetivos === 0) {

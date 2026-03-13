@@ -38,8 +38,23 @@ app.use('/api/comparacoes', comparacoesRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/parcelas-personalizadas', parcelasRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => res.json({ status: 'ok', versao: '1.0.0' }));
+// Health check — inclui diagnóstico de DB para facilitar debug no Railway
+app.get('/api/health', async (req, res) => {
+  const info = {
+    status: 'ok',
+    versao: '1.0.0',
+    db_url_presente: Boolean(process.env.DATABASE_URL),
+    node_env: process.env.NODE_ENV || null,
+  };
+  try {
+    const db = require('./config/database');
+    await db.query('SELECT 1');
+    info.db = 'conectado';
+  } catch (e) {
+    info.db = 'erro: ' + e.message;
+  }
+  res.json(info);
+});
 
 // SPA fallback: retorna index.html para rotas não-API (react-router)
 if (require('fs').existsSync(frontendDist)) {
@@ -53,6 +68,8 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`CalcTrabalho API rodando na porta ${PORT}`);
+  console.log(`NODE_ENV: ${process.env.NODE_ENV || '(não definido)'}`);
+  console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'PRESENTE (' + process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') + ')' : 'AUSENTE'}`);
 });
 
 module.exports = app;
