@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
+import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { useParcelas, useCriarParcela, useExcluirParcela } from '../../hooks/useParcelas.js';
+import { useSalarioMinimo, useSalvarSalarioMinimo, useRemoverSalarioMinimo } from '../../hooks/useSalarioMinimo.js';
 import ParcelaEditor from '../../components/ParcelaEditor/index.jsx';
 
 const TABS = [
@@ -31,14 +32,6 @@ const IPCA_ANUAL = [
   { ano: 2025, valor: 4.27 },
 ];
 
-const SALARIO_MINIMO = [
-  { vigencia: 'Jan/2021', valor: 1100.00 },
-  { vigencia: 'Jan/2022', valor: 1212.00 },
-  { vigencia: 'Jan/2023', valor: 1302.00 },
-  { vigencia: 'Mai/2023', valor: 1320.00 },
-  { vigencia: 'Jan/2024', valor: 1412.00 },
-  { vigencia: 'Jan/2025', valor: 1518.00 },
-];
 
 const VERBAS_PADRAO = [
   { nome: 'Saldo Salarial', natureza: 'salarial', fgts: true, inss: true, formula: 'Salário ÷ dias_mês × dias_trabalhados' },
@@ -67,6 +60,165 @@ function formatBRL(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
 
+// Meses para o select de mes_ano
+const MESES = ['01','02','03','04','05','06','07','08','09','10','11','12'];
+const ANOS = Array.from({ length: 80 }, (_, i) => String(1994 + i));
+
+function nomeMes(mesAno) {
+  if (!mesAno) return '';
+  const [y, m] = mesAno.split('-');
+  const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${nomes[Number(m) - 1]}/${y}`;
+}
+
+function SalarioMinimoAdmin() {
+  const { data: valores = [], isLoading } = useSalarioMinimo();
+  const { mutateAsync: salvar } = useSalvarSalarioMinimo();
+  const { mutateAsync: remover } = useRemoverSalarioMinimo();
+
+  const anoAtual = String(new Date().getFullYear());
+  const [verTodos, setVerTodos] = useState(false);
+  const [formAberto, setFormAberto] = useState(false);
+  const [mesSel, setMesSel] = useState('01');
+  const [anoSel, setAnoSel] = useState(anoAtual);
+  const [valor, setValor] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [removendo, setRemovendo] = useState(null);
+  const [erro, setErro] = useState('');
+
+  const exibidos = verTodos ? valores : valores.slice(0, 12);
+
+  async function handleSalvar(e) {
+    e.preventDefault();
+    const mesAno = `${anoSel}-${mesSel}`;
+    if (!valor) { setErro('Informe o valor.'); return; }
+    const v = Number(valor.replace(',', '.'));
+    if (isNaN(v) || v <= 0) { setErro('Valor inválido.'); return; }
+    setSalvando(true);
+    setErro('');
+    try {
+      await salvar({ mes_ano: mesAno, valor: v });
+      setValor('');
+      setFormAberto(false);
+    } catch (ex) {
+      setErro(ex.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function handleRemover(ma) {
+    if (!window.confirm(`Remover ${nomeMes(ma)}?`)) return;
+    setRemovendo(ma);
+    try { await remover(ma); } catch (ex) { alert(ex.message); }
+    finally { setRemovendo(null); }
+  }
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-titulo text-lg text-primaria">Salário Mínimo — Histórico</h3>
+        <button
+          type="button"
+          className="btn-primario flex items-center gap-1 text-sm py-1 px-3"
+          onClick={() => setFormAberto((v) => !v)}
+        >
+          <Plus size={14} /> Adicionar
+        </button>
+      </div>
+
+      {formAberto && (
+        <form onSubmit={handleSalvar} className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm font-medium text-blue-800 mb-3">Novo registro (ou atualizar existente)</p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="campo-label">Mês/Ano</label>
+              <div className="flex gap-1">
+                <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="campo-input">
+                  {MESES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={anoSel} onChange={(e) => setAnoSel(e.target.value)} className="campo-input">
+                  {ANOS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="campo-label">Valor (R$)</label>
+              <input
+                type="text"
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                placeholder="ex: 1518,00"
+                className="campo-input"
+              />
+            </div>
+          </div>
+          {erro && <p className="text-xs text-red-600 mb-2">{erro}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={salvando} className="btn-primario text-sm py-1 px-4">
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button type="button" onClick={() => { setFormAberto(false); setErro(''); }} className="btn-secundario text-sm py-1 px-4">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">Carregando...</p>
+      ) : valores.length === 0 ? (
+        <p className="text-sm text-gray-400">Nenhum registro. Adicione o primeiro acima.</p>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="tabela-memoria">
+              <thead>
+                <tr>
+                  <th>Vigência</th>
+                  <th className="text-right">Valor</th>
+                  <th style={{ width: 40 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {exibidos.map((s) => (
+                  <tr key={s.mes_ano}>
+                    <td>{nomeMes(s.mes_ano)}</td>
+                    <td className="text-right font-mono font-semibold">{formatBRL(Number(s.valor))}</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => handleRemover(s.mes_ano)}
+                        disabled={removendo === s.mes_ano}
+                        className="text-red-400 hover:text-red-600 p-1"
+                        title="Remover"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {valores.length > 12 && (
+            <button
+              type="button"
+              onClick={() => setVerTodos((v) => !v)}
+              className="mt-2 text-sm text-primaria flex items-center gap-1 hover:underline"
+            >
+              {verTodos ? <><ChevronUp size={14} /> Ver menos</> : <><ChevronDown size={14} /> Ver todos ({valores.length} registros)</>}
+            </button>
+          )}
+        </>
+      )}
+      <p className="text-xs text-gray-400 mt-2">
+        Fonte: MTE / Decreto Federal. Clique em "Adicionar" para inserir ou atualizar um mês.
+      </p>
+    </div>
+  );
+}
+
 // ---- ABA PARÂMETROS LEGAIS ----
 function TabLegais() {
   const [selic, setSelic] = useState(null);
@@ -90,22 +242,7 @@ function TabLegais() {
 
   return (
     <div className="space-y-5">
-      {/* Salário Mínimo */}
-      <div className="card p-6">
-        <h3 className="font-titulo text-lg mb-3 text-primaria">Salário Mínimo (últimos 5 anos)</h3>
-        <table className="tabela-memoria">
-          <thead><tr><th>Vigência</th><th className="text-right">Valor</th></tr></thead>
-          <tbody>
-            {[...SALARIO_MINIMO].reverse().map((s) => (
-              <tr key={s.vigencia}>
-                <td>{s.vigencia}</td>
-                <td className="text-right font-mono font-semibold">{formatBRL(s.valor)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <p className="text-xs text-gray-400 mt-2">Fonte: MTE / Decreto Federal. Para 2026, aguardar publicação oficial.</p>
-      </div>
+      <SalarioMinimoAdmin />
 
       {/* SELIC */}
       <div className="card p-6">
