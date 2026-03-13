@@ -93,10 +93,6 @@ export default function DadosContrato() {
             <input type="number" name="ultimoSalario" value={dados.ultimoSalario} onChange={handleChange} className="campo-input" step="0.01" min="0" required placeholder="2000.00" />
           </div>
           <div>
-            <label className="campo-label">Média Salarial (se diferente)</label>
-            <input type="number" name="mediaSalarial" value={dados.mediaSalarial} onChange={handleChange} className="campo-input" step="0.01" min="0" placeholder="Deixe vazio para usar último salário" />
-          </div>
-          <div>
             <label className="campo-label">Média de Comissões Mensais (R$)</label>
             <input type="number" name="comissoes" value={dados.comissoes} onChange={handleChange} className="campo-input" step="0.01" min="0" placeholder="0.00" />
           </div>

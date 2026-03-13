@@ -82,6 +82,8 @@ const schemaDadosContrato = Joi.object({
     incideInss: Joi.boolean().default(false),
     incideIr: Joi.boolean().default(false),
     incideFgts: Joi.boolean().default(false),
+    incidePrevidenciaPrivada: Joi.boolean().default(false),
+    aliquotaPrevidenciaPrivada: Joi.number().min(0).max(1).allow(null).optional(),
     // Histórico salarial como base de cálculo (substitui valorBase para parcelas mensais)
     baseHistoricoId: Joi.string().allow(null, '').optional(),
   })).default([]),
@@ -111,6 +113,7 @@ const schemaDadosContrato = Joi.object({
   // Períodos detalhados de férias e 13º (definidos pelo usuário)
   periodosFerias: Joi.array().items(Joi.object().unknown(true)).default([]),
   periodosDecimoTerceiro: Joi.array().items(Joi.object().unknown(true)).default([]),
+  feriasDeducaoPagas: Joi.number().min(0).default(0),
 
   // Honorários e despesas processuais
   aplicarHonorariosPericiais: Joi.boolean().default(false),

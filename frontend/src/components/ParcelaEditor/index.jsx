@@ -41,6 +41,8 @@ const INICIAL = {
   incideInss: false,
   incideIr: false,
   incideFgts: false,
+  incidePrevidenciaPrivada: false,
+  aliquotaPrevidenciaPrivada: '',
 };
 
 export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 'Nova Parcela' }) {
@@ -70,6 +72,7 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
       valorBase: form.valorBase !== '' ? Number(form.valorBase) : null,
       percentualBase: form.percentualBase !== '' ? Number(form.percentualBase) / 100 : null,
       percentualAdicional: Number(form.percentualAdicional) / 100,
+      aliquotaPrevidenciaPrivada: form.aliquotaPrevidenciaPrivada !== '' ? Number(form.aliquotaPrevidenciaPrivada) / 100 : null,
     });
   }
 
@@ -233,7 +236,28 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
                   {label}
                 </label>
               ))}
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.incidePrevidenciaPrivada}
+                  onChange={(e) => set('incidePrevidenciaPrivada', e.target.checked)}
+                />
+                Previdência Privada
+              </label>
             </div>
+            {form.incidePrevidenciaPrivada && (
+              <div className="pl-4 mt-2">
+                <label className="campo-label">Alíquota Previdência Privada (%)</label>
+                <input
+                  type="number"
+                  value={form.aliquotaPrevidenciaPrivada}
+                  onChange={(e) => set('aliquotaPrevidenciaPrivada', e.target.value)}
+                  className="campo-input max-w-xs"
+                  step="0.1" min="0" max="100"
+                  placeholder="Ex: 3.5"
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-3 pt-2 border-t">

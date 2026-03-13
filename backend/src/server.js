@@ -10,6 +10,7 @@ const simulacoesRoutes = require('./routes/simulacoes.routes');
 const comparacoesRoutes = require('./routes/comparacoes.routes');
 const pdfRoutes = require('./routes/pdf.routes');
 const parcelasRoutes = require('./routes/parcelasPersonalizadas.routes');
+const salarioMinimoRoutes = require('./routes/salarioMinimo.routes');
 const { errorHandler, notFound } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/api/simulacoes', simulacoesRoutes);
 app.use('/api/comparacoes', comparacoesRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/parcelas-personalizadas', parcelasRoutes);
+app.use('/api/salario-minimo', salarioMinimoRoutes);
 
 // Health check — inclui diagnóstico de DB para facilitar debug no Railway
 app.get('/api/health', async (req, res) => {

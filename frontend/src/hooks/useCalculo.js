@@ -86,6 +86,19 @@ export function prepararDadosContrato(dados) {
 
     // Períodos de férias e 13o (arrays com status definido pelo usuário)
     periodosFerias: dados.periodosFerias || [],
+    // Derivar contagem de férias dos períodos detalhados (se disponíveis)
+    ...(() => {
+      const pf = dados.periodosFerias || [];
+      if (pf.length === 0) return {};
+      const vencidos = pf.filter(p => p.tipo === 'vencida');
+      return {
+        qtdeFeriasVencidasDobradas: vencidos.filter(p => p.vencidas && !p.gozadas).length,
+        qtdeFeriasVencidasSimples: vencidos.filter(p =>
+          (!p.vencidas && !p.gozadas) || (p.gozadas && !p.pagas)
+        ).length,
+        feriasDeducaoPagas: pf.reduce((sum, p) => sum + (p.pagas ? Number(p.valorPago || 0) : 0), 0),
+      };
+    })(),
     periodosDecimoTerceiro: dados.periodosDecimoTerceiro || [],
 
     // Honorários e despesas processuais

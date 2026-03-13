@@ -162,7 +162,8 @@ async function calcular(dados, modalidade) {
   const fgtsDepositado = dados.fgtsDepositado || 0;
   const valorPago = dados.valorPago || 0;
   const deducoesGlobaisTotal = (dados.deducoesGlobais || []).reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
-  const totalDeducoes = round2(fgtsDepositado + valorPago + deducoesGlobaisTotal);
+  const feriasDeducaoPagas = dados.feriasDeducaoPagas || 0;
+  const totalDeducoes = round2(fgtsDepositado + valorPago + deducoesGlobaisTotal + feriasDeducaoPagas);
 
   // ---- TOTAL LÍQUIDO (subtotal - deduções) ----
   const total = nonNegative(round2(subtotal - totalDeducoes));
@@ -199,7 +200,7 @@ async function calcular(dados, modalidade) {
     verbas_raw: verbas,
     reflexos,
     subtotal,
-    deducoes: { fgtsDepositado, valorPago, deducoesGlobaisTotal, total: totalDeducoes },
+    deducoes: { fgtsDepositado, valorPago, deducoesGlobaisTotal, feriasDeducaoPagas, total: totalDeducoes },
     total,
     honorarios,
     honorariosPericiais,
