@@ -92,6 +92,17 @@ export function prepararDadosContrato(dados) {
     aplicarHonorariosPericiais: Boolean(dados.aplicarHonorariosPericiais),
     honorariosPericiaisValor: toNum(dados.honorariosPericiaisValor, 0),
     aplicarCustas: Boolean(dados.aplicarCustas),
+
+    // Históricos salariais (base de cálculo de parcelas mensais)
+    historicosSalariais: (dados.historicosSalariais || []).map((h) => ({
+      id: h.id,
+      titulo: h.titulo,
+      faixas: (h.faixas || []).map((f) => ({
+        inicio: f.inicio,
+        fim: f.fim || null,
+        valor: Number(f.valor) || 0,
+      })),
+    })),
   };
 }
 

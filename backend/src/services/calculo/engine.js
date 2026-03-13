@@ -18,6 +18,7 @@ const { calcularIntervaloIntrajornada } = require('./verbas/intervaloIntrajornad
 const { calcularParcelasGenericasSalariais, calcularParcelasGenericasIndenizatorias } = require('./verbas/parcelasGenericas');
 const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require('./verbas/inss');
 const { calcularJurosSelic } = require('./verbas/jurosSelic');
+const { calcularTotalPorHistorico, encontrarHistorico } = require('../../utils/historicoSalarial');
 
 /**
  * Motor Central de Cálculo Trabalhista
@@ -90,6 +91,34 @@ async function calcular(dados, modalidade) {
   // ---- PARCELAS GENÉRICAS ----
   verbas.parcelasGenericasSalariais = calcularParcelasGenericasSalariais(dados, temporal);
   verbas.parcelasGenericasIndenizatorias = calcularParcelasGenericasIndenizatorias(dados, temporal);
+
+  // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
+  // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId
+  verbas.parcelasHistorico = [];
+  const historicosSalariais = dados.historicosSalariais || [];
+  const parcelasComHistorico = (dados.parcelasPersonalizadas || []).filter((p) => p.baseHistoricoId);
+  for (const parcela of parcelasComHistorico) {
+    const historico = encontrarHistorico(historicosSalariais, parcela.baseHistoricoId);
+    if (!historico) continue;
+    const periodoInicio = parcela.periodoInicio || dados.dataAdmissao;
+    const periodoFim = parcela.periodoFim || dados.dataDispensa;
+    const percentual = parcela.percentualBase ? (parcela.percentualBase / 100) : 1;
+    const { total, meses, memoria } = calcularTotalPorHistorico(historico, periodoInicio, periodoFim, percentual);
+    verbas.parcelasHistorico.push({
+      codigo: `hist_parcela_${parcela.id || parcela.nome}`,
+      nome: parcela.nome,
+      natureza: parcela.natureza || 'salarial',
+      incideFgts: parcela.incideFgts || false,
+      incideInss: parcela.incideInss || false,
+      valor: total,
+      excluida: false,
+      memoria: {
+        formula: `${parcela.nome} via histórico "${historico.titulo}": ${meses} meses × valores variáveis = R$ ${total.toFixed(2)}`,
+        itens: memoria,
+        percentualAplicado: percentual,
+      },
+    });
+  }
 
   // ---- DANO MORAL (valor manual) ----
   verbas.danoMoral = { valor: dados.valorDanoMoral || 0, excluida: false };
@@ -245,6 +274,22 @@ function montarListaVerbas(verbas, reflexos) {
   add('pgenerica_sal_mensal_e_diaria', 'Parcelas Genéricas Salariais', 'salarial', 'salarial', true, true, verbas.parcelasGenericasSalariais);
   add('pgenerica_ind', 'Parcelas Genéricas Indenizatórias', 'indenizatoria', 'indenizatoria', false, false, verbas.parcelasGenericasIndenizatorias);
   add('dano_moral', 'Indenização por Danos Morais', 'indenizatoria', 'indenizatoria', false, false, verbas.danoMoral);
+
+  // Parcelas calculadas a partir de históricos salariais
+  for (const ph of (verbas.parcelasHistorico || [])) {
+    lista.push({
+      codigo: ph.codigo,
+      nome: ph.nome,
+      categoria: ph.natureza,
+      natureza: ph.natureza,
+      incideFgts: ph.incideFgts,
+      incideInss: ph.incideInss,
+      valor: ph.valor,
+      excluida: false,
+      memoria: ph.memoria,
+      ordemExibicao: ordem++,
+    });
+  }
 
   return lista;
 }

@@ -81,6 +81,8 @@ const schemaDadosContrato = Joi.object({
     incideInss: Joi.boolean().default(false),
     incideIr: Joi.boolean().default(false),
     incideFgts: Joi.boolean().default(false),
+    // Histórico salarial como base de cálculo (substitui valorBase para parcelas mensais)
+    baseHistoricoId: Joi.string().allow(null, '').optional(),
   })).default([]),
 
   // Deduções detalhadas
@@ -113,6 +115,17 @@ const schemaDadosContrato = Joi.object({
   aplicarHonorariosPericiais: Joi.boolean().default(false),
   honorariosPericiaisValor: Joi.number().min(0).default(0),
   aplicarCustas: Joi.boolean().default(false),
+
+  // Históricos salariais (base de cálculo de parcelas mensais)
+  historicosSalariais: Joi.array().items(Joi.object({
+    id: Joi.string().required(),
+    titulo: Joi.string().required(),
+    faixas: Joi.array().items(Joi.object({
+      inicio: Joi.string().pattern(/^\d{4}-\d{2}$/).required(),
+      fim: Joi.string().pattern(/^\d{4}-\d{2}$/).allow(null).optional(),
+      valor: Joi.number().min(0).required(),
+    })).default([]),
+  })).default([]),
 }).options({ allowUnknown: false });
 
 const schemaSimular = Joi.object({
