@@ -241,15 +241,10 @@ async function calcular(dados, modalidade) {
   const inssAcordo = await calcularINSS_Acordo(dados, total, percentualSalarial);
 
   // ---- JUROS DE MORA ADC 58 STF + Lei 14.905/2024 ----
-  const dataCalculo = new Date().toISOString().split('T')[0];
-  const faseProcessual = dados.faseProcessual || 'pre_judicial';
   const dataEncerramentoStr = temporal.dataEncerramentoComAviso
     ? format(toDate(temporal.dataEncerramentoComAviso), 'yyyy-MM-dd')
     : dados.dataDispensa;
-  const dataInicioJuros = faseProcessual === 'judicial'
-    ? dados.dataAjuizamento
-    : dataEncerramentoStr;
-  const juros = await calcularJurosADC58(totalComHonorarios, dataInicioJuros, dados.dataAjuizamento, dataCalculo, faseProcessual);
+  const juros = await calcularJurosADC58(totalComHonorarios, dataEncerramentoStr, dados.dataAjuizamento);
 
   // ---- ENCARGOS DO EMPREGADO (INSS + IR — informativo) ----
   const lapsoMeses = temporal.lapsoComAviso?.meses || temporal.lapsoSemAviso?.meses || 1;

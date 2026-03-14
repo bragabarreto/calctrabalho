@@ -236,8 +236,9 @@ export default function ResultadoTriplo() {
                   )}
                 </p>
                 <p className="text-xs text-blue-700 mb-2">
-                  Fase: {resultadoAtivo.juros.memoria?.faseProcessual === 'judicial' ? 'Judicial' : 'Pré-Judicial'}.
-                  {resultadoAtivo.juros.memoria?.dataInicioJuros && ` Marco: ${resultadoAtivo.juros.memoria.dataInicioJuros}.`}
+                  Apurado até: {resultadoAtivo.juros.dataApuracao
+                    ? new Date(resultadoAtivo.juros.dataApuracao + 'T12:00:00').toLocaleDateString('pt-BR')
+                    : resultadoAtivo.juros.memoria?.dataApuracao || '—'}.
                 </p>
                 {resultadoAtivo.juros.fases?.length > 0 && (
                   <div className="space-y-1 mb-3">

@@ -145,9 +145,6 @@ export function prepararDadosContrato(dados) {
       })),
     })),
 
-    // Fase processual (juros ADC 58)
-    faseProcessual: dados.faseProcessual || 'pre_judicial',
-
     // Bases de cálculo dos atrasados
     salarioAtrasadoBase: dados.salarioAtrasadoBase || 'ultimo_salario',
     salarioAtrasadoHistoricoId: dados.salarioAtrasadoHistoricoId || null,

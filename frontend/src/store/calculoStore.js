@@ -69,9 +69,6 @@ const dadosIniciais = {
   gorjetaAtrasadaBase: 'media', // 'media' | 'historico'
   gorjetaAtrasadoHistoricoId: '',
 
-  // Fase processual para cálculo de juros ADC 58 STF
-  faseProcessual: 'pre_judicial', // 'pre_judicial' | 'judicial'
-
   // Acordo
   valorAcordo: 0,
   tipoAcordo: '',

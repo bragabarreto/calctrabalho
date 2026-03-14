@@ -286,8 +286,10 @@ export default function Resultado() {
             )}
           </h4>
           <p className="text-xs text-gray-400 mb-3">
-            Fase: {resultado.juros.memoria?.faseProcessual === 'judicial' ? 'Judicial' : 'Pré-Judicial'}.
-            {resultado.juros.memoria?.dataInicioJuros && ` Marco inicial: ${resultado.juros.memoria.dataInicioJuros}.`}
+            Apurado até: {resultado.juros.dataApuracao
+              ? new Date(resultado.juros.dataApuracao + 'T12:00:00').toLocaleDateString('pt-BR')
+              : resultado.juros.memoria?.dataApuracao || '—'}.
+            {resultado.juros.memoria?.dataEncerramento && ` Início: ${resultado.juros.memoria.dataEncerramento}.`}
           </p>
 
           {resultado.juros.fases?.length > 0 && (

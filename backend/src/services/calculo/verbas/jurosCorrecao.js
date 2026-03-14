@@ -1,34 +1,35 @@
 'use strict';
 
-const { differenceInDays, toDate, format } = require('../../../utils/datas');
+const { differenceInDays, toDate, format, addDays } = require('../../../utils/datas');
 const { round2 } = require('../../../utils/formatacao');
 
 /**
- * Reexporta buscarSelicAcumulada para compatibilidade com callers externos
+ * Retorna o último dia do mês corrente no formato 'yyyy-MM-dd'.
+ * A atualização é sempre apurada até o último dia do mês em que o cálculo é elaborado.
  */
+function ultimoDiaMesAtual() {
+  const hoje = new Date();
+  const ultimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+  return format(ultimo, 'yyyy-MM-dd');
+}
+
+/** Busca SELIC diária acumulada (série BACEN 11) entre duas datas. */
 async function buscarSelicAcumulada(dataInicio, dataFim) {
   try {
     const ini = format(toDate(dataInicio), 'dd/MM/yyyy');
     const fim = format(toDate(dataFim), 'dd/MM/yyyy');
     const url = `https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=json&dataInicial=${ini}&dataFinal=${fim}`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!resp.ok) throw new Error('BACEN API retornou ' + resp.status);
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    if (!resp.ok) throw new Error('BACEN ' + resp.status);
     const dados = await resp.json();
     if (!Array.isArray(dados) || dados.length === 0) return null;
     let fator = 1;
-    for (const item of dados) {
-      fator *= (1 + parseFloat(item.valor) / 100);
-    }
+    for (const item of dados) fator *= (1 + parseFloat(item.valor) / 100);
     return { fatorAcumulado: fator, percentualAcumulado: round2((fator - 1) * 100), diasUteis: dados.length };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
-/**
- * Busca IPCA-E mensal do banco de dados (tabela ipca_e_historico).
- * Retorna array de { mes_ano: Date, valor: number } ordenado por mes_ano.
- */
+/** Busca IPCA-E mensal do banco (tabela ipca_e_historico). */
 async function buscarIpcaEDoBanco(dataInicio, dataFim) {
   try {
     const pool = require('../../../config/database');
@@ -40,14 +41,10 @@ async function buscarIpcaEDoBanco(dataInicio, dataFim) {
       [dataInicio, dataFim]
     );
     return rows.map(r => ({ mesAno: r.mes_ano, valor: parseFloat(r.valor) }));
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
-/**
- * Busca IPCA mensal do banco de dados (tabela ipca_historico).
- */
+/** Busca IPCA mensal do banco (tabela ipca_historico). */
 async function buscarIpcaDoBanco(dataInicio, dataFim) {
   try {
     const pool = require('../../../config/database');
@@ -59,26 +56,17 @@ async function buscarIpcaDoBanco(dataInicio, dataFim) {
       [dataInicio, dataFim]
     );
     return rows.map(r => ({ mesAno: r.mes_ano, valor: parseFloat(r.valor) }));
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
-/**
- * Acumula fator mensal a partir de array [{ mesAno, valor }] (valor em %)
- */
+/** Acumula fator a partir de registros mensais [{ valor (%) }]. */
 function acumularFatorMensal(registros) {
   let fator = 1;
-  for (const r of registros) {
-    fator *= (1 + r.valor / 100);
-  }
+  for (const r of registros) fator *= (1 + r.valor / 100);
   return fator;
 }
 
-/**
- * Conta meses entre duas datas (fracionário: inclui mês inicial e final proporcional)
- * Para cálculo de juros simples de 1%/mês usamos meses inteiros (arredondado)
- */
+/** Conta meses completos entre duas datas (inteiro). */
 function contarMesesEntre(dataInicio, dataFim) {
   const ini = toDate(dataInicio);
   const fim = toDate(dataFim);
@@ -88,131 +76,141 @@ function contarMesesEntre(dataInicio, dataFim) {
 /**
  * Calcula juros e correção monetária conforme ADC 58 STF + Lei 14.905/2024.
  *
- * Três fases:
- * - Fase 1 (pré-judicial, apenas se faseProcessual = 'pre_judicial'):
- *     dataInicioJuros → dataAjuizamento
- *     IPCA-E acumulado × (1.01)^meses  (1% ao mês composto + IPCA-E)
+ * As duas fases são SEMPRE apuradas em sequência (não se excluem):
  *
- * - Fase 2 (judicial, se dataAjuizamento ≤ 29/08/2024):
- *     dataAjuizamento → min(hoje, 2024-08-29)
- *     SELIC acumulada (série BACEN 11)
+ *   FASE 1 — Pré-judicial
+ *     De: dataEncerramentoComAviso (fim do contrato + aviso projetado)
+ *     Até: dia anterior ao ajuizamento (exclusive)
+ *     Critério: IPCA-E acumulado × (1,01)^meses  (correção + 1%/mês de mora)
  *
- * - Fase 3 (a partir de 30/08/2024, se hoje > 30/08/2024):
- *     max(dataAjuizamento, 2024-08-30) → hoje
- *     IPCA + max(0, SELIC - IPCA) por período
+ *   FASE 2 — Judicial (SELIC), vigente até 29/08/2024
+ *     De: dataAjuizamento
+ *     Até: min(dataApuracao, 29/08/2024)
+ *     Critério: SELIC diária acumulada (série BACEN 11)
+ *
+ *   FASE 3 — Judicial (Lei 14.905/2024), a partir de 30/08/2024
+ *     De: max(dataAjuizamento, 30/08/2024)
+ *     Até: dataApuracao (último dia do mês corrente)
+ *     Critério: IPCA (correção) + max(0, SELIC − IPCA) (juros de mora)
+ *
+ * dataApuracao = último dia do mês em que os cálculos estão sendo elaborados.
  *
  * @param {number} baseCalculo
- * @param {string} dataInicioJuros - dataEncerramentoComAviso (pré-judicial) ou dataAjuizamento (judicial)
- * @param {string} dataAjuizamento
- * @param {string} dataCalculo - data base do cálculo (hoje)
- * @param {string} faseProcessual - 'pre_judicial' | 'judicial'
+ * @param {string|Date} dataEncerramentoComAviso
+ * @param {string|Date} dataAjuizamento
  */
-async function calcularJurosADC58(baseCalculo, dataInicioJuros, dataAjuizamento, dataCalculo, faseProcessual = 'pre_judicial') {
-  if (!baseCalculo || baseCalculo <= 0 || !dataAjuizamento) {
-    return { valor: 0, fator: 1, percentual: 0, fases: [], memoria: { motivo: 'Base ou data de ajuizamento não informada' } };
+async function calcularJurosADC58(baseCalculo, dataEncerramentoComAviso, dataAjuizamento) {
+  if (!baseCalculo || baseCalculo <= 0 || !dataAjuizamento || !dataEncerramentoComAviso) {
+    return { valor: 0, fator: 1, percentual: 0, fases: [], dataApuracao: ultimoDiaMesAtual(),
+      memoria: { motivo: 'Base, data de encerramento ou data de ajuizamento não informada' } };
   }
 
-  const hoje = dataCalculo || format(new Date(), 'yyyy-MM-dd');
-  const DATA_MARCO = '2024-08-30'; // Lei 14.905/2024 vigora a partir de 30/08/2024
-  const DATA_MARCO_ANTERIOR = '2024-08-29';
+  // Data de apuração = último dia do mês corrente
+  const dataApuracao = ultimoDiaMesAtual();
+
+  // Normaliza para string yyyy-MM-dd
+  const dtEncerramento = format(toDate(dataEncerramentoComAviso), 'yyyy-MM-dd');
+  const dtAjuizamento  = format(toDate(dataAjuizamento), 'yyyy-MM-dd');
+
+  const DATA_MARCO      = '2024-08-30'; // vigência Lei 14.905/2024
+  const DATA_MARCO_ANTE = '2024-08-29';
 
   const fases = [];
   let fatorTotal = 1;
 
-  // === FASE 1: Pré-judicial (IPCA-E + 1%/mês) — apenas faseProcessual = 'pre_judicial' ===
-  if (faseProcessual === 'pre_judicial' && dataInicioJuros && dataAjuizamento > dataInicioJuros) {
-    const registrosIpcaE = await buscarIpcaEDoBanco(dataInicioJuros, dataAjuizamento);
-    const meses = Math.max(0, contarMesesEntre(dataInicioJuros, dataAjuizamento));
+  // ── FASE 1: Pré-judicial ────────────────────────────────────────────────
+  // Período: dtEncerramento até o dia ANTES do ajuizamento
+  const dtFimFase1 = format(addDays(toDate(dtAjuizamento), -1), 'yyyy-MM-dd');
+
+  if (dtEncerramento < dtAjuizamento) {
+    // IPCA-E: do mês de encerramento até o mês do dtFimFase1
+    const registrosIpcaE = await buscarIpcaEDoBanco(dtEncerramento, dtFimFase1);
+    const meses = Math.max(0, contarMesesEntre(dtEncerramento, dtAjuizamento));
 
     let fatorIpcaE = 1;
-    let fatorMora = 1;
-    let estimadoFase1 = false;
+    let fatorMora  = 1;
+    let estimado1  = false;
 
     if (registrosIpcaE.length > 0) {
       fatorIpcaE = acumularFatorMensal(registrosIpcaE);
     } else {
-      // Estimativa: usar IPCA-E médio histórico 0.40%/mês
-      fatorIpcaE = Math.pow(1 + 0.004, meses);
-      estimadoFase1 = true;
+      fatorIpcaE = Math.pow(1.004, meses); // fallback 0,40%/mês médio histórico
+      estimado1 = true;
     }
-
-    if (meses > 0) {
-      fatorMora = Math.pow(1.01, meses); // 1% ao mês composto
-    }
+    if (meses > 0) fatorMora = Math.pow(1.01, meses); // 1%/mês composto
 
     const fator1 = fatorIpcaE * fatorMora;
     fatorTotal *= fator1;
 
     fases.push({
       descricao: 'Pré-judicial: IPCA-E + 1%/mês (art. 39 Lei 8.177/91)',
-      periodo: `${format(toDate(dataInicioJuros), 'dd/MM/yyyy')} a ${format(toDate(dataAjuizamento), 'dd/MM/yyyy')}`,
+      periodo: `${format(toDate(dtEncerramento), 'dd/MM/yyyy')} a ${format(toDate(dtFimFase1), 'dd/MM/yyyy')}`,
       meses,
       fatorIpcaE: round2(fatorIpcaE),
-      fatorMora: round2(fatorMora),
-      fator: round2(fator1),
+      fatorMora:  round2(fatorMora),
+      fator:      round2(fator1),
       percentual: round2((fator1 - 1) * 100),
-      estimado: estimadoFase1,
+      estimado:   estimado1,
     });
   }
 
-  // === FASE 2: Judicial até 29/08/2024 (SELIC) ===
-  const dataInicioFase2 = faseProcessual === 'judicial' ? dataInicioJuros || dataAjuizamento : dataAjuizamento;
-  const dataFimFase2 = DATA_MARCO_ANTERIOR; // 29/08/2024
-
-  if (dataInicioFase2 <= dataFimFase2 && hoje > dataInicioFase2) {
-    const dataFimEfetiva = hoje < dataFimFase2 ? hoje : dataFimFase2;
-    if (dataInicioFase2 < dataFimEfetiva) {
-      const selic2 = await buscarSelicAcumulada(dataInicioFase2, dataFimEfetiva);
-      let fator2 = 1;
+  // ── FASE 2: Judicial SELIC (ajuizamento → 29/08/2024) ──────────────────
+  // Aplica-se se o ajuizamento ocorreu antes de 30/08/2024
+  if (dtAjuizamento <= DATA_MARCO_ANTE && dataApuracao >= dtAjuizamento) {
+    const dtFimFase2 = dataApuracao < DATA_MARCO_ANTE ? dataApuracao : DATA_MARCO_ANTE;
+    if (dtAjuizamento <= dtFimFase2) {
+      const selic2 = await buscarSelicAcumulada(dtAjuizamento, dtFimFase2);
+      let fator2   = 1;
       let estimado2 = false;
 
       if (selic2) {
         fator2 = selic2.fatorAcumulado;
       } else {
-        // Fallback: 15% a.a. = 0.0596% a.d.
-        const dias = differenceInDays(toDate(dataFimEfetiva), toDate(dataInicioFase2));
-        fator2 = Math.pow(1 + 0.15 / 252, dias);
+        const dias = differenceInDays(toDate(dtFimFase2), toDate(dtAjuizamento));
+        fator2 = Math.pow(1 + 0.1375 / 252, dias); // fallback ~13,75% a.a.
         estimado2 = true;
       }
 
       fatorTotal *= fator2;
       fases.push({
-        descricao: 'Judicial (até 29/08/2024): SELIC',
-        periodo: `${format(toDate(dataInicioFase2), 'dd/MM/yyyy')} a ${format(toDate(dataFimEfetiva), 'dd/MM/yyyy')}`,
-        fator: round2(fator2),
+        descricao: 'Judicial: SELIC (ajuizamento a 29/08/2024)',
+        periodo:   `${format(toDate(dtAjuizamento), 'dd/MM/yyyy')} a ${format(toDate(dtFimFase2), 'dd/MM/yyyy')}`,
+        fator:     round2(fator2),
         percentual: round2((fator2 - 1) * 100),
-        diasUteis: selic2?.diasUteis || null,
-        estimado: estimado2,
+        diasUteis:  selic2?.diasUteis ?? null,
+        estimado:   estimado2,
       });
     }
   }
 
-  // === FASE 3: A partir de 30/08/2024 (IPCA + max(0, SELIC - IPCA)) ===
-  if (hoje > DATA_MARCO) {
-    const dataInicioFase3 = dataInicioFase2 > DATA_MARCO ? dataInicioFase2 : DATA_MARCO;
-    if (dataInicioFase3 < hoje) {
+  // ── FASE 3: Lei 14.905/2024 (a partir de 30/08/2024) ───────────────────
+  // Aplica-se se dataApuracao > 30/08/2024
+  if (dataApuracao > DATA_MARCO) {
+    // Início: o maior entre ajuizamento e 30/08/2024
+    const dtInicioFase3 = dtAjuizamento > DATA_MARCO ? dtAjuizamento : DATA_MARCO;
+
+    if (dtInicioFase3 <= dataApuracao) {
       const [registrosIpca, selic3] = await Promise.all([
-        buscarIpcaDoBanco(dataInicioFase3, hoje),
-        buscarSelicAcumulada(dataInicioFase3, hoje),
+        buscarIpcaDoBanco(dtInicioFase3, dataApuracao),
+        buscarSelicAcumulada(dtInicioFase3, dataApuracao),
       ]);
 
-      let fatorIpca = 1;
+      let fatorIpca  = 1;
       let fatorJuros = 1;
-      let estimado3 = false;
+      let estimado3  = false;
 
       if (registrosIpca.length > 0) {
         fatorIpca = acumularFatorMensal(registrosIpca);
       } else {
-        const meses3 = Math.max(1, contarMesesEntre(dataInicioFase3, hoje));
-        fatorIpca = Math.pow(1 + 0.004, meses3);
+        const m3 = Math.max(1, contarMesesEntre(dtInicioFase3, dataApuracao));
+        fatorIpca = Math.pow(1.004, m3);
         estimado3 = true;
       }
 
       if (selic3) {
-        // Calcula juros = max(0, SELIC_acumulada - IPCA_acumulado) mensalmente
-        // Simplificação: usa fatorSELIC / fatorIPCA como proxy (resultado semelhante)
-        const fatorSelicIpca = selic3.fatorAcumulado / fatorIpca;
-        fatorJuros = Math.max(1, fatorSelicIpca);
+        // juros de mora = max(0, SELIC acumulada − IPCA acumulada) — proxy por divisão dos fatores
+        const razao = selic3.fatorAcumulado / fatorIpca;
+        fatorJuros = Math.max(1, razao);
       } else {
         estimado3 = true;
       }
@@ -221,62 +219,48 @@ async function calcularJurosADC58(baseCalculo, dataInicioJuros, dataAjuizamento,
       fatorTotal *= fator3;
 
       fases.push({
-        descricao: 'A partir de 30/08/2024: IPCA + max(0, SELIC−IPCA) (Lei 14.905/2024)',
-        periodo: `${format(toDate(dataInicioFase3), 'dd/MM/yyyy')} a ${format(toDate(hoje), 'dd/MM/yyyy')}`,
-        fatorIpca: round2(fatorIpca),
+        descricao: 'Judicial: IPCA + max(0, SELIC−IPCA) — Lei 14.905/2024 (a partir de 30/08/2024)',
+        periodo:   `${format(toDate(dtInicioFase3), 'dd/MM/yyyy')} a ${format(toDate(dataApuracao), 'dd/MM/yyyy')}`,
+        fatorIpca:  round2(fatorIpca),
         fatorJuros: round2(fatorJuros),
-        fator: round2(fator3),
+        fator:      round2(fator3),
         percentual: round2((fator3 - 1) * 100),
-        estimado: estimado3,
+        estimado:   estimado3,
       });
     }
   }
 
-  // Se nenhuma fase gerou fator, fallback para SELIC simples
+  // Fallback: se nenhuma fase gerou resultado (ex: ajuizamento = hoje), retorna zero
   if (fases.length === 0) {
-    const diasTotal = differenceInDays(toDate(hoje), toDate(dataAjuizamento));
-    if (diasTotal > 0) {
-      const selic = await buscarSelicAcumulada(dataAjuizamento, hoje);
-      if (selic) {
-        fatorTotal = selic.fatorAcumulado;
-        fases.push({
-          descricao: 'SELIC (fallback)',
-          periodo: `${format(toDate(dataAjuizamento), 'dd/MM/yyyy')} a ${format(toDate(hoje), 'dd/MM/yyyy')}`,
-          fator: round2(selic.fatorAcumulado),
-          percentual: selic.percentualAcumulado,
-          diasUteis: selic.diasUteis,
-          estimado: false,
-        });
-      }
-    }
+    return { valor: 0, fator: 1, percentual: 0, fases: [], dataApuracao,
+      memoria: { motivo: 'Período insuficiente para apuração de juros' } };
   }
 
-  const valor = round2(baseCalculo * (fatorTotal - 1));
-  const percentualTotal = round2((fatorTotal - 1) * 100);
-  const estimado = fases.some(f => f.estimado);
+  const valor         = round2(baseCalculo * (fatorTotal - 1));
+  const percentualTot = round2((fatorTotal - 1) * 100);
+  const estimado      = fases.some(f => f.estimado);
 
   return {
     valor,
-    fator: round2(fatorTotal),
-    percentual: percentualTotal,
+    fator:    round2(fatorTotal),
+    percentual: percentualTot,
     fases,
+    dataApuracao,
     estimado,
     memoria: {
-      formula: `Base R$ ${baseCalculo.toFixed(2)} × (fator total ${fatorTotal.toFixed(6)} − 1) = R$ ${valor.toFixed(2)}`,
-      faseProcessual,
-      dataInicioJuros: dataInicioJuros ? format(toDate(dataInicioJuros), 'dd/MM/yyyy') : null,
-      periodoTotal: `${format(toDate(dataAjuizamento), 'dd/MM/yyyy')} a ${format(toDate(hoje), 'dd/MM/yyyy')}`,
-      percentualTotal: `${percentualTotal.toFixed(4)}%`,
-      aviso: estimado ? 'Parte do cálculo usa estimativa — API do BACEN ou tabela de índices indisponível.' : undefined,
+      formula:       `Base R$ ${baseCalculo.toFixed(2)} × (fator ${fatorTotal.toFixed(6)} − 1) = R$ ${valor.toFixed(2)}`,
+      dataApuracao:  format(toDate(dataApuracao), 'dd/MM/yyyy'),
+      dataEncerramento: format(toDate(dtEncerramento), 'dd/MM/yyyy'),
+      periodoTotal:  `${format(toDate(dtEncerramento), 'dd/MM/yyyy')} a ${format(toDate(dataApuracao), 'dd/MM/yyyy')}`,
+      percentualTotal: `${percentualTot.toFixed(4)}%`,
+      aviso: estimado ? 'Parte do cálculo usa estimativa — API do BACEN ou índices do banco indisponíveis.' : undefined,
     },
   };
 }
 
-/**
- * Compatibilidade retroativa com código que chama calcularJurosSelic
- */
+/** Compatibilidade retroativa */
 async function calcularJurosSelic(baseCalculo, dataAjuizamento, dataCalculo) {
-  return calcularJurosADC58(baseCalculo, dataAjuizamento, dataAjuizamento, dataCalculo, 'judicial');
+  return calcularJurosADC58(baseCalculo, dataAjuizamento, dataAjuizamento);
 }
 
-module.exports = { calcularJurosADC58, calcularJurosSelic, buscarSelicAcumulada };
+module.exports = { calcularJurosADC58, calcularJurosSelic, buscarSelicAcumulada, ultimoDiaMesAtual };
