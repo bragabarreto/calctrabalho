@@ -205,7 +205,7 @@ export default function ResultadoTriplo() {
             {/* Memória de cálculo */}
             <div className="px-2 py-2 border-b border-gray-100 mb-2">
               <h5 className="font-titulo text-base text-primaria">Memória de Cálculo — {MODALIDADES[abaAtiva]}</h5>
-              <p className="text-xs text-gray-400 mt-0.5">Apenas parcelas com valor > 0 são exibidas. Clique para ver a fórmula.</p>
+              <p className="text-xs text-gray-400 mt-0.5">Apenas parcelas com valor {'>'}0 são exibidas. Clique para ver a fórmula.</p>
             </div>
             <MemoriaCalculo
               verbas={resultadoAtivo.verbas}

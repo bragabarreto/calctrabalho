@@ -35,6 +35,7 @@ export default function DecimoTerceiroDetalhado() {
         });
         setPeriodosLocal(novos);
         setPeriodosDecimoTerceiro(novos);
+      }).catch(() => {}).finally(() => setCarregando(false));
     }
   }, []);
 
