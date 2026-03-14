@@ -212,13 +212,6 @@ export default function MemoriaCalculo({
           </tr>
 
           {/* Deduções */}
-          {deducoes.fgtsDepositado > 0 && (
-            <tr style={{ backgroundColor: '#fff8e1' }}>
-              <td colSpan={4} className="pl-6 text-sm text-amber-800">(-) FGTS já Depositado</td>
-              <td className="text-right font-mono text-amber-800 pr-2">({formatBRL(deducoes.fgtsDepositado)})</td>
-              <td />
-            </tr>
-          )}
           {deducoes.valorPago > 0 && (
             <tr style={{ backgroundColor: '#fff8e1' }}>
               <td colSpan={4} className="pl-6 text-sm text-amber-800">(-) Valor Pago na Rescisão</td>

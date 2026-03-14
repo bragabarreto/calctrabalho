@@ -15,7 +15,6 @@ const { calcularAdicionalNoturno, calcularReflexosAN } = require('./verbas/adici
 const { calcularInsalubridade, calcularReflexosInsalubridade } = require('./verbas/insalubridade');
 const { calcularPericulosidade, calcularReflexosPericulosidade } = require('./verbas/periculosidade');
 const { calcularIntervaloIntrajornada } = require('./verbas/intervaloIntrajornada');
-const { calcularParcelasGenericasSalariais, calcularParcelasGenericasIndenizatorias } = require('./verbas/parcelasGenericas');
 const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require('./verbas/inss');
 const { calcularJurosSelic } = require('./verbas/jurosSelic');
 const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
@@ -152,10 +151,6 @@ async function calcular(dados, modalidade) {
   // ---- INTERVALO INTRAJORNADA ----
   verbas.intervaloIntrajornada = calcularIntervaloIntrajornada(dados, temporal);
 
-  // ---- PARCELAS GENÉRICAS ----
-  verbas.parcelasGenericasSalariais = calcularParcelasGenericasSalariais(dados, temporal);
-  verbas.parcelasGenericasIndenizatorias = calcularParcelasGenericasIndenizatorias(dados, temporal);
-
   // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
   // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId
   verbas.parcelasHistorico = [];
@@ -258,7 +253,7 @@ async function calcular(dados, modalidade) {
     verbas_raw: verbas,
     reflexos,
     subtotal,
-    deducoes: { fgtsDepositado, valorPago, deducoesGlobaisTotal, feriasDeducaoPagas, total: totalDeducoes },
+    deducoes: { valorPago, deducoesGlobaisTotal, feriasDeducaoPagas, total: totalDeducoes },
     total,
     honorarios,
     honorariosPericiais,
@@ -337,8 +332,6 @@ function montarListaVerbas(verbas, reflexos) {
   add('reflexo_per_13', 'Reflexo Peric. 13º', 'salarial', 'salarial', true, true, reflexos.periculosidade?.decimoTerceiro);
   add('reflexo_per_fgts', 'Reflexo Peric. FGTS', 'fgts', 'indenizatoria', false, false, reflexos.periculosidade?.fgts);
   add('reflexo_per_mul_fgts', 'Reflexo Peric. Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.periculosidade?.mulFgts);
-  add('pgenerica_sal_mensal_e_diaria', 'Parcelas Genéricas Salariais', 'salarial', 'salarial', true, true, verbas.parcelasGenericasSalariais);
-  add('pgenerica_ind', 'Parcelas Genéricas Indenizatórias', 'indenizatoria', 'indenizatoria', false, false, verbas.parcelasGenericasIndenizatorias);
   add('dano_moral', 'Indenização por Danos Morais', 'indenizatoria', 'indenizatoria', false, false, verbas.danoMoral);
 
   // Parcelas calculadas a partir de históricos salariais

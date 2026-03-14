@@ -40,14 +40,6 @@ const schemaDadosContrato = Joi.object({
   dataInicioPericulosidade: Joi.date().iso().allow(null, '').optional(),
   dataFimPericulosidade: Joi.date().iso().allow(null, '').optional(),
 
-  // Parcelas genéricas
-  parcelaGenericaSalarialMensal: Joi.number().min(0).default(0),
-  parcelaGenericaSalarialDiaria6d: Joi.number().min(0).default(0),
-  parcelaGenericaSalarialDiaria5d: Joi.number().min(0).default(0),
-  parcelaGenericaIndenizatoriaMensal: Joi.number().min(0).default(0),
-  parcelaGenericaIndenizatoriaDiaria6d: Joi.number().min(0).default(0),
-  parcelaGenericaIndenizatoriaDiaria5d: Joi.number().min(0).default(0),
-  parcelaGenericaIndenizatoriaUnica: Joi.number().min(0).default(0),
   valorDanoMoral: Joi.number().min(0).default(0),
 
   // Deduções

@@ -14,6 +14,155 @@ const FREQUENCIA_LABELS = {
   unica: 'Única',
 };
 
+// Templates de parcelas padrão do direito do trabalho
+// Podem ser adicionadas diretamente ao cálculo sem criar nova parcela do zero
+const TEMPLATES_PADRAO = [
+  {
+    _templateId: 'tpl_he_50',
+    nome: 'Horas Extras (50%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'horaria',
+    tipoValor: 'percentual_salario',
+    percentualBase: 100,
+    percentualAdicional: 50,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'aviso_previo', 'ferias', 'decimo_terceiro', 'fgts'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 59 CLT. Base: valor-hora × adicional 50% × qtde horas',
+  },
+  {
+    _templateId: 'tpl_he_100',
+    nome: 'Horas Extras (100%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'horaria',
+    tipoValor: 'percentual_salario',
+    percentualBase: 100,
+    percentualAdicional: 100,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'aviso_previo', 'ferias', 'decimo_terceiro', 'fgts'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Domingos/feriados. Base: valor-hora × adicional 100% × qtde horas',
+  },
+  {
+    _templateId: 'tpl_noturno',
+    nome: 'Adicional Noturno (20%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'horaria',
+    tipoValor: 'percentual_salario',
+    percentualBase: 100,
+    percentualAdicional: 20,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'ferias', 'decimo_terceiro', 'fgts'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 73 CLT. Trabalho entre 22h e 5h. Hora noturna reduzida: 52min30s',
+  },
+  {
+    _templateId: 'tpl_insalubridade_min',
+    nome: 'Adicional de Insalubridade — Grau Mínimo (10%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'percentual_sm',
+    percentualBase: 10,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 192 CLT. Base: salário mínimo × 10%',
+  },
+  {
+    _templateId: 'tpl_insalubridade_med',
+    nome: 'Adicional de Insalubridade — Grau Médio (20%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'percentual_sm',
+    percentualBase: 20,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 192 CLT. Base: salário mínimo × 20%',
+  },
+  {
+    _templateId: 'tpl_insalubridade_max',
+    nome: 'Adicional de Insalubridade — Grau Máximo (40%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'percentual_sm',
+    percentualBase: 40,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 192 CLT. Base: salário mínimo × 40%',
+  },
+  {
+    _templateId: 'tpl_periculosidade',
+    nome: 'Adicional de Periculosidade (30%)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'percentual_salario',
+    percentualBase: 30,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 193 CLT. Base: salário base × 30%',
+  },
+  {
+    _templateId: 'tpl_intervalo',
+    nome: 'Intervalo Intrajornada (1h)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'fixo',
+    valorBase: null,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'ferias', 'decimo_terceiro', 'fgts'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 71 CLT / Súm. 437 TST. Informe o valor mensal (salário-hora × dias × 50%)',
+  },
+  {
+    _templateId: 'tpl_dano_moral',
+    nome: 'Indenização por Danos Morais',
+    natureza: 'indenizatoria',
+    periodoTipo: 'contrato',
+    frequencia: 'unica',
+    tipoValor: 'fixo',
+    valorBase: null,
+    percentualAdicional: 0,
+    geraReflexos: false,
+    reflexosEm: [],
+    incideInss: false,
+    incideIr: false,
+    incideFgts: false,
+    descricao: 'Valor único, natureza indenizatória, não integra base de FGTS/INSS/IR',
+  },
+];
+
 export default function ParcelasPersonalizadas() {
   const { dados, setDados, setStep, tipoFluxo } = useCalculoStore();
 
@@ -156,6 +305,40 @@ export default function ParcelasPersonalizadas() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Parcelas Padrão — catálogo de templates trabalhistas */}
+      <div className="card p-6 mb-4">
+        <div className="flex items-center gap-2 mb-1">
+          <BookOpen size={18} className="text-primaria" />
+          <h3 className="font-titulo text-lg text-primaria">Parcelas Padrão</h3>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">Modelos pré-configurados do direito do trabalho. Clique em "Usar" para adicionar ao cálculo.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {TEMPLATES_PADRAO.map((t) => (
+            <div key={t._templateId} className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm leading-tight">{t.nome}</p>
+                <p className="text-xs text-gray-400 mt-0.5 leading-snug">{t.descricao}</p>
+                <div className="flex gap-1.5 mt-1 flex-wrap">
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${t.natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                    {t.natureza}
+                  </span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                    {FREQUENCIA_LABELS[t.frequencia] || t.frequencia}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => adicionarAoCalculo({ ...t })}
+                className="btn-secundario text-xs py-1 px-3 shrink-0"
+              >
+                Usar
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Biblioteca de parcelas salvas */}

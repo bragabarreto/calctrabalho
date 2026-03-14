@@ -44,14 +44,6 @@ export function prepararDadosContrato(dados) {
     dataInicioPericulosidade: toDate(dados.dataInicioPericulosidade),
     dataFimPericulosidade: toDate(dados.dataFimPericulosidade),
 
-    // Parcelas genéricas
-    parcelaGenericaSalarialMensal: toNum(dados.parcelaGenericaSalarialMensal, 0),
-    parcelaGenericaSalarialDiaria6d: toNum(dados.parcelaGenericaSalarialDiaria6d, 0),
-    parcelaGenericaSalarialDiaria5d: toNum(dados.parcelaGenericaSalarialDiaria5d, 0),
-    parcelaGenericaIndenizatoriaMensal: toNum(dados.parcelaGenericaIndenizatoriaMensal, 0),
-    parcelaGenericaIndenizatoriaDiaria6d: toNum(dados.parcelaGenericaIndenizatoriaDiaria6d, 0),
-    parcelaGenericaIndenizatoriaDiaria5d: toNum(dados.parcelaGenericaIndenizatoriaDiaria5d, 0),
-    parcelaGenericaIndenizatoriaUnica: toNum(dados.parcelaGenericaIndenizatoriaUnica, 0),
     valorDanoMoral: toNum(dados.valorDanoMoral, 0),
 
     // Deduções

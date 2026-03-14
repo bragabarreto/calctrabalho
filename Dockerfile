@@ -50,5 +50,5 @@ COPY --from=frontend-builder /app/frontend/dist ./backend/public
 
 EXPOSE 3001
 
-# Servidor inicia direto — migrations são executadas pelo releaseCommand do Railway
-CMD ["node", "backend/src/server.js"]
+# Migrations rodam antes do servidor iniciar (idempotentes — seguro executar sempre)
+CMD ["sh", "-c", "node backend/scripts/migrate.js && node backend/src/server.js"]

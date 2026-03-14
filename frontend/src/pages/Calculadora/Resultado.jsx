@@ -180,7 +180,7 @@ export default function Resultado() {
         <CardInfo label="Subtotal Condenação" valor={resultado.subtotal} cor="azul" />
         <CardInfo label="(-) Deduções" valor={resultado.deducoes?.total} cor="laranja" />
         <CardInfo label="Total Líquido" valor={resultado.total} cor="verde" />
-        <CardInfo label="Total Devido pelo Reclamado" valor={resultado.totalComHonorarios} cor="escuro" />
+        <CardInfo label="Total sem Juros" valor={resultado.totalComHonorarios} cor="escuro" />
       </div>
 
       {/* Demonstrativo de honorários */}
@@ -212,50 +212,10 @@ export default function Resultado() {
                 <span className="font-mono text-pink-700">+ {formatBRL(resultado.custas)}</span>
               </div>
             )}
-            <div className="flex justify-between items-center py-2 bg-blue-900 text-white rounded px-3 mt-2">
-              <span className="font-bold">Total Devido pelo Reclamado</span>
+            <div className="flex justify-between items-center py-2 bg-gray-800 text-white rounded px-3 mt-2">
+              <span className="font-bold">Subtotal (sem juros)</span>
               <span className="font-mono font-bold text-lg">{formatBRL(resultado.totalComHonorarios)}</span>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Juros de mora SELIC */}
-      {resultado.juros && resultado.juros.valor > 0 && (
-        <div className="card p-6 mb-4">
-          <h4 className="font-titulo text-lg mb-3 text-primaria">
-            Juros de Mora (SELIC desde o Ajuizamento)
-            {resultado.juros.estimado && (
-              <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">estimado</span>
-            )}
-          </h4>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
-            <div>
-              <p className="campo-label">Base de Cálculo</p>
-              <p className="font-mono">{formatBRL(resultado.total)}</p>
-            </div>
-            <div>
-              <p className="campo-label">Taxa Acumulada</p>
-              <p className="font-mono">{resultado.juros.percentual?.toFixed(4)}%</p>
-            </div>
-            <div>
-              <p className="campo-label">Dias Úteis</p>
-              <p className="font-mono">{resultado.juros.diasUteis}</p>
-            </div>
-            <div>
-              <p className="campo-label">Valor dos Juros</p>
-              <p className="font-mono font-bold text-blue-700">{formatBRL(resultado.juros.valor)}</p>
-            </div>
-          </div>
-          {resultado.juros.memoria?.periodoCalculado && (
-            <p className="text-xs text-gray-400">Período: {resultado.juros.memoria.periodoCalculado}</p>
-          )}
-          {resultado.juros.estimado && (
-            <p className="text-xs text-amber-600 mt-1">{resultado.juros.memoria?.aviso}</p>
-          )}
-          <div className="mt-3 flex justify-between items-center bg-blue-50 border border-blue-200 rounded px-4 py-2 text-sm">
-            <span className="font-semibold text-blue-900">Total Líquido + Juros (referência)</span>
-            <span className="font-mono font-bold text-blue-900">{formatBRL((resultado.total || 0) + (resultado.juros.valor || 0))}</span>
           </div>
         </div>
       )}
@@ -309,6 +269,52 @@ export default function Resultado() {
           onToggle={toggleVerbaExcluida}
         />
       </div>
+
+      {/* Total sem juros — antes da apuração de juros */}
+      <div className="flex justify-between items-center px-6 py-4 bg-gray-800 text-white rounded-lg mb-4">
+        <span className="font-bold text-lg">Total devido pelo Reclamado (sem juros)</span>
+        <span className="font-mono font-bold text-xl">{formatBRL(resultado.totalComHonorarios)}</span>
+      </div>
+
+      {/* Juros de mora SELIC — posicionados após memória de cálculo */}
+      {resultado.juros && resultado.juros.valor > 0 && (
+        <div className="card p-6 mb-4">
+          <h4 className="font-titulo text-lg mb-3 text-primaria">
+            Juros de Mora (SELIC desde o Ajuizamento)
+            {resultado.juros.estimado && (
+              <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">estimado</span>
+            )}
+          </h4>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
+            <div>
+              <p className="campo-label">Base de Cálculo</p>
+              <p className="font-mono">{formatBRL(resultado.totalComHonorarios)}</p>
+            </div>
+            <div>
+              <p className="campo-label">Taxa Acumulada</p>
+              <p className="font-mono">{resultado.juros.percentual?.toFixed(4)}%</p>
+            </div>
+            <div>
+              <p className="campo-label">Dias Úteis</p>
+              <p className="font-mono">{resultado.juros.diasUteis}</p>
+            </div>
+            <div>
+              <p className="campo-label">Valor dos Juros</p>
+              <p className="font-mono font-bold text-blue-700">{formatBRL(resultado.juros.valor)}</p>
+            </div>
+          </div>
+          {resultado.juros.memoria?.periodoCalculado && (
+            <p className="text-xs text-gray-400">Período: {resultado.juros.memoria.periodoCalculado}</p>
+          )}
+          {resultado.juros.estimado && (
+            <p className="text-xs text-amber-600 mt-1">{resultado.juros.memoria?.aviso}</p>
+          )}
+          <div className="mt-4 flex justify-between items-center bg-blue-900 text-white rounded-lg px-6 py-3">
+            <span className="font-bold text-lg">Total devido pelo Reclamado com Juros</span>
+            <span className="font-mono font-bold text-xl">{formatBRL((resultado.totalComHonorarios || 0) + (resultado.juros.valor || 0))}</span>
+          </div>
+        </div>
+      )}
 
       {/* Avisos legais */}
       <div className="space-y-2 mb-4">

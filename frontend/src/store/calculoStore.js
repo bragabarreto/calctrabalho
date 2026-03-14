@@ -112,14 +112,6 @@ const dadosIniciais = {
   qtdeFeriasVencidasSimples: 0,
   qtdeDecimoTerceiroVencidos: 0,
 
-  // Parcelas genéricas (legado — mantidas para compatibilidade)
-  parcelaGenericaSalarialMensal: 0,
-  parcelaGenericaSalarialDiaria6d: 0,
-  parcelaGenericaSalarialDiaria5d: 0,
-  parcelaGenericaIndenizatoriaMensal: 0,
-  parcelaGenericaIndenizatoriaDiaria6d: 0,
-  parcelaGenericaIndenizatoriaDiaria5d: 0,
-  parcelaGenericaIndenizatoriaUnica: 0,
 };
 
 export const useCalculoStore = create((set, get) => ({

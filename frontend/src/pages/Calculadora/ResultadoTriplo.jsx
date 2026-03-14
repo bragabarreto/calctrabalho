@@ -155,55 +155,52 @@ export default function ResultadoTriplo() {
 
         {resultadoAtivo && (
           <div className="p-4">
-            {/* Resumo temporal */}
-            {resultadoAtivo.temporal && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-4 p-4 bg-gray-50 rounded-lg">
+            {/* Dados do Contrato — por modalidade */}
+            <div className="mb-4 p-4 border border-gray-200 rounded-lg bg-white">
+              <h5 className="font-titulo text-sm text-primaria mb-3">Dados do Contrato — {MODALIDADES[abaAtiva]}</h5>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
                 <div>
-                  <p className="campo-label">Marco Prescricional</p>
-                  <p className="font-mono text-xs">
-                    {new Date(resultadoAtivo.temporal.marcoPrescricional).toLocaleDateString('pt-BR')}
-                  </p>
+                  <p className="campo-label">Data de Admissão</p>
+                  <p className="font-mono text-xs">{dados.dataAdmissao ? new Date(dados.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                </div>
+                <div>
+                  <p className="campo-label">Data de Dispensa</p>
+                  <p className="font-mono text-xs">{dados.dataDispensa ? new Date(dados.dataDispensa + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                </div>
+                <div>
+                  <p className="campo-label">Remuneração Base</p>
+                  <p className="font-mono text-xs font-semibold">{formatBRL(dados.ultimoSalario)}{dados.comissoes > 0 ? ` + com. ${formatBRL(dados.comissoes)}` : ''}{dados.gorjetas > 0 ? ` + gorj. ${formatBRL(dados.gorjetas)}` : ''}</p>
                 </div>
                 <div>
                   <p className="campo-label">Aviso Prévio</p>
-                  <p className="font-mono text-xs">{resultadoAtivo.temporal.diasAvisoPrevio} dias</p>
+                  <p className="font-mono text-xs">{dados.avisoPrevioTrabalhado ? 'Trabalhado' : 'Indenizado'}{resultadoAtivo.temporal ? ` — ${resultadoAtivo.temporal.diasAvisoPrevio} dias` : ''}</p>
                 </div>
-                <div>
-                  <p className="campo-label">Lapso c/ aviso</p>
-                  <p className="font-mono text-xs">{resultadoAtivo.temporal.lapsoComAviso?.meses} meses</p>
-                </div>
-                <div>
-                  <p className="campo-label">Lapso s/ aviso</p>
-                  <p className="font-mono text-xs">{resultadoAtivo.temporal.lapsoSemAviso?.meses} meses</p>
-                </div>
+                {resultadoAtivo.temporal?.dataEncerramentoComAviso && (
+                  <div>
+                    <p className="campo-label">Término c/ aviso</p>
+                    <p className="font-mono text-xs">{new Date(resultadoAtivo.temporal.dataEncerramentoComAviso).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                )}
+                {resultadoAtivo.temporal?.marcoPrescricional && (
+                  <div>
+                    <p className="campo-label">Marco Prescricional</p>
+                    <p className="font-mono text-xs">{new Date(resultadoAtivo.temporal.marcoPrescricional).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                )}
+                {resultadoAtivo.temporal && (
+                  <div>
+                    <p className="campo-label">Lapso s/ aviso</p>
+                    <p className="font-mono text-xs">{resultadoAtivo.temporal.lapsoSemAviso?.meses} meses</p>
+                  </div>
+                )}
+                {resultadoAtivo.temporal && (
+                  <div>
+                    <p className="campo-label">Lapso c/ aviso</p>
+                    <p className="font-mono text-xs">{resultadoAtivo.temporal.lapsoComAviso?.meses} meses</p>
+                  </div>
+                )}
               </div>
-            )}
-
-            {/* Juros SELIC */}
-            {resultadoAtivo.juros && resultadoAtivo.juros.valor > 0 && (
-              <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                <p className="font-semibold text-blue-900 mb-2">
-                  Juros de Mora (SELIC desde ajuizamento)
-                  {resultadoAtivo.juros.estimado && (
-                    <span className="ml-2 text-xs font-normal text-amber-600">(estimado)</span>
-                  )}
-                </p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <p className="campo-label">Taxa Acumulada</p>
-                    <p className="font-mono">{resultadoAtivo.juros.percentual?.toFixed(4)}%</p>
-                  </div>
-                  <div>
-                    <p className="campo-label">Dias Úteis</p>
-                    <p className="font-mono">{resultadoAtivo.juros.diasUteis}</p>
-                  </div>
-                  <div>
-                    <p className="campo-label">Valor dos Juros</p>
-                    <p className="font-mono font-bold text-blue-800">{formatBRL(resultadoAtivo.juros.valor)}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Memória de cálculo */}
             <div className="px-2 py-2 border-b border-gray-100 mb-2">
@@ -222,6 +219,42 @@ export default function ResultadoTriplo() {
               onToggle={toggleVerbaExcluida}
               apenasComValor
             />
+
+            {/* Total sem juros */}
+            <div className="flex justify-between items-center px-4 py-3 bg-gray-800 text-white rounded-lg mt-4">
+              <span className="font-semibold text-sm">Total devido pelo Reclamado (sem juros)</span>
+              <span className="font-mono font-bold">{formatBRL(resultadoAtivo.totalComHonorarios)}</span>
+            </div>
+
+            {/* Juros SELIC — posicionados após o total sem juros */}
+            {resultadoAtivo.juros && resultadoAtivo.juros.valor > 0 && (
+              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                <p className="font-semibold text-blue-900 mb-2">
+                  Juros de Mora (SELIC desde ajuizamento)
+                  {resultadoAtivo.juros.estimado && (
+                    <span className="ml-2 text-xs font-normal text-amber-600">(estimado)</span>
+                  )}
+                </p>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div>
+                    <p className="campo-label">Taxa Acumulada</p>
+                    <p className="font-mono">{resultadoAtivo.juros.percentual?.toFixed(4)}%</p>
+                  </div>
+                  <div>
+                    <p className="campo-label">Dias Úteis</p>
+                    <p className="font-mono">{resultadoAtivo.juros.diasUteis}</p>
+                  </div>
+                  <div>
+                    <p className="campo-label">Valor dos Juros</p>
+                    <p className="font-mono font-bold text-blue-800">{formatBRL(resultadoAtivo.juros.valor)}</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-center bg-blue-900 text-white rounded px-4 py-2">
+                  <span className="font-bold text-sm">Total devido pelo Reclamado com Juros</span>
+                  <span className="font-mono font-bold">{formatBRL((resultadoAtivo.totalComHonorarios || 0) + (resultadoAtivo.juros.valor || 0))}</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
