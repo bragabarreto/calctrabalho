@@ -1,6 +1,6 @@
 'use strict';
 
-const { calcularTemporais } = require('../../utils/datas');
+const { calcularTemporais, format, toDate } = require('../../utils/datas');
 const { round2, nonNegative } = require('../../utils/formatacao');
 const { Auditoria } = require('../../utils/auditoria');
 
@@ -16,7 +16,7 @@ const { calcularInsalubridade, calcularReflexosInsalubridade } = require('./verb
 const { calcularPericulosidade, calcularReflexosPericulosidade } = require('./verbas/periculosidade');
 const { calcularIntervaloIntrajornada } = require('./verbas/intervaloIntrajornada');
 const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require('./verbas/inss');
-const { calcularJurosSelic } = require('./verbas/jurosSelic');
+const { calcularJurosADC58 } = require('./verbas/jurosCorrecao');
 const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
 
 /**
@@ -240,9 +240,16 @@ async function calcular(dados, modalidade) {
   // ---- SIMULAÇÃO DE ACORDO ----
   const inssAcordo = await calcularINSS_Acordo(dados, total, percentualSalarial);
 
-  // ---- JUROS DE MORA (SELIC desde o ajuizamento) ----
+  // ---- JUROS DE MORA ADC 58 STF + Lei 14.905/2024 ----
   const dataCalculo = new Date().toISOString().split('T')[0];
-  const juros = await calcularJurosSelic(total, dados.dataAjuizamento, dataCalculo);
+  const faseProcessual = dados.faseProcessual || 'pre_judicial';
+  const dataEncerramentoStr = temporal.dataEncerramentoComAviso
+    ? format(toDate(temporal.dataEncerramentoComAviso), 'yyyy-MM-dd')
+    : dados.dataDispensa;
+  const dataInicioJuros = faseProcessual === 'judicial'
+    ? dados.dataAjuizamento
+    : dataEncerramentoStr;
+  const juros = await calcularJurosADC58(totalComHonorarios, dataInicioJuros, dados.dataAjuizamento, dataCalculo, faseProcessual);
 
   // ---- ENCARGOS DO EMPREGADO (INSS + IR — informativo) ----
   const lapsoMeses = temporal.lapsoComAviso?.meses || temporal.lapsoSemAviso?.meses || 1;

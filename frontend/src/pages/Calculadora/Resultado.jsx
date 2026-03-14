@@ -276,36 +276,55 @@ export default function Resultado() {
         <span className="font-mono font-bold text-xl">{formatBRL(resultado.totalComHonorarios)}</span>
       </div>
 
-      {/* Juros de mora SELIC — posicionados após memória de cálculo */}
+      {/* Juros ADC 58 STF — posicionados após memória de cálculo */}
       {resultado.juros && resultado.juros.valor > 0 && (
         <div className="card p-6 mb-4">
-          <h4 className="font-titulo text-lg mb-3 text-primaria">
-            Juros de Mora (SELIC desde o Ajuizamento)
+          <h4 className="font-titulo text-lg mb-1 text-primaria">
+            Juros e Correção Monetária (ADC 58 STF / Lei 14.905/2024)
             {resultado.juros.estimado && (
               <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">estimado</span>
             )}
           </h4>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
+          <p className="text-xs text-gray-400 mb-3">
+            Fase: {resultado.juros.memoria?.faseProcessual === 'judicial' ? 'Judicial' : 'Pré-Judicial'}.
+            {resultado.juros.memoria?.dataInicioJuros && ` Marco inicial: ${resultado.juros.memoria.dataInicioJuros}.`}
+          </p>
+
+          {resultado.juros.fases?.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {resultado.juros.fases.map((f, i) => (
+                <div key={i} className="bg-gray-50 rounded-lg px-4 py-2">
+                  <div className="flex justify-between items-start gap-2">
+                    <div>
+                      <p className="font-medium text-gray-700 text-xs leading-snug">{f.descricao}</p>
+                      <p className="text-xs text-gray-400">{f.periodo}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-mono font-semibold text-blue-700 text-sm">
+                        {f.percentual >= 0 ? '+' : ''}{f.percentual?.toFixed(4)}%
+                      </p>
+                      {f.estimado && <span className="text-xs text-amber-600">estimado</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mb-3">
             <div>
               <p className="campo-label">Base de Cálculo</p>
               <p className="font-mono">{formatBRL(resultado.totalComHonorarios)}</p>
             </div>
             <div>
-              <p className="campo-label">Taxa Acumulada</p>
+              <p className="campo-label">Taxa Total Acumulada</p>
               <p className="font-mono">{resultado.juros.percentual?.toFixed(4)}%</p>
             </div>
             <div>
-              <p className="campo-label">Dias Úteis</p>
-              <p className="font-mono">{resultado.juros.diasUteis}</p>
-            </div>
-            <div>
-              <p className="campo-label">Valor dos Juros</p>
+              <p className="campo-label">Valor dos Juros/Correção</p>
               <p className="font-mono font-bold text-blue-700">{formatBRL(resultado.juros.valor)}</p>
             </div>
           </div>
-          {resultado.juros.memoria?.periodoCalculado && (
-            <p className="text-xs text-gray-400">Período: {resultado.juros.memoria.periodoCalculado}</p>
-          )}
           {resultado.juros.estimado && (
             <p className="text-xs text-amber-600 mt-1">{resultado.juros.memoria?.aviso}</p>
           )}

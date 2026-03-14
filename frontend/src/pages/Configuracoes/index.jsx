@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
 import { useParcelas, useCriarParcela, useExcluirParcela } from '../../hooks/useParcelas.js';
 import { useSalarioMinimo, useSalvarSalarioMinimo, useRemoverSalarioMinimo } from '../../hooks/useSalarioMinimo.js';
+import { useIpcaE, useSalvarIpcaE, useRemoverIpcaE, useBacenSyncIpcaE } from '../../hooks/useIpcaE.js';
 import ParcelaEditor from '../../components/ParcelaEditor/index.jsx';
 
 const TABS = [
@@ -219,6 +220,155 @@ function SalarioMinimoAdmin() {
   );
 }
 
+function IpcaEAdmin() {
+  const { data: valores = [], isLoading } = useIpcaE();
+  const { mutateAsync: salvar } = useSalvarIpcaE();
+  const { mutateAsync: remover } = useRemoverIpcaE();
+  const { mutateAsync: bacenSync, isPending: sincronizando } = useBacenSyncIpcaE();
+
+  const anoAtual = String(new Date().getFullYear());
+  const [verTodos, setVerTodos] = useState(false);
+  const [formAberto, setFormAberto] = useState(false);
+  const [mesSel, setMesSel] = useState('01');
+  const [anoSel, setAnoSel] = useState(anoAtual);
+  const [valor, setValor] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [removendo, setRemovendo] = useState(null);
+  const [erro, setErro] = useState('');
+  const [msgSync, setMsgSync] = useState('');
+
+  const exibidos = verTodos ? valores : valores.slice(0, 12);
+
+  async function handleSalvar(e) {
+    e.preventDefault();
+    const mesAno = `${anoSel}-${mesSel}`;
+    if (!valor) { setErro('Informe o valor.'); return; }
+    const v = Number(valor.replace(',', '.'));
+    if (isNaN(v)) { setErro('Valor inválido.'); return; }
+    setSalvando(true); setErro('');
+    try {
+      await salvar({ mes_ano: mesAno, valor: v });
+      setValor(''); setFormAberto(false);
+    } catch (ex) { setErro(ex.message); }
+    finally { setSalvando(false); }
+  }
+
+  async function handleRemover(ma) {
+    if (!window.confirm(`Remover ${nomeMes(ma)}?`)) return;
+    setRemovendo(ma);
+    try { await remover(ma); } catch (ex) { alert(ex.message); }
+    finally { setRemovendo(null); }
+  }
+
+  async function handleBacenSync() {
+    setMsgSync('');
+    try {
+      const r = await bacenSync();
+      setMsgSync(`Sincronizado: ${r.atualizados} registros atualizados.`);
+    } catch (ex) { setMsgSync('Erro: ' + ex.message); }
+  }
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-titulo text-lg text-primaria">IPCA-E — Histórico Mensal</h3>
+        <div className="flex gap-2">
+          <button type="button" className="btn-secundario flex items-center gap-1 text-sm py-1 px-3"
+            onClick={handleBacenSync} disabled={sincronizando}>
+            <RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />
+            {sincronizando ? 'Sincronizando...' : 'Atualizar via BACEN'}
+          </button>
+          <button type="button" className="btn-primario flex items-center gap-1 text-sm py-1 px-3"
+            onClick={() => setFormAberto((v) => !v)}>
+            <Plus size={14} /> Adicionar
+          </button>
+        </div>
+      </div>
+
+      {msgSync && <p className="text-xs text-green-700 bg-green-50 p-2 rounded mb-3">{msgSync}</p>}
+
+      {formAberto && (
+        <form onSubmit={handleSalvar} className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm font-medium text-blue-800 mb-3">Novo registro (ou atualizar existente)</p>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="campo-label">Mês/Ano</label>
+              <div className="flex gap-1">
+                <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="campo-input">
+                  {MESES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={anoSel} onChange={(e) => setAnoSel(e.target.value)} className="campo-input">
+                  {ANOS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="campo-label">Valor (%)</label>
+              <input type="text" value={valor} onChange={(e) => setValor(e.target.value)}
+                placeholder="ex: 0,42" className="campo-input" />
+            </div>
+          </div>
+          {erro && <p className="text-xs text-red-600 mb-2">{erro}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={salvando} className="btn-primario text-sm py-1 px-4">
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button type="button" onClick={() => { setFormAberto(false); setErro(''); }} className="btn-secundario text-sm py-1 px-4">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">Carregando...</p>
+      ) : valores.length === 0 ? (
+        <p className="text-sm text-gray-400">Nenhum registro. Clique em "Atualizar via BACEN" para importar o histórico.</p>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="tabela-memoria">
+              <thead>
+                <tr>
+                  <th>Vigência</th>
+                  <th className="text-right">IPCA-E (%)</th>
+                  <th style={{ width: 40 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {exibidos.map((s) => (
+                  <tr key={s.mes_ano}>
+                    <td>{nomeMes(s.mes_ano)}</td>
+                    <td className={`text-right font-mono font-semibold ${Number(s.valor) < 0 ? 'text-green-700' : Number(s.valor) > 0.8 ? 'text-red-600' : ''}`}>
+                      {Number(s.valor) > 0 ? '+' : ''}{Number(s.valor).toFixed(4)}%
+                    </td>
+                    <td>
+                      <button type="button" onClick={() => handleRemover(s.mes_ano)} disabled={removendo === s.mes_ano}
+                        className="text-red-400 hover:text-red-600 p-1" title="Remover">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {valores.length > 12 && (
+            <button type="button" onClick={() => setVerTodos((v) => !v)}
+              className="mt-2 text-sm text-primaria flex items-center gap-1 hover:underline">
+              {verTodos ? <><ChevronUp size={14} /> Ver menos</> : <><ChevronDown size={14} /> Ver todos ({valores.length} registros)</>}
+            </button>
+          )}
+        </>
+      )}
+      <p className="text-xs text-gray-400 mt-2">
+        Fonte: BACEN — Série 10764. Usado no cálculo de juros pré-judiciais (ADC 58 STF).
+        Clique em "Atualizar via BACEN" para importar os últimos 7 anos automaticamente.
+      </p>
+    </div>
+  );
+}
+
 // ---- ABA PARÂMETROS LEGAIS ----
 function TabLegais() {
   const [selic, setSelic] = useState(null);
@@ -243,6 +393,8 @@ function TabLegais() {
   return (
     <div className="space-y-5">
       <SalarioMinimoAdmin />
+
+      <IpcaEAdmin />
 
       {/* SELIC */}
       <div className="card p-6">
@@ -315,20 +467,20 @@ function TabLegais() {
 
       {/* INSS 2025 */}
       <div className="card p-6">
-        <h3 className="font-titulo text-lg mb-3 text-primaria">Tabela INSS 2025 (Progressiva)</h3>
+        <h3 className="font-titulo text-lg mb-3 text-primaria">Tabela INSS 2026 (Progressiva)</h3>
         <table className="tabela-memoria">
           <thead><tr><th>Faixa</th><th className="text-right">Até (R$)</th><th className="text-center">Alíquota</th></tr></thead>
           <tbody>
-            <tr><td>1ª faixa</td><td className="text-right font-mono">1.518,00</td><td className="text-center">7,5%</td></tr>
-            <tr><td>2ª faixa</td><td className="text-right font-mono">2.793,88</td><td className="text-center">9,0%</td></tr>
-            <tr><td>3ª faixa</td><td className="text-right font-mono">4.190,83</td><td className="text-center">12,0%</td></tr>
-            <tr><td>4ª faixa (teto)</td><td className="text-right font-mono">8.157,41</td><td className="text-center">14,0%</td></tr>
+            <tr><td>1ª faixa</td><td className="text-right font-mono">1.621,00</td><td className="text-center">7,5%</td></tr>
+            <tr><td>2ª faixa</td><td className="text-right font-mono">2.902,84</td><td className="text-center">9,0%</td></tr>
+            <tr><td>3ª faixa</td><td className="text-right font-mono">4.354,27</td><td className="text-center">12,0%</td></tr>
+            <tr><td>4ª faixa (teto)</td><td className="text-right font-mono">8.475,55</td><td className="text-center">14,0%</td></tr>
           </tbody>
           <tfoot>
-            <tr><td colSpan={2} className="text-sm text-gray-500">Contribuição máxima mensal</td><td className="text-center font-mono font-semibold">R$ 908,86</td></tr>
+            <tr><td colSpan={2} className="text-sm text-gray-500">Contribuição máxima mensal</td><td className="text-center font-mono font-semibold">R$ 951,62</td></tr>
           </tfoot>
         </table>
-        <p className="text-xs text-gray-400 mt-2">Fonte: Portaria MPS nº 1.419/2024. Tabela progressiva — alíquota incide sobre cada faixa separadamente.</p>
+        <p className="text-xs text-gray-400 mt-2">Fonte: Decreto nº 12.797/2025. Tabela progressiva — alíquota incide sobre cada faixa separadamente.</p>
       </div>
 
       {/* Outros Parâmetros */}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, AlertCircle, Sparkles, X } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
 
 function formatBRL(v) {
@@ -133,13 +133,139 @@ function TabelaFaixas({ faixas, onRemover }) {
   );
 }
 
+/** Modal de importação de histórico salarial via análise de texto */
+function ModalImportarIA({ onImportar, onFechar }) {
+  const [texto, setTexto] = useState('');
+  const [analisando, setAnalisando] = useState(false);
+  const [resultados, setResultados] = useState(null);
+  const [selecionados, setSelecionados] = useState({});
+  const [erro, setErro] = useState('');
+
+  async function analisar() {
+    if (!texto.trim()) return;
+    setAnalisando(true); setErro(''); setResultados(null);
+    try {
+      const resp = await fetch('/api/calculos/parse-historico-salarial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ texto }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.erro || 'Erro na análise');
+      const res = json.resultados || [];
+      setResultados(res);
+      // Pré-selecionar todos
+      const sel = {};
+      res.forEach((_, i) => { sel[i] = true; });
+      setSelecionados(sel);
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setAnalisando(false);
+    }
+  }
+
+  function importar() {
+    if (!resultados) return;
+    const faixas = resultados
+      .filter((_, i) => selecionados[i])
+      .map(r => ({ inicio: r.mesAno, fim: null, valor: r.valor }));
+    if (faixas.length > 0) onImportar(faixas);
+    onFechar();
+  }
+
+  const numSel = Object.values(selecionados).filter(Boolean).length;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Sparkles size={18} className="text-primaria" />
+            <h3 className="font-semibold text-gray-800">Importar Histórico via Texto</h3>
+          </div>
+          <button type="button" onClick={onFechar} className="text-gray-400 hover:text-gray-600">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div>
+            <label className="campo-label">Cole o texto com o histórico salarial</label>
+            <textarea
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              className="campo-input min-h-[120px] font-mono text-xs"
+              placeholder={'Exemplos aceitos:\n• Jan/2022: R$ 3.500,00\n• 01/2022 R$ 3.500,00\n• 2022-01 3500.00\n• janeiro 2022 - 3.500,00'}
+            />
+          </div>
+
+          {erro && <p className="text-xs text-red-600">{erro}</p>}
+
+          <button type="button" onClick={analisar} disabled={analisando || !texto.trim()}
+            className="btn-primario w-full flex items-center justify-center gap-2 disabled:opacity-50">
+            <Sparkles size={16} />
+            {analisando ? 'Analisando...' : 'Analisar texto'}
+          </button>
+
+          {resultados !== null && (
+            <div>
+              {resultados.length === 0 ? (
+                <p className="text-sm text-gray-500 text-center py-2">Nenhum dado encontrado. Tente um formato diferente.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold text-gray-700">{resultados.length} registros encontrados</p>
+                    <button type="button" className="text-xs text-primaria hover:underline"
+                      onClick={() => {
+                        const all = resultados.every((_, i) => selecionados[i]);
+                        const novo = {};
+                        resultados.forEach((_, i) => { novo[i] = !all; });
+                        setSelecionados(novo);
+                      }}>
+                      {resultados.every((_, i) => selecionados[i]) ? 'Desmarcar todos' : 'Marcar todos'}
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
+                    {resultados.map((r, i) => (
+                      <label key={i} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox" checked={!!selecionados[i]}
+                          onChange={() => setSelecionados(p => ({ ...p, [i]: !p[i] }))} />
+                        <span className="font-mono text-xs text-gray-600 w-20">{r.mesAno}</span>
+                        <span className="font-mono text-sm font-semibold text-gray-800">{formatBRL(r.valor)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button type="button" onClick={importar} disabled={numSel === 0}
+                    className="btn-primario w-full mt-3 disabled:opacity-50">
+                    Importar {numSel} {numSel === 1 ? 'registro' : 'registros'} como faixas
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Painel de uma parcela dentro do histórico */
 function ParcelaPanel({ parcela, histId, onUpdate, onRemover, minMes, maxMes }) {
   const [aberta, setAberta] = useState(false);
+  const [modalIA, setModalIA] = useState(false);
 
   function addFaixa(faixa) {
     const novasFaixas = [...(parcela.faixas || []), faixa].sort((a, b) => a.inicio.localeCompare(b.inicio));
     onUpdate({ ...parcela, faixas: novasFaixas });
+  }
+
+  function addFaixas(faixas) {
+    const existentes = parcela.faixas || [];
+    const mesSet = new Set(existentes.map(f => f.inicio));
+    const novas = faixas.filter(f => !mesSet.has(f.inicio));
+    const merged = [...existentes, ...novas].sort((a, b) => a.inicio.localeCompare(b.inicio));
+    onUpdate({ ...parcela, faixas: merged });
   }
 
   function removeFaixa(idx) {
@@ -149,41 +275,57 @@ function ParcelaPanel({ parcela, histId, onUpdate, onRemover, minMes, maxMes }) 
   const ultimoValor = parcela.faixas?.length > 0 ? parcela.faixas[parcela.faixas.length - 1].valor : null;
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
-      <div
-        className="flex items-center justify-between px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-        onClick={() => setAberta(!aberta)}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="font-medium text-sm text-gray-800 truncate">{parcela.nome}</span>
-          {parcela.faixas?.length > 0 && (
-            <span className="text-xs text-gray-400 shrink-0">
-              {parcela.faixas.length} {parcela.faixas.length === 1 ? 'faixa' : 'faixas'}
-              {ultimoValor !== null && (
-                <span className="ml-1 text-gray-600 font-medium">· {formatBRL(ultimoValor)}/mês (atual)</span>
-              )}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0 ml-2">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onRemover(); }}
-            className="text-red-400 hover:text-red-600 p-0.5"
-            title="Remover parcela"
-          >
-            <Trash2 size={13} />
-          </button>
-          {aberta ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
-        </div>
-      </div>
-      {aberta && (
-        <div className="p-3">
-          <TabelaFaixas faixas={parcela.faixas || []} onRemover={removeFaixa} />
-          <FormFaixa onAdicionar={addFaixa} minMes={minMes} maxMes={maxMes} />
-        </div>
+    <>
+      {modalIA && (
+        <ModalImportarIA
+          onImportar={addFaixas}
+          onFechar={() => setModalIA(false)}
+        />
       )}
-    </div>
+      <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
+        <div
+          className="flex items-center justify-between px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+          onClick={() => setAberta(!aberta)}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-medium text-sm text-gray-800 truncate">{parcela.nome}</span>
+            {parcela.faixas?.length > 0 && (
+              <span className="text-xs text-gray-400 shrink-0">
+                {parcela.faixas.length} {parcela.faixas.length === 1 ? 'faixa' : 'faixas'}
+                {ultimoValor !== null && (
+                  <span className="ml-1 text-gray-600 font-medium">· {formatBRL(ultimoValor)}/mês (atual)</span>
+                )}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setModalIA(true); }}
+              className="text-primaria hover:text-blue-700 p-0.5 flex items-center gap-1 text-xs"
+              title="Importar via IA"
+            >
+              <Sparkles size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRemover(); }}
+              className="text-red-400 hover:text-red-600 p-0.5"
+              title="Remover parcela"
+            >
+              <Trash2 size={13} />
+            </button>
+            {aberta ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+          </div>
+        </div>
+        {aberta && (
+          <div className="p-3">
+            <TabelaFaixas faixas={parcela.faixas || []} onRemover={removeFaixa} />
+            <FormFaixa onAdicionar={addFaixa} minMes={minMes} maxMes={maxMes} />
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

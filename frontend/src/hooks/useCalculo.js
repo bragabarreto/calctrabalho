@@ -98,19 +98,30 @@ export function prepararDadosContrato(dados) {
     // Períodos de férias e 13o (arrays com status definido pelo usuário)
     periodosFerias: dados.periodosFerias || [],
     // Derivar contagem de férias dos períodos detalhados (se disponíveis)
+    // Períodos marcados como excluídos (ex: prescritos) são ignorados
     ...(() => {
       const pf = dados.periodosFerias || [];
       if (pf.length === 0) return {};
-      const vencidos = pf.filter(p => p.tipo === 'vencida');
+      const ativos = pf.filter(p => !p.excluida);
+      const vencidos = ativos.filter(p => p.tipo === 'vencida');
       return {
         qtdeFeriasVencidasDobradas: vencidos.filter(p => p.vencidas && !p.gozadas).length,
         qtdeFeriasVencidasSimples: vencidos.filter(p =>
           (!p.vencidas && !p.gozadas) || (p.gozadas && !p.pagas)
         ).length,
-        feriasDeducaoPagas: pf.reduce((sum, p) => sum + (p.pagas ? Number(p.valorPago || 0) : 0), 0),
+        feriasDeducaoPagas: ativos.reduce((sum, p) => sum + (p.pagas ? Number(p.valorPago || 0) : 0), 0),
       };
     })(),
     periodosDecimoTerceiro: dados.periodosDecimoTerceiro || [],
+    // Derivar qtdeDecimoTerceiroVencidos dos períodos detalhados (se disponíveis)
+    // Períodos excluídos (prescritos) e pagos não contam
+    ...(() => {
+      const pd = dados.periodosDecimoTerceiro || [];
+      if (pd.length === 0) return {};
+      const ativos = pd.filter(p => !p.excluido);
+      const integraisDevidos = ativos.filter(p => p.tipo === 'integral' && p.status !== 'pago').length;
+      return { qtdeDecimoTerceiroVencidos: integraisDevidos };
+    })(),
 
     // Honorários e despesas processuais
     percentualHonorarios: toNum(dados.percentualHonorarios, 0.15),
@@ -133,6 +144,9 @@ export function prepararDadosContrato(dados) {
         })),
       })),
     })),
+
+    // Fase processual (juros ADC 58)
+    faseProcessual: dados.faseProcessual || 'pre_judicial',
 
     // Bases de cálculo dos atrasados
     salarioAtrasadoBase: dados.salarioAtrasadoBase || 'ultimo_salario',

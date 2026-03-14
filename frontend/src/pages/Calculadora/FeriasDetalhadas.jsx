@@ -9,11 +9,25 @@ function fmtData(iso) {
 }
 
 function badgeFerias(p) {
+  if (p.prescrita && p.excluida) return { label: 'Prescrita (excluída)', cls: 'bg-gray-400 text-white' };
   if (p.tipo === 'proporcional') return { label: 'Devidas', cls: 'bg-orange-500 text-white' };
   if (p.gozadas && p.pagas) return { label: 'Gozadas + Pagas', cls: 'bg-green-500 text-white' };
   if (p.gozadas && !p.pagas) return { label: 'Gozadas (não pagas)', cls: 'bg-blue-500 text-white' };
   if (!p.gozadas && p.pagas) return { label: 'Pagas (não gozadas)', cls: 'bg-yellow-500 text-white' };
   return { label: p.vencidas ? 'Devidas em Dobro' : 'Devidas', cls: 'bg-red-500 text-white' };
+}
+
+/** Verifica se um período de férias está prescrito.
+ * Prescrição começa após fim do período concessivo (inicio_aquisitivo + 24 meses).
+ * Prazo prescricional: 5 anos. Total: inicio_aquisitivo < ajuizamento - 7 anos.
+ */
+function isPrescrita(inicioAquisitivo, dataAjuizamento) {
+  if (!inicioAquisitivo || !dataAjuizamento) return false;
+  const ini = new Date(inicioAquisitivo);
+  const ajuiz = new Date(dataAjuizamento);
+  const limitePrescrição = new Date(ajuiz);
+  limitePrescrição.setFullYear(limitePrescrição.getFullYear() - 7);
+  return ini < limitePrescrição;
 }
 
 export default function FeriasDetalhadas() {
@@ -30,15 +44,21 @@ export default function FeriasDetalhadas() {
         dataDispensa: dados.dataDispensa,
         avisoPrevioTrabalhado: dados.avisoPrevioTrabalhado,
       }).then((res) => {
-        const novos = (res.periodosFerias || []).map(p => ({
-          ...p,
-          gozadas: false,
-          pagas: false,
-          valorPago: null,
-          dataGozo: null,
-          dataGozoFim: null,
-          diasGozados: null,
-        }));
+        const ajuiz = dados.dataAjuizamento;
+        const novos = (res.periodosFerias || []).map(p => {
+          const prescrita = isPrescrita(p.inicioAquisitivo, ajuiz);
+          return {
+            ...p,
+            gozadas: false,
+            pagas: false,
+            valorPago: null,
+            dataGozo: null,
+            dataGozoFim: null,
+            diasGozados: null,
+            prescrita,
+            excluida: prescrita,
+          };
+        });
         setPeriodosLocal(novos);
         setPeriodosFerias(novos);
       }).catch(() => {}).finally(() => setCarregando(false));
@@ -91,6 +111,7 @@ export default function FeriasDetalhadas() {
 
           return (
             <div key={idx} className={`card p-4 border-l-4 ${
+              p.prescrita && p.excluida ? 'border-l-gray-300 opacity-60' :
               p.vencidas && !p.gozadas ? 'border-l-red-400' : ehProporcional ? 'border-l-blue-400' : p.gozadas && p.pagas ? 'border-l-green-400' : 'border-l-gray-300'
             }`}>
               <div className="flex flex-col sm:flex-row sm:items-start gap-3">
@@ -102,8 +123,11 @@ export default function FeriasDetalhadas() {
                         ? `Período Proporcional — ${p.avos}/12 avos`
                         : `${p.numero}º Período Aquisitivo`}
                     </span>
-                    {p.vencidas && !p.gozadas && (
+                    {p.vencidas && !p.gozadas && !p.prescrita && (
                       <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-medium">Vencidas — Dobro</span>
+                    )}
+                    {p.prescrita && (
+                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full font-medium">Prescrita</span>
                     )}
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>
                       {badge.label}
@@ -146,6 +170,18 @@ export default function FeriasDetalhadas() {
                 )}
                 {ehProporcional && (
                   <span className="text-xs px-3 py-1.5 rounded-full bg-orange-500 text-white font-medium">Devidas</span>
+                )}
+                {p.prescrita && (
+                  <button
+                    type="button"
+                    onClick={() => atualizar(idx, { excluida: !p.excluida })}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                      p.excluida ? 'border-gray-400 text-gray-500 hover:bg-gray-50' : 'bg-amber-500 text-white border-amber-500'
+                    }`}
+                    title={p.excluida ? 'Incluir no cálculo (sobrepõe prescrição)' : 'Excluir do cálculo (prescrita)'}
+                  >
+                    {p.excluida ? 'Incluir' : 'Excluir'}
+                  </button>
                 )}
               </div>
 

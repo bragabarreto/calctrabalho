@@ -62,6 +62,9 @@ const schemaDadosContrato = Joi.object({
   // Saldo de salário pago
   saldoSalarialPago: Joi.boolean().default(false),
 
+  // Fase processual (para cálculo de juros ADC 58 STF + Lei 14.905/2024)
+  faseProcessual: Joi.string().valid('pre_judicial', 'judicial').default('pre_judicial'),
+
   // Bases de cálculo dos atrasados
   salarioAtrasadoBase: Joi.string().valid('ultimo_salario', 'historico').default('ultimo_salario'),
   salarioAtrasadoHistoricoId: Joi.string().allow(null, '').optional(),

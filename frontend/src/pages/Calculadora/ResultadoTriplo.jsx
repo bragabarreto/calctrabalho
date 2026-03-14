@@ -226,23 +226,35 @@ export default function ResultadoTriplo() {
               <span className="font-mono font-bold">{formatBRL(resultadoAtivo.totalComHonorarios)}</span>
             </div>
 
-            {/* Juros SELIC — posicionados após o total sem juros */}
+            {/* Juros ADC 58 STF — posicionados após o total sem juros */}
             {resultadoAtivo.juros && resultadoAtivo.juros.valor > 0 && (
               <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                <p className="font-semibold text-blue-900 mb-2">
-                  Juros de Mora (SELIC desde ajuizamento)
+                <p className="font-semibold text-blue-900 mb-1">
+                  Juros e Correção (ADC 58 STF / Lei 14.905/2024)
                   {resultadoAtivo.juros.estimado && (
                     <span className="ml-2 text-xs font-normal text-amber-600">(estimado)</span>
                   )}
                 </p>
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div>
-                    <p className="campo-label">Taxa Acumulada</p>
-                    <p className="font-mono">{resultadoAtivo.juros.percentual?.toFixed(4)}%</p>
+                <p className="text-xs text-blue-700 mb-2">
+                  Fase: {resultadoAtivo.juros.memoria?.faseProcessual === 'judicial' ? 'Judicial' : 'Pré-Judicial'}.
+                  {resultadoAtivo.juros.memoria?.dataInicioJuros && ` Marco: ${resultadoAtivo.juros.memoria.dataInicioJuros}.`}
+                </p>
+                {resultadoAtivo.juros.fases?.length > 0 && (
+                  <div className="space-y-1 mb-3">
+                    {resultadoAtivo.juros.fases.map((f, i) => (
+                      <div key={i} className="flex justify-between text-xs bg-white/60 rounded px-2 py-1">
+                        <span className="text-gray-600 truncate pr-2">{f.descricao}</span>
+                        <span className="font-mono font-semibold text-blue-800 shrink-0">
+                          {f.percentual >= 0 ? '+' : ''}{f.percentual?.toFixed(4)}%
+                        </span>
+                      </div>
+                    ))}
                   </div>
+                )}
+                <div className="grid grid-cols-2 gap-3 mb-3">
                   <div>
-                    <p className="campo-label">Dias Úteis</p>
-                    <p className="font-mono">{resultadoAtivo.juros.diasUteis}</p>
+                    <p className="campo-label">Taxa Total</p>
+                    <p className="font-mono">{resultadoAtivo.juros.percentual?.toFixed(4)}%</p>
                   </div>
                   <div>
                     <p className="campo-label">Valor dos Juros</p>

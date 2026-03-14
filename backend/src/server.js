@@ -11,6 +11,7 @@ const comparacoesRoutes = require('./routes/comparacoes.routes');
 const pdfRoutes = require('./routes/pdf.routes');
 const parcelasRoutes = require('./routes/parcelasPersonalizadas.routes');
 const salarioMinimoRoutes = require('./routes/salarioMinimo.routes');
+const ipcaERoutes = require('./routes/ipcaE.routes');
 const { errorHandler, notFound } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/comparacoes', comparacoesRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/parcelas-personalizadas', parcelasRoutes);
 app.use('/api/salario-minimo', salarioMinimoRoutes);
+app.use('/api/ipca-e', ipcaERoutes);
 
 // Health check — inclui diagnóstico de DB para facilitar debug no Railway
 app.get('/api/health', async (req, res) => {
@@ -68,10 +70,31 @@ if (require('fs').existsSync(frontendDist)) {
 }
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`CalcTrabalho API rodando na porta ${PORT}`);
-  console.log(`NODE_ENV: ${process.env.NODE_ENV || '(não definido)'}`);
-  console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'PRESENTE (' + process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') + ')' : 'AUSENTE'}`);
-});
+async function runMigrationsAtStartup() {
+  const pool = require('./config/database');
+  const fs = require('fs');
+  const migrationsDir = path.join(__dirname, '..', 'migrations');
+  const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+  console.log(`[migrations] Executando ${files.length} migration(s)...`);
+  for (const file of files) {
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    console.log(`[migrations]   -> ${file}`);
+    await pool.query(sql);
+  }
+  console.log('[migrations] Concluídas.');
+}
+
+runMigrationsAtStartup()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`CalcTrabalho API rodando na porta ${PORT}`);
+      console.log(`NODE_ENV: ${process.env.NODE_ENV || '(não definido)'}`);
+      console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? 'PRESENTE (' + process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') + ')' : 'AUSENTE'}`);
+    });
+  })
+  .catch(err => {
+    console.error('[migrations] ERRO FATAL:', err.message);
+    process.exit(1);
+  });
 
 module.exports = app;

@@ -100,6 +100,30 @@ export default function DadosContrato() {
                 : 'Aviso indenizado: empregador pagou em dinheiro — integra ao tempo para FGTS e férias.'}
             </p>
           </div>
+          <div className="sm:col-span-2">
+            <label className="campo-label">Fase do Processo para Cálculo de Juros (ADC 58 STF)</label>
+            <div className="flex flex-wrap gap-3 mt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="faseProcessual" value="pre_judicial"
+                  checked={dados.faseProcessual === 'pre_judicial' || !dados.faseProcessual}
+                  onChange={() => setDados({ faseProcessual: 'pre_judicial' })}
+                />
+                <span className="text-sm">Pré-Judicial</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="faseProcessual" value="judicial"
+                  checked={dados.faseProcessual === 'judicial'}
+                  onChange={() => setDados({ faseProcessual: 'judicial' })}
+                />
+                <span className="text-sm">Judicial</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              {dados.faseProcessual === 'judicial'
+                ? 'Juros contados a partir do ajuizamento da ação (SELIC até 29/08/2024; IPCA + juros a partir de 30/08/2024).'
+                : 'Juros contados a partir do fim do contrato: IPCA-E + 1%/mês (pré-judicial) → SELIC (judicial até 29/08/2024) → IPCA + juros (a partir de 30/08/2024).'}
+            </p>
+          </div>
         </div>
       </div>
 
