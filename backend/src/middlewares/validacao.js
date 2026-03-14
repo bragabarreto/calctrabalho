@@ -61,6 +61,23 @@ const schemaDadosContrato = Joi.object({
   mesesAfastamento: Joi.number().integer().min(0).default(0),
   diasAfastamento: Joi.number().integer().min(0).default(0),
 
+  // Afastamentos (array de períodos)
+  periodosAfastamento: Joi.array().items(Joi.object({
+    inicio: Joi.date().iso().required(),
+    fim: Joi.date().iso().required(),
+  })).default([]),
+
+  // Saldo de salário pago
+  saldoSalarialPago: Joi.boolean().default(false),
+
+  // Bases de cálculo dos atrasados
+  salarioAtrasadoBase: Joi.string().valid('ultimo_salario', 'historico').default('ultimo_salario'),
+  salarioAtrasadoHistoricoId: Joi.string().allow(null, '').optional(),
+  comissaoAtrasadaBase: Joi.string().valid('media', 'historico').default('media'),
+  comissaoAtrasadoHistoricoId: Joi.string().allow(null, '').optional(),
+  gorjetaAtrasadaBase: Joi.string().valid('media', 'historico').default('media'),
+  gorjetaAtrasadoHistoricoId: Joi.string().allow(null, '').optional(),
+
   // Verbas excluídas
   verbasExcluidas: Joi.array().items(Joi.string()).default([]),
 

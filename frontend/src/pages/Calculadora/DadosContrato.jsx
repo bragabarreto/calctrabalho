@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
 import HistoricoSalarial from './HistoricoSalarial.jsx';
 
@@ -13,6 +14,23 @@ const MODALIDADES = [
 export default function DadosContrato() {
   const { dados, setDados, setStep } = useCalculoStore();
   const [mostrarHistorico, setMostrarHistorico] = useState(false);
+  const [mostrarAfastamentos, setMostrarAfastamentos] = useState(false);
+  const [novoAfastInicio, setNovoAfastInicio] = useState('');
+  const [novoAfastFim, setNovoAfastFim] = useState('');
+
+  const periodosAfastamento = dados.periodosAfastamento || [];
+
+  function addAfastamento() {
+    if (!novoAfastInicio || !novoAfastFim) return;
+    const novo = { id: `afast_${Date.now()}`, inicio: novoAfastInicio, fim: novoAfastFim };
+    setDados({ periodosAfastamento: [...periodosAfastamento, novo] });
+    setNovoAfastInicio('');
+    setNovoAfastFim('');
+  }
+
+  function removeAfastamento(id) {
+    setDados({ periodosAfastamento: periodosAfastamento.filter((p) => p.id !== id) });
+  }
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -100,14 +118,6 @@ export default function DadosContrato() {
             <label className="campo-label">Média de Gorjetas Mensais (R$)</label>
             <input type="number" name="gorjetas" value={dados.gorjetas} onChange={handleChange} className="campo-input" step="0.01" min="0" placeholder="0.00" />
           </div>
-          <div>
-            <label className="campo-label">Salários Atrasados (meses)</label>
-            <input type="number" name="salariosMesesAtrasados" value={dados.salariosMesesAtrasados} onChange={handleChange} className="campo-input" min="0" step="1" />
-          </div>
-          <div>
-            <label className="campo-label">Comissões Atrasadas (meses)</label>
-            <input type="number" name="comissoesMesesAtrasados" value={dados.comissoesMesesAtrasados} onChange={handleChange} className="campo-input" min="0" step="1" />
-          </div>
         </div>
       </div>
 
@@ -125,6 +135,65 @@ export default function DadosContrato() {
         </div>
       </div>
 
+      {/* Afastamentos (opcional) */}
+      <div className="card mb-4">
+        <button
+          type="button"
+          onClick={() => setMostrarAfastamentos(!mostrarAfastamentos)}
+          className="w-full flex items-center justify-between p-6 text-left"
+        >
+          <div>
+            <h3 className="font-titulo text-lg text-primaria">Afastamentos (opcional)</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Períodos de suspensão/afastamento do contrato
+              {periodosAfastamento.length > 0 && ` · ${periodosAfastamento.length} período(s) registrado(s)`}
+            </p>
+          </div>
+          <span className="text-gray-400 text-lg">{mostrarAfastamentos ? '▲' : '▼'}</span>
+        </button>
+        {mostrarAfastamentos && (
+          <div className="px-6 pb-6 space-y-3">
+            {periodosAfastamento.length > 0 && (
+              <div className="space-y-2">
+                {periodosAfastamento.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg text-sm">
+                    <span className="font-mono text-xs">
+                      {p.inicio ? new Date(p.inicio + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                      {' → '}
+                      {p.fim ? new Date(p.fim + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+                    </span>
+                    <button type="button" onClick={() => removeAfastamento(p.id)} className="text-red-400 hover:text-red-600 ml-auto">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="campo-label">Início do Afastamento</label>
+                <input type="date" value={novoAfastInicio} onChange={(e) => setNovoAfastInicio(e.target.value)} className="campo-input"
+                  min={dados.dataAdmissao} max={dados.dataDispensa} />
+              </div>
+              <div>
+                <label className="campo-label">Fim do Afastamento</label>
+                <input type="date" value={novoAfastFim} onChange={(e) => setNovoAfastFim(e.target.value)} className="campo-input"
+                  min={novoAfastInicio || dados.dataAdmissao} max={dados.dataDispensa} />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={addAfastamento}
+              disabled={!novoAfastInicio || !novoAfastFim}
+              className="btn-secundario flex items-center gap-1 text-sm disabled:opacity-40"
+            >
+              <Plus size={14} /> Adicionar Período
+            </button>
+            <p className="text-xs text-gray-400">Os meses de afastamento são deduzidos do período de horas extras e adicional noturno.</p>
+          </div>
+        )}
+      </div>
+
       {/* Histórico Salarial (colapsível) */}
       <div className="card mb-4">
         <button
@@ -134,13 +203,20 @@ export default function DadosContrato() {
         >
           <div>
             <h3 className="font-titulo text-lg text-primaria">Histórico Salarial (opcional)</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Registre evolução salarial para análise comparativa</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Registre evolução salarial para análise comparativa
+              {dados.dataAdmissao && dados.dataDispensa && (
+                <span className="ml-2 font-medium text-gray-500">
+                  · Contrato: {new Date(dados.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR')} – {new Date(dados.dataDispensa + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              )}
+            </p>
           </div>
           <span className="text-gray-400 text-lg">{mostrarHistorico ? '▲' : '▼'}</span>
         </button>
         {mostrarHistorico && (
           <div className="px-6 pb-6 space-y-4">
-            <HistoricoSalarial />
+            <HistoricoSalarial dataAdmissao={dados.dataAdmissao} dataDispensa={dados.dataDispensa} />
           </div>
         )}
       </div>

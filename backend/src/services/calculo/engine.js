@@ -36,23 +36,81 @@ async function calcular(dados, modalidade) {
   verbas.saldoSalarial = calcularSaldoSalarial(dados, temporal);
 
   // ---- SALÁRIOS E COMISSÕES ATRASADOS ----
+  const historicosSalariais = dados.historicosSalariais || [];
+
+  // Helper: get last N months before dataDispensa (excluding dispensa month)
+  function getUltimosMeses(n) {
+    const d = new Date(dados.dataDispensa);
+    const resultado = [];
+    for (let i = 1; i <= n; i++) {
+      const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+      resultado.unshift(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`);
+    }
+    return resultado;
+  }
+
+  // Salários atrasados
   const salAtrasadosMeses = dados.salariosMesesAtrasados || 0;
-  verbas.salariosAtrasados = salAtrasadosMeses > 0
-    ? { valor: round2((dados.ultimoSalario || 0) * salAtrasadosMeses), excluida: false,
-        memoria: { formula: `R$ ${dados.ultimoSalario} × ${salAtrasadosMeses} meses` } }
-    : { valor: 0, excluida: false };
+  if (salAtrasadosMeses > 0) {
+    let valorSalAt = round2((dados.ultimoSalario || 0) * salAtrasadosMeses);
+    let memoriaFormulaSal = `R$ ${dados.ultimoSalario} × ${salAtrasadosMeses} meses`;
+    if (dados.salarioAtrasadoBase === 'historico' && dados.salarioAtrasadoHistoricoId) {
+      const { historico, parcelaId } = resolverBaseHistoricoId(historicosSalariais, dados.salarioAtrasadoHistoricoId);
+      if (historico) {
+        const meses = getUltimosMeses(salAtrasadosMeses);
+        const inicio = meses[0] + '-01';
+        const fim = meses[meses.length - 1] + '-28';
+        const { total: totalHist } = calcularTotalPorHistorico(historico, inicio, fim, 1, parcelaId);
+        valorSalAt = totalHist;
+        memoriaFormulaSal = `Histórico "${historico.titulo}": ${meses[0]} a ${meses[meses.length - 1]} (${salAtrasadosMeses} meses) = R$ ${totalHist.toFixed(2)}`;
+      }
+    }
+    verbas.salariosAtrasados = { valor: valorSalAt, excluida: false, memoria: { formula: memoriaFormulaSal } };
+  } else {
+    verbas.salariosAtrasados = { valor: 0, excluida: false };
+  }
 
+  // Comissões atrasadas
   const comAtrasadosMeses = dados.comissoesMesesAtrasados || 0;
-  verbas.comissoesAtrasadas = comAtrasadosMeses > 0
-    ? { valor: round2((dados.comissoes || 0) * comAtrasadosMeses), excluida: false,
-        memoria: { formula: `R$ ${dados.comissoes} × ${comAtrasadosMeses} meses` } }
-    : { valor: 0, excluida: false };
+  if (comAtrasadosMeses > 0) {
+    let valorComAt = round2((dados.comissoes || 0) * comAtrasadosMeses);
+    let memoriaFormulaComm = `R$ ${dados.comissoes} × ${comAtrasadosMeses} meses`;
+    if (dados.comissaoAtrasadaBase === 'historico' && dados.comissaoAtrasadoHistoricoId) {
+      const { historico, parcelaId } = resolverBaseHistoricoId(historicosSalariais, dados.comissaoAtrasadoHistoricoId);
+      if (historico) {
+        const meses = getUltimosMeses(comAtrasadosMeses);
+        const inicio = meses[0] + '-01';
+        const fim = meses[meses.length - 1] + '-28';
+        const { total: totalHist } = calcularTotalPorHistorico(historico, inicio, fim, 1, parcelaId);
+        valorComAt = totalHist;
+        memoriaFormulaComm = `Histórico "${historico.titulo}": ${meses[0]} a ${meses[meses.length - 1]} (${comAtrasadosMeses} meses) = R$ ${totalHist.toFixed(2)}`;
+      }
+    }
+    verbas.comissoesAtrasadas = { valor: valorComAt, excluida: false, memoria: { formula: memoriaFormulaComm } };
+  } else {
+    verbas.comissoesAtrasadas = { valor: 0, excluida: false };
+  }
 
+  // Gorjetas atrasadas
   const gorjAtrasadosMeses = dados.gorjetasMesesAtrasados || 0;
-  verbas.gorjetasAtrasadas = gorjAtrasadosMeses > 0
-    ? { valor: round2((dados.gorjetas || 0) * gorjAtrasadosMeses), excluida: false,
-        memoria: { formula: 'R$ ' + (dados.gorjetas || 0) + ' × ' + gorjAtrasadosMeses + ' meses (Súmula 354 TST)' } }
-    : { valor: 0, excluida: false };
+  if (gorjAtrasadosMeses > 0) {
+    let valorGorjAt = round2((dados.gorjetas || 0) * gorjAtrasadosMeses);
+    let memoriaFormulaGorj = `R$ ${dados.gorjetas || 0} × ${gorjAtrasadosMeses} meses (Súmula 354 TST)`;
+    if (dados.gorjetaAtrasadaBase === 'historico' && dados.gorjetaAtrasadoHistoricoId) {
+      const { historico, parcelaId } = resolverBaseHistoricoId(historicosSalariais, dados.gorjetaAtrasadoHistoricoId);
+      if (historico) {
+        const meses = getUltimosMeses(gorjAtrasadosMeses);
+        const inicio = meses[0] + '-01';
+        const fim = meses[meses.length - 1] + '-28';
+        const { total: totalHist } = calcularTotalPorHistorico(historico, inicio, fim, 1, parcelaId);
+        valorGorjAt = totalHist;
+        memoriaFormulaGorj = `Histórico "${historico.titulo}": ${meses[0]} a ${meses[meses.length - 1]} (${gorjAtrasadosMeses} meses) = R$ ${totalHist.toFixed(2)} (Súmula 354 TST)`;
+      }
+    }
+    verbas.gorjetasAtrasadas = { valor: valorGorjAt, excluida: false, memoria: { formula: memoriaFormulaGorj } };
+  } else {
+    verbas.gorjetasAtrasadas = { valor: 0, excluida: false };
+  }
 
   // ---- AVISO PRÉVIO ----
   verbas.avisoPrevio = calcularAvisoPrevio(dados, temporal, modalidade);
@@ -101,7 +159,6 @@ async function calcular(dados, modalidade) {
   // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
   // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId
   verbas.parcelasHistorico = [];
-  const historicosSalariais = dados.historicosSalariais || [];
   const parcelasComHistorico = (dados.parcelasPersonalizadas || []).filter((p) => p.baseHistoricoId);
   for (const parcela of parcelasComHistorico) {
     const { historico, parcelaId } = resolverBaseHistoricoId(historicosSalariais, parcela.baseHistoricoId);
@@ -163,7 +220,8 @@ async function calcular(dados, modalidade) {
   const valorPago = dados.valorPago || 0;
   const deducoesGlobaisTotal = (dados.deducoesGlobais || []).reduce((acc, d) => acc + (Number(d.valor) || 0), 0);
   const feriasDeducaoPagas = dados.feriasDeducaoPagas || 0;
-  const totalDeducoes = round2(fgtsDepositado + valorPago + deducoesGlobaisTotal + feriasDeducaoPagas);
+  // fgtsDepositado já deduzido internamente no cálculo da verba FGTS (fgts.js)
+  const totalDeducoes = round2(valorPago + deducoesGlobaisTotal + feriasDeducaoPagas);
 
   // ---- TOTAL LÍQUIDO (subtotal - deduções) ----
   const total = nonNegative(round2(subtotal - totalDeducoes));

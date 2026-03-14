@@ -60,15 +60,24 @@ export default function Resultado() {
         observacoes: dados.observacoes,
       });
       setSalvoId(resp.id);
-      alert('Simulação salva com sucesso!');
+      return resp.id;
     } catch (e) {
       alert('Erro ao salvar: ' + e.message);
+      return null;
     } finally {
       setSalvando(false);
     }
   }
 
   const t = resultado.temporal;
+
+  const MODALIDADE_LABELS = {
+    sem_justa_causa: 'Dispensa sem Justa Causa',
+    pedido_demissao: 'Pedido de Demissão',
+    culpa_reciproca: 'Culpa Recíproca',
+    rescisao_indireta: 'Rescisão Indireta (art. 483 CLT)',
+    justa_causa: 'Dispensa por Justa Causa',
+  };
 
   return (
     <div className="max-w-5xl">
@@ -122,6 +131,49 @@ export default function Resultado() {
           </div>
         </div>
       )}
+
+      {/* Dados do Contrato */}
+      <div className="card p-6 mb-4">
+        <h4 className="font-titulo text-lg mb-3 text-primaria">Dados do Contrato</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+          <div>
+            <p className="campo-label">Data de Admissão</p>
+            <p className="font-mono">{dados.dataAdmissao ? new Date(dados.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+          </div>
+          <div>
+            <p className="campo-label">Data de Dispensa</p>
+            <p className="font-mono">{dados.dataDispensa ? new Date(dados.dataDispensa + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+          </div>
+          <div>
+            <p className="campo-label">Modalidade</p>
+            <p className="font-mono text-xs">{MODALIDADE_LABELS[dados.modalidade] || dados.modalidade}</p>
+          </div>
+          <div>
+            <p className="campo-label">Aviso Prévio</p>
+            <p className="font-mono">{dados.avisoPrevioTrabalhado ? 'Trabalhado' : 'Indenizado'}</p>
+          </div>
+          {t && (
+            <div>
+              <p className="campo-label">Término do Contrato</p>
+              <p className="font-mono">{t.dataEncerramentoComAviso ? new Date(t.dataEncerramentoComAviso).toLocaleDateString('pt-BR') : '—'}</p>
+            </div>
+          )}
+          <div>
+            <p className="campo-label">Último Salário</p>
+            <p className="font-mono font-semibold">{formatBRL(dados.ultimoSalario)}</p>
+          </div>
+          {(dados.comissoes > 0 || dados.gorjetas > 0) && (
+            <div className="sm:col-span-2">
+              <p className="campo-label">Composição Salarial</p>
+              <p className="font-mono text-xs">
+                Salário: {formatBRL(dados.ultimoSalario)}
+                {dados.comissoes > 0 && ` + Comissões: ${formatBRL(dados.comissoes)}`}
+                {dados.gorjetas > 0 && ` + Gorjetas: ${formatBRL(dados.gorjetas)}`}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Cards de resumo */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">

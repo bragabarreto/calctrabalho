@@ -51,9 +51,23 @@ const dadosIniciais = {
   multasProcessuaisPercentual: 0,
   valorCausa: 0,
 
-  // Afastamentos
+  // Afastamentos (array de períodos)
+  periodosAfastamento: [], // [{ id, inicio: 'YYYY-MM-DD', fim: 'YYYY-MM-DD' }]
+
+  // Afastamentos (legado — mantidos para compatibilidade)
   mesesAfastamento: 0,
   diasAfastamento: 0,
+
+  // Saldo de salário
+  saldoSalarialPago: false,
+
+  // Bases para cálculo de atrasados
+  salarioAtrasadoBase: 'ultimo_salario', // 'ultimo_salario' | 'historico'
+  salarioAtrasadoHistoricoId: '', // 'histId' ou 'histId:parcelaId'
+  comissaoAtrasadaBase: 'media', // 'media' | 'historico'
+  comissaoAtrasadoHistoricoId: '',
+  gorjetaAtrasadaBase: 'media', // 'media' | 'historico'
+  gorjetaAtrasadoHistoricoId: '',
 
   // Acordo
   valorAcordo: 0,

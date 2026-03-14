@@ -3,10 +3,30 @@ import { Download, Save, FileText } from 'lucide-react';
 
 export default function ExportBar({ simulacaoId, onSalvar, salvoId }) {
   const [gerando, setGerando] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+
+  async function handleSalvar() {
+    if (!onSalvar) return null;
+    setSalvando(true);
+    try {
+      const id = await onSalvar();
+      return id;
+    } finally {
+      setSalvando(false);
+    }
+  }
 
   async function gerarPdf() {
-    const id = salvoId || simulacaoId;
-    if (!id) { alert('Salve a simulação antes de gerar o PDF.'); return; }
+    let id = salvoId || simulacaoId;
+    if (!id) {
+      if (onSalvar) {
+        id = await handleSalvar();
+        if (!id) { alert('Erro ao salvar antes de gerar PDF.'); return; }
+      } else {
+        alert('Salve a simulação antes de gerar o PDF.');
+        return;
+      }
+    }
     setGerando(true);
     try {
       const resp = await fetch(`/api/pdf/gerar/${id}`, { method: 'POST' });
@@ -31,16 +51,21 @@ export default function ExportBar({ simulacaoId, onSalvar, salvoId }) {
 
   return (
     <div className="flex gap-3 items-center no-print">
-      {onSalvar && (
-        <button className="btn-secundario flex items-center gap-2" onClick={onSalvar}>
+      {onSalvar && !salvoId && (
+        <button className="btn-secundario flex items-center gap-2" onClick={handleSalvar} disabled={salvando}>
           <Save size={16} />
-          Salvar Simulação
+          {salvando ? 'Salvando...' : 'Salvar Simulação'}
         </button>
+      )}
+      {salvoId && (
+        <span className="text-xs text-green-600 flex items-center gap-1">
+          <Save size={14} /> Salvo
+        </span>
       )}
       <button
         className="btn-primario flex items-center gap-2"
         onClick={gerarPdf}
-        disabled={gerando}
+        disabled={gerando || salvando}
       >
         <FileText size={16} />
         {gerando ? 'Gerando PDF...' : 'Exportar PDF'}

@@ -37,7 +37,7 @@ function resolverFaixas(faixas) {
   });
 }
 
-function FormFaixa({ onAdicionar }) {
+function FormFaixa({ onAdicionar, minMes, maxMes }) {
   const [inicio, setInicio] = useState('');
   const [fim, setFim] = useState('');
   const [valor, setValor] = useState('');
@@ -56,11 +56,11 @@ function FormFaixa({ onAdicionar }) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div>
           <label className="campo-label">Início * <span className="text-gray-400 font-normal">(mês/ano)</span></label>
-          <input type="month" value={inicio} onChange={(e) => setInicio(e.target.value)} className="campo-input" />
+          <input type="month" value={inicio} onChange={(e) => setInicio(e.target.value)} className="campo-input" min={minMes} max={maxMes} />
         </div>
         <div>
           <label className="campo-label">Fim <span className="text-gray-400 font-normal">(vazio = vigente)</span></label>
-          <input type="month" value={fim} onChange={(e) => setFim(e.target.value)} className="campo-input" />
+          <input type="month" value={fim} onChange={(e) => setFim(e.target.value)} className="campo-input" min={minMes || inicio} max={maxMes} />
         </div>
         <div>
           <label className="campo-label">Valor (R$) *</label>
@@ -134,7 +134,7 @@ function TabelaFaixas({ faixas, onRemover }) {
 }
 
 /** Painel de uma parcela dentro do histórico */
-function ParcelaPanel({ parcela, histId, onUpdate, onRemover }) {
+function ParcelaPanel({ parcela, histId, onUpdate, onRemover, minMes, maxMes }) {
   const [aberta, setAberta] = useState(false);
 
   function addFaixa(faixa) {
@@ -180,7 +180,7 @@ function ParcelaPanel({ parcela, histId, onUpdate, onRemover }) {
       {aberta && (
         <div className="p-3">
           <TabelaFaixas faixas={parcela.faixas || []} onRemover={removeFaixa} />
-          <FormFaixa onAdicionar={addFaixa} />
+          <FormFaixa onAdicionar={addFaixa} minMes={minMes} maxMes={maxMes} />
         </div>
       )}
     </div>
@@ -219,12 +219,15 @@ function FormParcela({ onAdicionar }) {
   );
 }
 
-export default function HistoricoSalarial() {
+export default function HistoricoSalarial({ dataAdmissao, dataDispensa }) {
   const { dados, setDados } = useCalculoStore();
   const historicos = dados.historicosSalariais || [
     { id: 'reclamante', titulo: 'Reclamante', fixo: true, parcelas: [] },
   ];
   const [expandido, setExpandido] = useState(null);
+
+  const minMes = dataAdmissao ? dataAdmissao.slice(0, 7) : undefined; // 'YYYY-MM'
+  const maxMes = dataDispensa ? dataDispensa.slice(0, 7) : undefined; // 'YYYY-MM'
 
   function setHistoricos(nova) {
     setDados({ historicosSalariais: nova });
@@ -272,6 +275,9 @@ export default function HistoricoSalarial() {
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">
           Registre a evolução de cada rubrica ao longo do contrato. Use como base de cálculo nas parcelas mensais.
+          {minMes && maxMes && (
+            <span className="ml-1 font-medium text-gray-600">Período: {minMes.split('-').reverse().join('/')} a {maxMes.split('-').reverse().join('/')}</span>
+          )}
         </p>
         <button type="button" onClick={addHistorico}
           className="btn-secundario flex items-center gap-2 text-sm shrink-0 ml-3">
@@ -353,6 +359,8 @@ export default function HistoricoSalarial() {
                       histId={h.id}
                       onUpdate={(p) => updateParcela(h.id, parcela.id, p)}
                       onRemover={() => removeParcela(h.id, parcela.id)}
+                      minMes={minMes}
+                      maxMes={maxMes}
                     />
                   ))}
 

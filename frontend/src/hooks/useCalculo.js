@@ -59,12 +59,31 @@ export function prepararDadosContrato(dados) {
     valorPago: toNum(dados.valorPago, 0),
     percentualHonorarios: toNum(dados.percentualHonorarios, 0.15),
 
-    // Afastamentos
-    mesesAfastamento: toNum(dados.mesesAfastamento, 0),
+    // Afastamentos: derive mesesAfastamento from periodosAfastamento
+    mesesAfastamento: (() => {
+      const periodos = dados.periodosAfastamento || [];
+      if (periodos.length === 0) return toNum(dados.mesesAfastamento, 0);
+      // Sum months of each period
+      let totalDias = 0;
+      for (const p of periodos) {
+        if (!p.inicio || !p.fim) continue;
+        const ini = new Date(p.inicio);
+        const fim = new Date(p.fim);
+        totalDias += (fim - ini) / (1000 * 60 * 60 * 24);
+      }
+      return Math.round(totalDias / 30);
+    })(),
     diasAfastamento: toNum(dados.diasAfastamento, 0),
+    periodosAfastamento: (dados.periodosAfastamento || []).map((p) => ({ inicio: p.inicio, fim: p.fim })),
 
-    // Verbas excluídas
-    verbasExcluidas: dados.verbasExcluidas || [],
+    // Verbas excluídas (inclui saldo_salarial se já foi pago)
+    verbasExcluidas: (() => {
+      const base = dados.verbasExcluidas || [];
+      if (dados.saldoSalarialPago && !base.includes('saldo_salarial')) {
+        return [...base, 'saldo_salarial'];
+      }
+      return base;
+    })(),
 
     // Acordo
     valorAcordo: toNum(dados.valorAcordo),
@@ -122,6 +141,15 @@ export function prepararDadosContrato(dados) {
         })),
       })),
     })),
+
+    // Bases de cálculo dos atrasados
+    salarioAtrasadoBase: dados.salarioAtrasadoBase || 'ultimo_salario',
+    salarioAtrasadoHistoricoId: dados.salarioAtrasadoHistoricoId || null,
+    comissaoAtrasadaBase: dados.comissaoAtrasadaBase || 'media',
+    comissaoAtrasadoHistoricoId: dados.comissaoAtrasadoHistoricoId || null,
+    gorjetaAtrasadaBase: dados.gorjetaAtrasadaBase || 'media',
+    gorjetaAtrasadoHistoricoId: dados.gorjetaAtrasadoHistoricoId || null,
+    saldoSalarialPago: Boolean(dados.saldoSalarialPago),
   };
 }
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCalculoStore } from '../../store/calculoStore.js';
 import MemoriaCalculo from '../../components/MemoriaCalculo/index.jsx';
 import ExportBar from '../../components/ExportBar/index.jsx';
+import { useSalvarSimulacao } from '../../hooks/useCalculo.js';
 
 const MODALIDADES = {
   sem_justa_causa: 'Dispensa sem Justa Causa',
@@ -23,8 +24,32 @@ function ColoredValue({ valor, max, min }) {
 
 export default function ResultadoTriplo() {
   const { resultadosTriplos, dados, setStep, toggleVerbaExcluida } = useCalculoStore();
+  const { mutateAsync: salvar } = useSalvarSimulacao();
   const [abaAtiva, setAbaAtiva] = useState('sem_justa_causa');
   const [salvoIds, setSalvoIds] = useState({});
+  const [salvandoId, setSalvandoId] = useState(null);
+
+  async function handleSalvar() {
+    setSalvandoId(abaAtiva);
+    try {
+      const resp = await salvar({
+        nome: (dados.nomeSimulacao || 'Simulação') + ' — ' + (MODALIDADES[abaAtiva] || abaAtiva),
+        modalidade: abaAtiva,
+        dados,
+        resultado: resultadosTriplos[abaAtiva],
+        numeroProcesso: dados.numeroProcesso,
+        varaNome: dados.varaNome,
+        observacoes: dados.observacoes,
+      });
+      setSalvoIds((prev) => ({ ...prev, [abaAtiva]: resp.id }));
+      return resp.id;
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+      return null;
+    } finally {
+      setSalvandoId(null);
+    }
+  }
 
   if (!resultadosTriplos) {
     return (
@@ -62,7 +87,7 @@ export default function ResultadoTriplo() {
               {new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
-          <ExportBar salvoId={salvoIds[abaAtiva]} />
+          <ExportBar salvoId={salvoIds[abaAtiva]} onSalvar={handleSalvar} />
         </div>
       </div>
 
