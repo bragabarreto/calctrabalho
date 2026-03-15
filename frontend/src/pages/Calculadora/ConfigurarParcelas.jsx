@@ -231,14 +231,14 @@ function CardParcela({ parcela, idx, onUpdate, dadosContrato, setDados }) {
 }
 
 export default function ConfigurarParcelas() {
-  const { dados, setDados, setStep, tipoFluxo } = useCalculoStore();
+  const { dados, setDados, setStep } = useCalculoStore();
   const [parcelasLocais, setParcelasLocais] = useState(dados.parcelasPersonalizadas || []);
+  const [abaAtiva, setAbaAtiva] = useState(0);
 
   // Determinar se precisa de aba Jornada
   const precisaJornada = parcelasLocais.some(p => PARCELAS_JORNADA_IDS.includes(p._templateId));
 
   function onNext() {
-    // Salvar parcelasLocais no store antes de avançar
     setDados({ parcelasPersonalizadas: parcelasLocais });
     setStep(precisaJornada ? 6 : 7);
   }
@@ -272,25 +272,63 @@ export default function ConfigurarParcelas() {
     );
   }
 
+  const abaIdx = Math.min(abaAtiva, parcelasLocais.length - 1);
+
   return (
     <div className="max-w-3xl">
-      <div className="card p-6 mb-4">
-        <h3 className="font-titulo text-lg text-primaria mb-1">Configurar Parcelas</h3>
-        <p className="text-xs text-gray-400 mb-4">
-          Defina os parâmetros de cada parcela selecionada. Parcelas que dependem de jornada serão configuradas na próxima aba.
-        </p>
-        <div className="space-y-3">
-          {parcelasLocais.map((p, idx) => (
-            <CardParcela
-              key={p._localId || p.id || idx}
-              parcela={p}
-              idx={idx}
-              onUpdate={handleUpdateParcela}
-              dadosContrato={dados}
-              setDados={setDados}
-            />
+      <div className="card mb-4 overflow-hidden">
+        {/* Abas — uma por parcela */}
+        <div className="flex border-b overflow-x-auto bg-gray-50">
+          {parcelasLocais.map((p, i) => (
+            <button
+              key={p._localId || p.id || i}
+              type="button"
+              onClick={() => setAbaAtiva(i)}
+              className={`px-4 py-3 text-sm font-medium shrink-0 border-b-2 transition-colors whitespace-nowrap ${
+                i === abaIdx
+                  ? 'border-primaria text-primaria bg-white'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {i + 1}. {p.nome}
+            </button>
           ))}
         </div>
+
+        {/* Conteúdo da aba ativa */}
+        <div className="p-4">
+          <CardParcela
+            key={parcelasLocais[abaIdx]?._localId || parcelasLocais[abaIdx]?.id || abaIdx}
+            parcela={parcelasLocais[abaIdx]}
+            idx={abaIdx}
+            onUpdate={handleUpdateParcela}
+            dadosContrato={dados}
+            setDados={setDados}
+          />
+        </div>
+
+        {/* Navegação entre abas */}
+        {parcelasLocais.length > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+            <button
+              type="button"
+              className="btn-secundario text-xs py-1.5 px-3 disabled:opacity-40"
+              disabled={abaIdx === 0}
+              onClick={() => setAbaAtiva(abaIdx - 1)}
+            >
+              ← Anterior
+            </button>
+            <span className="text-xs text-gray-400">{abaIdx + 1} / {parcelasLocais.length}</span>
+            <button
+              type="button"
+              className="btn-secundario text-xs py-1.5 px-3 disabled:opacity-40"
+              disabled={abaIdx === parcelasLocais.length - 1}
+              onClick={() => setAbaAtiva(abaIdx + 1)}
+            >
+              Próxima →
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-between">

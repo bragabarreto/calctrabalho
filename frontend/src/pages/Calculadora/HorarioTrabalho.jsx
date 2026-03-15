@@ -32,6 +32,7 @@ function SemanaPadrao({ periodo }) {
   const {
     horaEntrada, horaSaida, intervaloMinutos = 60,
     diasSemana = [1, 2, 3, 4, 5], divisorJornada = 220, padraoApuracao = 'diario',
+    horasJornadaPadrao12x36 = 12,
   } = periodo;
 
   if (!horaEntrada || !horaSaida) return null;
@@ -40,19 +41,23 @@ function SemanaPadrao({ periodo }) {
   const saidaMin = toMinutos(horaSaida);
   const minLiquidosDia = Math.max(0, (saidaMin - entradaMin) - (intervaloMinutos || 0));
 
-  const horasSemanais = (divisorJornada * 12) / 52;
+  // Relação: divisor = horasSemanais × 5 (Súmula TST 431)
+  const horasSemanais = divisorJornada / 5;
   const minContratualSemana = horasSemanais * 60;
   const minContratualDia = diasSemana.length > 0 ? minContratualSemana / diasSemana.length : 0;
 
   if (padraoApuracao === '12x36') {
+    const minEfetivoDia = minLiquidosDia;
+    const minPadraoTurno = horasJornadaPadrao12x36 * 60;
+    const heMinTurno = Math.max(0, minEfetivoDia - minPadraoTurno);
     return (
       <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-xs font-medium text-blue-800 mb-2">Regime 12×36 — Ciclo padrão</p>
         <div className="flex gap-3">
           <div className="flex-1 p-2 bg-blue-100 rounded text-center">
-            <p className="text-sm font-bold text-blue-900">12h</p>
-            <p className="text-xs text-blue-700">Turno trabalho</p>
-            <p className="text-xs text-blue-600 font-mono">{horaEntrada} → {horaSaida}</p>
+            <p className="text-sm font-bold text-blue-900">{horasJornadaPadrao12x36}h padrão</p>
+            <p className="text-xs text-blue-700">Turno contratual</p>
+            <p className="text-xs text-blue-600 font-mono">{horaEntrada} → {horaSaida} ({formatMin(minEfetivoDia)} efetivo)</p>
           </div>
           <div className="flex-1 p-2 bg-gray-100 rounded text-center">
             <p className="text-sm font-bold text-gray-600">36h</p>
@@ -60,6 +65,11 @@ function SemanaPadrao({ periodo }) {
             <p className="text-xs text-gray-400">~15 turnos/mês</p>
           </div>
         </div>
+        {heMinTurno > 0 && (
+          <p className="text-xs text-amber-700 mt-2 font-medium">
+            HE/turno: {formatMin(heMinTurno)} × ~15 turnos ≈ {formatMin(heMinTurno * 15)}/mês
+          </p>
+        )}
       </div>
     );
   }
@@ -183,6 +193,7 @@ function novoPeriodo(dataAdmissao, dataDispensa) {
     horaSaida: '17:00',
     intervaloMinutos: 60,
     diasSemana: [1, 2, 3, 4, 5],
+    horasJornadaPadrao12x36: 12,
     afastamentos: [],
     // Resultado cartão
     totalHorasExtras: null,
@@ -434,6 +445,17 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                     className="campo-input" min="0" max="120" step="15" />
                 </div>
               </div>
+
+              {/* Para 12×36: horas padrão do turno (jornada contratual) */}
+              {periodo.padraoApuracao === '12x36' && (
+                <div>
+                  <label className="campo-label">Horas por turno — padrão contratual (h)</label>
+                  <input type="number" value={periodo.horasJornadaPadrao12x36 ?? 12}
+                    onChange={e => set('horasJornadaPadrao12x36', Number(e.target.value))}
+                    className="campo-input" step="0.5" min="1" max="24" />
+                  <p className="text-xs text-gray-400 mt-0.5">HE = horas efetivas trabalhadas − este valor</p>
+                </div>
+              )}
 
               <div>
                 <label className="campo-label mb-1 block">Dias trabalhados na semana</label>

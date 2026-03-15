@@ -32,13 +32,13 @@ async function criar(req, res, next) {
     const d = req.body;
     const { rows } = await pool.query(
       `INSERT INTO parcelas_personalizadas (
-        nome, natureza, periodo_tipo, periodo_inicio, periodo_fim,
+        nome, descricao, natureza, periodo_tipo, periodo_inicio, periodo_fim,
         frequencia, tipo_valor, valor_base, percentual_base, percentual_adicional,
         gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, template_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       RETURNING *`,
       [
-        d.nome, d.natureza, d.periodoTipo || 'contrato',
+        d.nome, d.descricao || null, d.natureza, d.periodoTipo || 'contrato',
         d.periodoInicio || null, d.periodoFim || null,
         d.frequencia, d.tipoValor || 'fixo',
         d.valorBase || null, d.percentualBase || null, d.percentualAdicional || 0,
@@ -59,13 +59,13 @@ async function atualizar(req, res, next) {
     const d = req.body;
     const { rows } = await pool.query(
       `UPDATE parcelas_personalizadas SET
-        nome=$1, natureza=$2, periodo_tipo=$3, periodo_inicio=$4, periodo_fim=$5,
-        frequencia=$6, tipo_valor=$7, valor_base=$8, percentual_base=$9, percentual_adicional=$10,
-        gera_reflexos=$11, reflexos_em=$12, incide_inss=$13, incide_ir=$14, incide_fgts=$15,
-        template_id=$16, atualizado_em=NOW()
-      WHERE id=$17 AND ativo=TRUE RETURNING *`,
+        nome=$1, descricao=$2, natureza=$3, periodo_tipo=$4, periodo_inicio=$5, periodo_fim=$6,
+        frequencia=$7, tipo_valor=$8, valor_base=$9, percentual_base=$10, percentual_adicional=$11,
+        gera_reflexos=$12, reflexos_em=$13, incide_inss=$14, incide_ir=$15, incide_fgts=$16,
+        template_id=$17, atualizado_em=NOW()
+      WHERE id=$18 AND ativo=TRUE RETURNING *`,
       [
-        d.nome, d.natureza, d.periodoTipo || 'contrato',
+        d.nome, d.descricao || null, d.natureza, d.periodoTipo || 'contrato',
         d.periodoInicio || null, d.periodoFim || null,
         d.frequencia, d.tipoValor || 'fixo',
         d.valorBase || null, d.percentualBase || null, d.percentualAdicional || 0,

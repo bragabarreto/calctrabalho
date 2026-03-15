@@ -62,6 +62,9 @@ const schemaDadosContrato = Joi.object({
   // Saldo de salário pago
   saldoSalarialPago: Joi.boolean().default(false),
 
+  // Tipo de fluxo — controla quais verbas são calculadas
+  tipoFluxo: Joi.string().valid('verbas_rescisórias', 'verbas_e_parcelas', 'apenas_parcelas').default('verbas_rescisórias'),
+
   // Bases de cálculo dos atrasados
   salarioAtrasadoBase: Joi.string().valid('ultimo_salario', 'historico').default('ultimo_salario'),
   salarioAtrasadoHistoricoId: Joi.string().allow(null, '').optional(),
@@ -142,6 +145,7 @@ const schemaDadosContrato = Joi.object({
     horaSaida: Joi.string().allow(null, '').optional(),
     intervaloMinutos: Joi.number().min(0).default(60),
     diasSemana: Joi.array().items(Joi.number().integer().min(0).max(6)).default([1,2,3,4,5]),
+    horasJornadaPadrao12x36: Joi.number().positive().default(12),
     afastamentos: Joi.array().items(Joi.object().unknown(true)).default([]),
     totalHorasExtras: Joi.number().min(0).allow(null).optional(),
     totalHorasNoturnas: Joi.number().min(0).allow(null).optional(),

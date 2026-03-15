@@ -125,8 +125,12 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp) {
   const afastamentos = periodo.afastamentos || [];
 
   // Jornada contratual derivada do divisor
-  const horasSemanais = (divisor * 12) / 52;
-  const horasContratualDiaria = horasSemanais / 5; // assume 5 dias úteis base
+  // Relação: divisor = horasSemanais × 5 (Súmula TST 431: 220 ÷ 5 = 44h/sem)
+  const horasSemanais = divisor / 5;
+  const diasTrabalhadosSemana = (periodo.diasSemana || [1, 2, 3, 4, 5]).length;
+  const horasContratualDiaria = horasSemanais / Math.max(1, diasTrabalhadosSemana);
+  // Para 12x36: jornada padrão do turno é informada separadamente
+  const horasJornadaPadrao12x36 = periodo.horasJornadaPadrao12x36 ?? 12;
 
   if (periodo.modoEntrada === 'medio') {
     // Modo médio: calcular com base em médias informadas pelo usuário
@@ -213,8 +217,11 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp) {
       let minHE = 0;
       let minHN = 0;
 
-      if (padraoApuracao === 'diario' || padraoApuracao === '12x36') {
+      if (padraoApuracao === 'diario') {
         minHE = Math.max(0, minLiquidosDia - minContratualDia);
+      } else if (padraoApuracao === '12x36') {
+        // Para 12×36: compara jornada efetiva vs padrão do turno (default 12h)
+        minHE = Math.max(0, minLiquidosDia - horasJornadaPadrao12x36 * 60);
       }
       // Para semanal/misto: HE diária = 0 (será calculada semanalmente abaixo)
       // Para misto: adiciona excesso diário também

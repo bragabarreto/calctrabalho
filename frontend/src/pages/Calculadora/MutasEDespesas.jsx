@@ -77,6 +77,7 @@ export default function MutasEDespesas() {
     // Monta dadosFinais diretamente pois o store não atualiza de forma síncrona.
     const dadosFinais = {
       ...dados,
+      tipoFluxo,
       percentualHonorarios: Number(pctHonorarios) / 100,
       aplicarHonorariosPericiais: aplicarPericiais,
       honorariosPericiaisValor: aplicarPericiais ? Number(valorPericiais) || 0 : 0,

@@ -31,11 +31,14 @@ async function calcular(dados, modalidade) {
   const verbas = {};
   const reflexos = {};
 
+  const apenasParc = dados.tipoFluxo === 'apenas_parcelas';
+  const historicosSalariais = dados.historicosSalariais || [];
+
+  if (!apenasParc) {
   // ---- SALDO SALARIAL ----
   verbas.saldoSalarial = calcularSaldoSalarial(dados, temporal);
 
   // ---- SALÁRIOS E COMISSÕES ATRASADOS ----
-  const historicosSalariais = dados.historicosSalariais || [];
 
   // Helper: get last N months before dataDispensa (excluding dispensa month)
   function getUltimosMeses(n) {
@@ -150,6 +153,8 @@ async function calcular(dados, modalidade) {
 
   // ---- INTERVALO INTRAJORNADA ----
   verbas.intervaloIntrajornada = calcularIntervaloIntrajornada(dados, temporal);
+
+  } // fim if (!apenasParc)
 
   // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
   // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId

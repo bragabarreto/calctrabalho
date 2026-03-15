@@ -51,8 +51,8 @@ export default function Deducoes() {
         </div>
       </div>
 
-      {/* FGTS e Pagamentos */}
-      <div className="card p-6 mb-4">
+      {/* FGTS e Pagamentos — apenas para verbas rescisórias */}
+      {tipoFluxo !== 'apenas_parcelas' && <div className="card p-6 mb-4">
         <h3 className="font-titulo text-lg mb-4 text-primaria">FGTS e Pagamentos Rescisórios</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
@@ -74,7 +74,7 @@ export default function Deducoes() {
             <p className="text-xs text-gray-400 mt-1">Valor efetivamente pago pelo empregador</p>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Compensações Globais */}
       <div className="card p-6 mb-4">

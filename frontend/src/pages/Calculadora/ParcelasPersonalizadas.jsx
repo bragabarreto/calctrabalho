@@ -323,6 +323,7 @@ function lerGruposExtras() {
 function mapParcelaBDParaForm(p) {
   return {
     nome: p.nome,
+    descricao: p.descricao || '',
     natureza: p.natureza,
     periodoTipo: p.periodo_tipo,
     periodoInicio: p.periodo_inicio,
