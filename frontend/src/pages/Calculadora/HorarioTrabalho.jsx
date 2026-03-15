@@ -13,6 +13,149 @@ const DIAS_SEMANA = [
   { value: 6, label: 'Sáb' },
 ];
 
+function toMinutos(hhmm) {
+  if (!hhmm) return 0;
+  const [h, m] = hhmm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function formatMin(min) {
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
+const NOMES_DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const ORDEM_DIAS = [1, 2, 3, 4, 5, 6, 0]; // Seg → Dom
+
+function SemanaPadrao({ periodo }) {
+  const {
+    horaEntrada, horaSaida, intervaloMinutos = 60,
+    diasSemana = [1, 2, 3, 4, 5], divisorJornada = 220, padraoApuracao = 'diario',
+  } = periodo;
+
+  if (!horaEntrada || !horaSaida) return null;
+
+  const entradaMin = toMinutos(horaEntrada);
+  const saidaMin = toMinutos(horaSaida);
+  const minLiquidosDia = Math.max(0, (saidaMin - entradaMin) - (intervaloMinutos || 0));
+
+  const horasSemanais = (divisorJornada * 12) / 52;
+  const minContratualSemana = horasSemanais * 60;
+  const minContratualDia = diasSemana.length > 0 ? minContratualSemana / diasSemana.length : 0;
+
+  if (padraoApuracao === '12x36') {
+    return (
+      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-xs font-medium text-blue-800 mb-2">Regime 12×36 — Ciclo padrão</p>
+        <div className="flex gap-3">
+          <div className="flex-1 p-2 bg-blue-100 rounded text-center">
+            <p className="text-sm font-bold text-blue-900">12h</p>
+            <p className="text-xs text-blue-700">Turno trabalho</p>
+            <p className="text-xs text-blue-600 font-mono">{horaEntrada} → {horaSaida}</p>
+          </div>
+          <div className="flex-1 p-2 bg-gray-100 rounded text-center">
+            <p className="text-sm font-bold text-gray-600">36h</p>
+            <p className="text-xs text-gray-500">Descanso</p>
+            <p className="text-xs text-gray-400">~15 turnos/mês</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  let somaDiasMin = 0;
+  let somaHEDiariasMin = 0;
+
+  const linhas = ORDEM_DIAS.map((dia) => {
+    const trabalha = diasSemana.includes(dia);
+    let heMin = 0;
+    if (trabalha) {
+      somaDiasMin += minLiquidosDia;
+      if (padraoApuracao === 'diario' || padraoApuracao === 'misto') {
+        heMin = Math.max(0, minLiquidosDia - minContratualDia);
+        somaHEDiariasMin += heMin;
+      }
+    }
+    return { dia, trabalha, heMin };
+  });
+
+  let heSemanalAdicionalMin = 0;
+  if (padraoApuracao === 'semanal') {
+    heSemanalAdicionalMin = Math.max(0, somaDiasMin - minContratualSemana);
+  } else if (padraoApuracao === 'misto') {
+    heSemanalAdicionalMin = Math.max(0, somaDiasMin - minContratualSemana - somaHEDiariasMin);
+  }
+  const totalHEMin = somaHEDiariasMin + heSemanalAdicionalMin;
+
+  const mostraColHE = padraoApuracao === 'diario' || padraoApuracao === 'misto';
+
+  return (
+    <div className="mt-3">
+      <p className="text-xs font-medium text-gray-600 mb-1.5">Semana padrão</p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border border-gray-200 rounded">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="px-2 py-1.5 text-left text-gray-600">Dia</th>
+              <th className="px-2 py-1.5 text-center text-gray-600">Entrada</th>
+              <th className="px-2 py-1.5 text-center text-gray-600">Saída</th>
+              <th className="px-2 py-1.5 text-center text-gray-600">Horas</th>
+              {mostraColHE && <th className="px-2 py-1.5 text-center text-gray-600">HE diária</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map(({ dia, trabalha, heMin }) => (
+              <tr key={dia} className={trabalha ? 'hover:bg-blue-50' : 'opacity-40 bg-gray-50'}>
+                <td className="px-2 py-1 font-medium">{NOMES_DIAS[dia]}</td>
+                <td className="px-2 py-1 text-center font-mono">{trabalha ? horaEntrada : '—'}</td>
+                <td className="px-2 py-1 text-center font-mono">{trabalha ? horaSaida : '—'}</td>
+                <td className="px-2 py-1 text-center">{trabalha ? formatMin(minLiquidosDia) : 'Folga'}</td>
+                {mostraColHE && (
+                  <td className={`px-2 py-1 text-center ${heMin > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
+                    {trabalha ? (heMin > 0 ? formatMin(heMin) : '—') : '—'}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="bg-gray-100 border-t-2 border-gray-300 font-medium">
+              <td colSpan={3} className="px-2 py-1.5 text-gray-700">Total semana</td>
+              <td className="px-2 py-1.5 text-center">{formatMin(somaDiasMin)}</td>
+              {mostraColHE && (
+                <td className={`px-2 py-1.5 text-center ${somaHEDiariasMin > 0 ? 'text-orange-600' : ''}`}>
+                  {somaHEDiariasMin > 0 ? formatMin(somaHEDiariasMin) : '—'}
+                </td>
+              )}
+            </tr>
+            {heSemanalAdicionalMin > 0 && (
+              <tr className="bg-orange-50">
+                <td colSpan={mostraColHE ? 5 : 4} className="px-2 py-1 text-xs text-orange-700">
+                  + {formatMin(heSemanalAdicionalMin)} HE semanal (excesso sobre {formatMin(Math.round(minContratualSemana))} contratual)
+                </td>
+              </tr>
+            )}
+            {totalHEMin > 0 && (
+              <tr className="bg-orange-100">
+                <td colSpan={mostraColHE ? 4 : 3} className="px-2 py-1 text-xs font-bold text-orange-800">HE total/semana</td>
+                <td className="px-2 py-1 text-center text-xs font-bold text-orange-800">
+                  {formatMin(totalHEMin)} ≈ {(totalHEMin / 60).toFixed(2)}h
+                </td>
+              </tr>
+            )}
+          </tfoot>
+        </table>
+      </div>
+      {padraoApuracao === 'semanal' && (
+        <p className="text-xs text-gray-400 mt-1">
+          HE apuradas somente quando o total semanal excede o limite contratual ({formatMin(Math.round(minContratualSemana))}).
+        </p>
+      )}
+    </div>
+  );
+}
+
 const PADROES = [
   { value: 'diario', label: 'Diário', desc: 'HE apuradas por dia: excesso sobre limite diário' },
   { value: 'semanal', label: 'Semanal', desc: 'HE apuradas por semana: excesso sobre limite semanal' },
@@ -307,6 +450,8 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                   ))}
                 </div>
               </div>
+
+              <SemanaPadrao periodo={periodo} />
 
               {/* Afastamentos */}
               <div>

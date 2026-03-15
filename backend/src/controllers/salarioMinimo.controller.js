@@ -16,12 +16,16 @@ async function listar(req, res, next) {
 
 async function vigente(req, res, next) {
   try {
+    const data = req.query.data; // YYYY-MM-DD opcional — SM em vigor nessa data
+    const refExpr = data ? `$1::date` : `NOW()`;
+    const params = data ? [data] : [];
     const { rows } = await db.query(
       `SELECT TO_CHAR(mes_ano, 'YYYY-MM') AS mes_ano, valor
        FROM salario_minimo_historico
-       WHERE mes_ano <= DATE_TRUNC('month', NOW())
+       WHERE mes_ano <= DATE_TRUNC('month', ${refExpr})
        ORDER BY mes_ano DESC
-       LIMIT 1`
+       LIMIT 1`,
+      params
     );
     res.json({ valor: rows[0]?.valor || 0, mes_ano: rows[0]?.mes_ano || null });
   } catch (e) { next(e); }

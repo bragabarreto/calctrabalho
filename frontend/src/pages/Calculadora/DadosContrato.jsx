@@ -17,6 +17,26 @@ export default function DadosContrato() {
   const [mostrarAfastamentos, setMostrarAfastamentos] = useState(false);
   const [novoAfastInicio, setNovoAfastInicio] = useState('');
   const [novoAfastFim, setNovoAfastFim] = useState('');
+  const [carregandoSM, setCarregandoSM] = useState(false);
+  const [smInfo, setSmInfo] = useState(null);
+
+  async function usarSalarioMinimo() {
+    if (!dados.dataDispensa) return;
+    setCarregandoSM(true);
+    setSmInfo(null);
+    try {
+      const resp = await fetch(`/api/salario-minimo/vigente?data=${dados.dataDispensa}`);
+      const json = await resp.json();
+      if (json.valor) {
+        setDados({ ultimoSalario: json.valor });
+        setSmInfo(json);
+      }
+    } catch {
+      // silencia erro de rede
+    } finally {
+      setCarregandoSM(false);
+    }
+  }
 
   const periodosAfastamento = dados.periodosAfastamento || [];
 
@@ -108,7 +128,21 @@ export default function DadosContrato() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="campo-label">Último Salário (R$) *</label>
-            <input type="number" name="ultimoSalario" value={dados.ultimoSalario} onChange={handleChange} className="campo-input" step="0.01" min="0" required placeholder="2000.00" />
+            <div className="flex gap-2 items-center">
+              <input type="number" name="ultimoSalario" value={dados.ultimoSalario} onChange={handleChange} className="campo-input flex-1" step="0.01" min="0" required placeholder="2000.00" />
+              <button
+                type="button"
+                onClick={usarSalarioMinimo}
+                disabled={!dados.dataDispensa || carregandoSM}
+                className="btn-secundario text-xs whitespace-nowrap py-1.5 px-3 shrink-0 disabled:opacity-40"
+                title="Preencher com salário mínimo vigente na data de dispensa"
+              >
+                {carregandoSM ? '...' : 'Usar SM'}
+              </button>
+            </div>
+            {smInfo && (
+              <p className="text-xs text-gray-400 mt-0.5">SM de {smInfo.mes_ano}: R$ {Number(smInfo.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            )}
           </div>
           <div>
             <label className="campo-label">Média de Comissões Mensais (R$)</label>

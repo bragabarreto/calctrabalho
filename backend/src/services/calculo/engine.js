@@ -174,6 +174,11 @@ async function calcular(dados, modalidade) {
         formula: `${parcela.nome} via histórico "${historico.titulo}": ${meses} meses × valores variáveis = R$ ${total.toFixed(2)}`,
         itens: memoria,
         percentualAplicado: percentual,
+        distribuicaoMensal: memoria.map((m) => ({
+          mes: m.competencia,
+          valorBase: m.valor,
+          valor: m.valorComPercentual,
+        })),
       },
     });
   }

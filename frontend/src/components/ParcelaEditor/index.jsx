@@ -28,6 +28,7 @@ const REFLEXOS_OPCOES = [
 
 const INICIAL = {
   nome: '',
+  descricao: '',
   natureza: 'salarial',
   periodoTipo: 'contrato',
   periodoInicio: '',
@@ -141,6 +142,16 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
                 className="campo-input"
                 placeholder="Ex: Comissão de Vendas, Adicional de Sobreaviso..."
                 required
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="campo-label">Descrição / Fundamento Legal</label>
+              <input
+                type="text"
+                value={form.descricao || ''}
+                onChange={(e) => set('descricao', e.target.value)}
+                className="campo-input"
+                placeholder="Ex: Art. 59 CLT — horas extras"
               />
             </div>
             <div>

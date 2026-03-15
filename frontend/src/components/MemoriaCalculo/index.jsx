@@ -7,6 +7,7 @@ function formatBRL(valor) {
 
 function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, editarVerba }) {
   const [expandida, setExpandida] = useState(false);
+  const [mostrarDistribuicao, setMostrarDistribuicao] = useState(false);
   const isZero = modoEdicao ? getValorVerba(verba) === 0 : verba.valor === 0;
   const isExcluida = verba.excluida;
 
@@ -82,13 +83,62 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
                 <p className="italic text-slate-500">{verba.memoria.motivo}</p>
               )}
               {Object.entries(verba.memoria)
-                .filter(([k]) => !['formula', 'motivo'].includes(k))
+                .filter(([k]) => !['formula', 'motivo', 'distribuicaoMensal', 'itens'].includes(k))
                 .map(([k, v]) => (
                   <p key={k}>
                     <span className="font-medium capitalize">{k.replace(/_/g, ' ')}: </span>
                     <span>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
                   </p>
                 ))}
+              {/* Demonstrativo mensal para parcelas calculadas sobre histórico salarial */}
+              {verba.memoria.distribuicaoMensal?.length > 0 && (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setMostrarDistribuicao(v => !v)}
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
+                  >
+                    {mostrarDistribuicao ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {mostrarDistribuicao ? 'Ocultar demonstrativo mensal' : 'Ver demonstrativo mensal'}
+                  </button>
+                  {mostrarDistribuicao && (
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="w-full text-xs border border-slate-200 rounded">
+                        <thead>
+                          <tr className="bg-slate-100">
+                            <th className="text-left px-3 py-1.5 font-medium text-slate-700">Competência</th>
+                            <th className="text-right px-3 py-1.5 font-medium text-slate-700">Salário Base</th>
+                            <th className="text-right px-3 py-1.5 font-medium text-slate-700">Valor Parcela</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {verba.memoria.distribuicaoMensal.map((m) => (
+                            <tr key={m.mes} className="border-t border-slate-100 hover:bg-white">
+                              <td className="px-3 py-1 font-mono text-slate-600">
+                                {m.mes.split('-').reverse().join('/')}
+                              </td>
+                              <td className="px-3 py-1 text-right font-mono text-slate-600">
+                                {formatBRL(m.valorBase)}
+                              </td>
+                              <td className="px-3 py-1 text-right font-mono font-medium text-slate-700">
+                                {formatBRL(m.valor)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-slate-300 bg-slate-100">
+                            <td colSpan={2} className="px-3 py-1.5 font-bold text-slate-700">Total</td>
+                            <td className="px-3 py-1.5 text-right font-bold font-mono text-slate-800">
+                              {formatBRL(verba.memoria.distribuicaoMensal.reduce((s, m) => s + (m.valor || 0), 0))}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </td>
         </tr>
