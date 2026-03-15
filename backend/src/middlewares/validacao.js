@@ -124,6 +124,30 @@ const schemaDadosContrato = Joi.object({
   periodosDecimoTerceiro: Joi.array().items(Joi.object().unknown(true)).default([]),
   feriasDeducaoPagas: Joi.number().min(0).default(0),
 
+  // Jornada multi-período
+  jornadaPeriodos: Joi.array().items(Joi.object({
+    id: Joi.string().required(),
+    dataInicio: Joi.date().iso().allow(null, '').optional(),
+    dataFim: Joi.date().iso().allow(null, '').optional(),
+    padraoApuracao: Joi.string().valid('diario', 'semanal', 'misto', '12x36').default('diario'),
+    divisorJornada: Joi.number().positive().default(220),
+    adicionalHoraExtra: Joi.number().min(0).default(0.5),
+    adicionalHoraNoturna: Joi.number().min(0).default(0.2),
+    modoEntrada: Joi.string().valid('medio', 'cartao_ponto').default('medio'),
+    mediaHorasExtrasDiarias: Joi.number().min(0).default(0),
+    mediaHorasExtrasSemanais: Joi.number().min(0).default(0),
+    mediaHorasExtrasPorTurno: Joi.number().min(0).default(0),
+    mediaHorasNoturnasDiarias: Joi.number().min(0).default(0),
+    horaEntrada: Joi.string().allow(null, '').optional(),
+    horaSaida: Joi.string().allow(null, '').optional(),
+    intervaloMinutos: Joi.number().min(0).default(60),
+    diasSemana: Joi.array().items(Joi.number().integer().min(0).max(6)).default([1,2,3,4,5]),
+    afastamentos: Joi.array().items(Joi.object().unknown(true)).default([]),
+    totalHorasExtras: Joi.number().min(0).allow(null).optional(),
+    totalHorasNoturnas: Joi.number().min(0).allow(null).optional(),
+    distribuicaoMensal: Joi.array().allow(null).optional(),
+  })).default([]),
+
   // Honorários e despesas processuais
   aplicarHonorariosPericiais: Joi.boolean().default(false),
   honorariosPericiaisValor: Joi.number().min(0).default(0),

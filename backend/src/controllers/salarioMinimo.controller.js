@@ -50,4 +50,21 @@ async function remover(req, res, next) {
   } catch (e) { next(e); }
 }
 
-module.exports = { listar, vigente, salvar, remover };
+// Retorna faixas de salário mínimo entre duas datas (para geração automática de histórico)
+async function faixas(req, res, next) {
+  try {
+    const { inicio, fim } = req.query;
+    if (!inicio || !fim) return res.status(400).json({ erro: 'Parâmetros inicio e fim obrigatórios (YYYY-MM-DD)' });
+    const { rows } = await db.query(
+      `SELECT TO_CHAR(mes_ano, 'YYYY-MM') AS "mesAno", valor
+       FROM salario_minimo_historico
+       WHERE mes_ano >= DATE_TRUNC('month', $1::date)
+         AND mes_ano <= DATE_TRUNC('month', $2::date)
+       ORDER BY mes_ano ASC`,
+      [inicio, fim]
+    );
+    res.json({ faixas: rows });
+  } catch (e) { next(e); }
+}
+
+module.exports = { listar, vigente, salvar, remover, faixas };

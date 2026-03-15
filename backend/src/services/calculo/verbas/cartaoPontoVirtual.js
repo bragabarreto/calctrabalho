@@ -109,4 +109,193 @@ function gerarCartaoPontoVirtual(jornadaDefinida, dataInicio, dataFim, afastamen
   };
 }
 
-module.exports = { gerarCartaoPontoVirtual };
+/**
+ * Calcula horas extras de um período de jornada com suporte a padrões diário/semanal/misto/12x36.
+ *
+ * @param {Object} periodo   - Configuração do período (campos do jornadaPeriodos)
+ * @param {string} dataAdm   - dataAdmissao do contrato (fallback quando periodo.dataInicio = null)
+ * @param {string} dataDisp  - dataDispensa do contrato (fallback quando periodo.dataFim = null)
+ * @returns {Object} { totalHorasExtras, totalHorasNoturnas, distribuicaoMensal, numMeses }
+ */
+function calcularPeriodoJornada(periodo, dataAdm, dataDisp) {
+  const inicio = toDate(periodo.dataInicio || dataAdm);
+  const fim = toDate(periodo.dataFim || dataDisp);
+  const padraoApuracao = periodo.padraoApuracao || 'diario';
+  const divisor = periodo.divisorJornada || 220;
+  const afastamentos = periodo.afastamentos || [];
+
+  // Jornada contratual derivada do divisor
+  const horasSemanais = (divisor * 12) / 52;
+  const horasContratualDiaria = horasSemanais / 5; // assume 5 dias úteis base
+
+  if (periodo.modoEntrada === 'medio') {
+    // Modo médio: calcular com base em médias informadas pelo usuário
+    const distribuicaoMensal = {};
+    let current = new Date(inicio);
+    while (current <= fim) {
+      const mes = format(current, 'yyyy-MM');
+      if (!distribuicaoMensal[mes]) distribuicaoMensal[mes] = true;
+      current = addDays(current, 1);
+    }
+    const meses = Object.keys(distribuicaoMensal);
+    const numMeses = meses.length || 1;
+
+    let heTotal = 0;
+    let hnTotal = 0;
+    const distArray = [];
+
+    if (padraoApuracao === 'diario') {
+      const heDia = periodo.mediaHorasExtrasDiarias || 0;
+      const hnDia = periodo.mediaHorasNoturnasDiarias || 0;
+      // Estimar dias úteis por mês (~21.75)
+      const diasUteisMedia = 21.75;
+      meses.forEach(mes => {
+        const he = +(heDia * diasUteisMedia).toFixed(2);
+        const hn = +(hnDia * diasUteisMedia).toFixed(2);
+        heTotal += he;
+        hnTotal += hn;
+        distArray.push({ mes, horasExtras: he, horasNoturnas: hn });
+      });
+    } else if (padraoApuracao === 'semanal' || padraoApuracao === 'misto') {
+      const heSemana = periodo.mediaHorasExtrasSemanais || 0;
+      const hnDia = periodo.mediaHorasNoturnasDiarias || 0;
+      // ~4.33 semanas/mês
+      meses.forEach(mes => {
+        const he = +(heSemana * 4.33).toFixed(2);
+        const hn = +(hnDia * 21.75).toFixed(2);
+        heTotal += he;
+        hnTotal += hn;
+        distArray.push({ mes, horasExtras: he, horasNoturnas: hn });
+      });
+    } else if (padraoApuracao === '12x36') {
+      // ~15 turnos/mês em regime 12x36
+      const heTurno = periodo.mediaHorasExtrasPorTurno || 0;
+      meses.forEach(mes => {
+        const he = +(heTurno * 15).toFixed(2);
+        heTotal += he;
+        distArray.push({ mes, horasExtras: he, horasNoturnas: 0 });
+      });
+    }
+
+    return {
+      totalHorasExtras: +heTotal.toFixed(2),
+      totalHorasNoturnas: +hnTotal.toFixed(2),
+      distribuicaoMensal: distArray,
+      numMeses,
+    };
+  }
+
+  // Modo cartão de ponto: calcula dia a dia
+  const {
+    horaEntrada,
+    horaSaida,
+    intervaloMinutos = 60,
+    diasSemana = [1, 2, 3, 4, 5],
+  } = periodo;
+
+  const entradaMin = toMinutos(horaEntrada);
+  const saidaMin = toMinutos(horaSaida);
+  const minLiquidosDia = Math.max(0, (saidaMin - entradaMin) - (intervaloMinutos || 0));
+
+  // Limite diário em minutos derivado do divisor
+  const minContratualDia = (horasContratualDiaria * 60);
+
+  let totalMinHE = 0;
+  let totalMinHN = 0;
+  const distribuicaoMensal = {};
+
+  let current = new Date(inicio);
+  while (current <= fim) {
+    const diaSemana = current.getDay();
+    const mes = format(current, 'yyyy-MM');
+
+    if (diasSemana.includes(diaSemana) && !estaEmAfastamento(current, afastamentos)) {
+      let minHE = 0;
+      let minHN = 0;
+
+      if (padraoApuracao === 'diario' || padraoApuracao === '12x36') {
+        minHE = Math.max(0, minLiquidosDia - minContratualDia);
+      }
+      // Para semanal/misto: HE diária = 0 (será calculada semanalmente abaixo)
+      // Para misto: adiciona excesso diário também
+      if (padraoApuracao === 'misto') {
+        minHE = Math.max(0, minLiquidosDia - minContratualDia);
+      }
+
+      totalMinHE += minHE;
+      totalMinHN += minHN;
+
+      if (!distribuicaoMensal[mes]) distribuicaoMensal[mes] = { diasTrabalhados: 0, minutosHE: 0, minutosHN: 0 };
+      distribuicaoMensal[mes].diasTrabalhados++;
+      distribuicaoMensal[mes].minutosHE += minHE;
+    }
+
+    current = addDays(current, 1);
+  }
+
+  // Para padrão semanal: calcular HE semanal acumulando por semana
+  if (padraoApuracao === 'semanal' || padraoApuracao === 'misto') {
+    // Recalcular por semana
+    const minContratualSemana = horasSemanais * 60;
+    const semanas = {};
+    // Helper: chave da semana = data da segunda-feira da semana
+    function chaveSemanaDe(d) {
+      const day = d.getDay(); // 0=Dom
+      const diff = day === 0 ? -6 : 1 - day;
+      const seg = new Date(d);
+      seg.setDate(seg.getDate() + diff);
+      return format(seg, 'yyyy-MM-dd');
+    }
+    let curr2 = new Date(inicio);
+    while (curr2 <= fim) {
+      const iso = chaveSemanaDe(curr2);
+      const diaSemana = curr2.getDay();
+      const mes = format(curr2, 'yyyy-MM');
+
+      if (diasSemana.includes(diaSemana) && !estaEmAfastamento(curr2, afastamentos)) {
+        if (!semanas[iso]) semanas[iso] = { minTotal: 0, mes };
+        semanas[iso].minTotal += minLiquidosDia;
+      }
+      curr2 = addDays(curr2, 1);
+    }
+
+    // Reset HE from diario calculation for semanal mode
+    if (padraoApuracao === 'semanal') {
+      totalMinHE = 0;
+      Object.values(distribuicaoMensal).forEach(m => { m.minutosHE = 0; });
+    }
+
+    Object.entries(semanas).forEach(([, s]) => {
+      let heSemana = Math.max(0, s.minTotal - minContratualSemana);
+      if (padraoApuracao === 'misto') {
+        // Misto: semanal excess beyond daily excess already counted
+        heSemana = Math.max(0, s.minTotal - minContratualSemana - (distribuicaoMensal[s.mes]?.minutosHE || 0));
+      }
+      if (heSemana > 0) {
+        totalMinHE += heSemana;
+        if (!distribuicaoMensal[s.mes]) distribuicaoMensal[s.mes] = { diasTrabalhados: 0, minutosHE: 0, minutosHN: 0 };
+        distribuicaoMensal[s.mes].minutosHE += heSemana;
+      }
+    });
+  }
+
+  const distArray = Object.entries(distribuicaoMensal)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([mes, d]) => ({
+      mes,
+      diasTrabalhados: d.diasTrabalhados,
+      horasExtras: +(d.minutosHE / 60).toFixed(2),
+      horasNoturnas: +(d.minutosHN / 60).toFixed(2),
+    }));
+
+  const numMeses = distArray.length || 1;
+
+  return {
+    totalHorasExtras: +(totalMinHE / 60).toFixed(2),
+    totalHorasNoturnas: +(totalMinHN / 60).toFixed(2),
+    distribuicaoMensal: distArray,
+    numMeses,
+  };
+}
+
+module.exports = { gerarCartaoPontoVirtual, calcularPeriodoJornada };

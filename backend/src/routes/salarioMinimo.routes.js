@@ -6,6 +6,7 @@ const ctrl = require('../controllers/salarioMinimo.controller');
 
 router.get('/', ctrl.listar);
 router.get('/vigente', ctrl.vigente);
+router.get('/faixas', ctrl.faixas);
 router.post('/', ctrl.salvar);
 router.delete('/:mesAno', ctrl.remover);
 

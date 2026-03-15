@@ -1,6 +1,37 @@
 'use strict';
 
 const { round2 } = require('../../../utils/formatacao');
+const { calcularPeriodoJornada } = require('./cartaoPontoVirtual');
+
+/**
+ * Deriva qtdeHorasExtrasMensais, divisorJornada e adicionalHoraExtra a partir de jornadaPeriodos.
+ * Retorna { qtdeHorasExtrasMensais, divisorJornada, adicionalHoraExtra } ponderados pelo período.
+ */
+function resolverJornadaPeriodos(dados) {
+  const periodos = dados.jornadaPeriodos || [];
+  if (!periodos.length) return null;
+
+  let totalHE = 0;
+  let totalMeses = 0;
+  let divisorPonderado = 0;
+  let adicionalPonderado = 0;
+
+  for (const p of periodos) {
+    const res = calcularPeriodoJornada(p, dados.dataAdmissao, dados.dataDispensa);
+    const meses = res.numMeses || 1;
+    totalHE += res.totalHorasExtras;
+    divisorPonderado += (p.divisorJornada || 220) * meses;
+    adicionalPonderado += (p.adicionalHoraExtra || 0.5) * meses;
+    totalMeses += meses;
+  }
+
+  if (totalMeses === 0) return null;
+  return {
+    qtdeHorasExtrasMensais: +(totalHE / totalMeses).toFixed(2),
+    divisorJornada: Math.round(divisorPonderado / totalMeses),
+    adicionalHoraExtra: +(adicionalPonderado / totalMeses).toFixed(4),
+  };
+}
 
 /**
  * Horas Extras + reflexos
@@ -13,10 +44,13 @@ function calcularHorasExtras(dados, temporal) {
     return { valor: 0, excluida: true, valorHora: 0, memoria: { motivo: 'Excluída do cálculo' } };
   }
 
+  // Se jornadaPeriodos preenchido, derivar parâmetros de HE dos períodos
+  const periodoResolvido = resolverJornadaPeriodos(dados);
+
   const M = dados.mediaSalarial || dados.ultimoSalario || 0;
-  const D = dados.divisorJornada || 220;
-  const AHE = dados.adicionalHoraExtra ?? 0.5;
-  const HE = dados.qtdeHorasExtrasMensais || 0;
+  const D = periodoResolvido?.divisorJornada ?? dados.divisorJornada ?? 220;
+  const AHE = periodoResolvido?.adicionalHoraExtra ?? dados.adicionalHoraExtra ?? 0.5;
+  const HE = periodoResolvido?.qtdeHorasExtrasMensais ?? dados.qtdeHorasExtrasMensais ?? 0;
   const AHN = dados.adicionalHoraNoturna ?? 0.2;
   const HN = dados.qtdeHorasNoturnasMensais || 0;
   const C = dados.comissoes || 0;
@@ -67,7 +101,8 @@ function calcularReflexosHE(heResult, dados, temporal, modalidade) {
     };
   }
 
-  const HE = dados.qtdeHorasExtrasMensais || 0;
+  const periodoResolvido = resolverJornadaPeriodos(dados);
+  const HE = periodoResolvido?.qtdeHorasExtrasMensais ?? dados.qtdeHorasExtrasMensais ?? 0;
   const meses = temporal.lapsoSemAviso.meses - (dados.mesesAfastamento || 0);
 
   // RSR: 1 repouso para cada 6 dias úteis
@@ -76,7 +111,7 @@ function calcularReflexosHE(heResult, dados, temporal, modalidade) {
   // Aviso Prévio
   let avisoPrevio = 0;
   if (!dados.avisoPrevioTrabalhado && modalidade !== 'pedido_demissao' && modalidade !== 'justa_causa') {
-    const D = dados.divisorJornada || 220;
+    const D = periodoResolvido?.divisorJornada ?? dados.divisorJornada ?? 220;
     const diasAviso = temporal.diasAvisoPrevio;
     avisoPrevio = round2(heResult.valorHora * HE * (diasAviso / 30));
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);

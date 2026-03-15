@@ -104,7 +104,8 @@ export default function Verbas() {
   const historicos = dados.historicosSalariais || [];
 
   function proximaEtapa() {
-    setStep(tipoFluxo === 'verbas_rescisórias' ? 7 : 4);
+    // verbas_rescisórias → Deduções (7); verbas_e_parcelas → Parcelas (5)
+    setStep(tipoFluxo === 'verbas_rescisórias' ? 7 : 5);
   }
 
   return (

@@ -1,6 +1,31 @@
 'use strict';
 
 const { round2 } = require('../../../utils/formatacao');
+const { calcularPeriodoJornada } = require('./cartaoPontoVirtual');
+
+/** Deriva qtdeHorasNoturnasMensais ponderado por período */
+function resolverHorasNoturnasPeriodos(dados) {
+  const periodos = dados.jornadaPeriodos || [];
+  if (!periodos.length) return null;
+
+  let totalHN = 0;
+  let totalMeses = 0;
+  let adicionalPonderado = 0;
+
+  for (const p of periodos) {
+    const res = calcularPeriodoJornada(p, dados.dataAdmissao, dados.dataDispensa);
+    const meses = res.numMeses || 1;
+    totalHN += res.totalHorasNoturnas;
+    adicionalPonderado += (p.adicionalHoraNoturna || 0.2) * meses;
+    totalMeses += meses;
+  }
+
+  if (totalMeses === 0 || totalHN === 0) return null;
+  return {
+    qtdeHorasNoturnasMensais: +(totalHN / totalMeses).toFixed(2),
+    adicionalHoraNoturna: +(adicionalPonderado / totalMeses).toFixed(4),
+  };
+}
 
 /**
  * Adicional Noturno (20% sobre hora noturna)
@@ -11,10 +36,12 @@ function calcularAdicionalNoturno(dados, temporal) {
     return { valor: 0, excluida: true, valorHora: 0, memoria: { motivo: 'Excluída do cálculo' } };
   }
 
+  const periodoResolvido = resolverHorasNoturnasPeriodos(dados);
+
   const M = dados.mediaSalarial || dados.ultimoSalario || 0;
   const D = dados.divisorJornada || 220;
-  const AHN = dados.adicionalHoraNoturna ?? 0.2;
-  const HN = dados.qtdeHorasNoturnasMensais || 0;
+  const AHN = periodoResolvido?.adicionalHoraNoturna ?? dados.adicionalHoraNoturna ?? 0.2;
+  const HN = periodoResolvido?.qtdeHorasNoturnasMensais ?? dados.qtdeHorasNoturnasMensais ?? 0;
   const AF = dados.mesesAfastamento || 0;
 
   if (HN === 0) return { valor: 0, excluida: false, valorHora: 0, memoria: { motivo: 'Qtde horas noturnas = 0' } };

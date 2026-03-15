@@ -84,8 +84,28 @@ export function prepararDadosContrato(dados) {
     valorLiquidoExequente: toNum(dados.valorLiquidoExequente),
     contribuicaoSocialLiquidacao: toNum(dados.contribuicaoSocialLiquidacao),
 
-    // Parcelas personalizadas
-    parcelasPersonalizadas: dados.parcelasPersonalizadas || [],
+    // Parcelas personalizadas — apenas campos do schema Joi (strip _templateId, descricao, etc.)
+    parcelasPersonalizadas: (dados.parcelasPersonalizadas || []).map(p => ({
+      ...(p.id ? { id: p.id } : {}),
+      nome: p.nome,
+      natureza: p.natureza,
+      periodoTipo: p.periodoTipo || 'contrato',
+      periodoInicio: p.periodoInicio || null,
+      periodoFim: p.periodoFim || null,
+      frequencia: p.frequencia,
+      tipoValor: p.tipoValor || 'fixo',
+      valorBase: p.valorBase != null ? Number(p.valorBase) : null,
+      percentualBase: p.percentualBase != null ? Number(p.percentualBase) : null,
+      percentualAdicional: Number(p.percentualAdicional) || 0,
+      geraReflexos: Boolean(p.geraReflexos),
+      reflexosEm: p.reflexosEm || [],
+      incideInss: Boolean(p.incideInss),
+      incideIr: Boolean(p.incideIr),
+      incideFgts: Boolean(p.incideFgts),
+      incidePrevidenciaPrivada: Boolean(p.incidePrevidenciaPrivada),
+      ...(p.aliquotaPrevidenciaPrivada != null ? { aliquotaPrevidenciaPrivada: Number(p.aliquotaPrevidenciaPrivada) } : {}),
+      baseHistoricoId: p.baseHistoricoId || null,
+    })),
 
     // Deduções detalhadas
     deducoesGlobais: dados.deducoesGlobais || [],
@@ -143,6 +163,29 @@ export function prepararDadosContrato(dados) {
           valor: Number(faixa.valor) || 0,
         })),
       })),
+    })),
+
+    // Jornada multi-período — apenas campos do schema Joi
+    jornadaPeriodos: (dados.jornadaPeriodos || []).map(p => ({
+      id: p.id,
+      dataInicio: p.dataInicio || null,
+      dataFim: p.dataFim || null,
+      padraoApuracao: p.padraoApuracao || 'diario',
+      divisorJornada: Number(p.divisorJornada) || 220,
+      adicionalHoraExtra: Number(p.adicionalHoraExtra) || 0.5,
+      adicionalHoraNoturna: Number(p.adicionalHoraNoturna) || 0.2,
+      modoEntrada: p.modoEntrada || 'medio',
+      mediaHorasExtrasDiarias: Number(p.mediaHorasExtrasDiarias) || 0,
+      mediaHorasExtrasSemanais: Number(p.mediaHorasExtrasSemanais) || 0,
+      mediaHorasExtrasPorTurno: Number(p.mediaHorasExtrasPorTurno) || 0,
+      mediaHorasNoturnasDiarias: Number(p.mediaHorasNoturnasDiarias) || 0,
+      horaEntrada: p.horaEntrada || null,
+      horaSaida: p.horaSaida || null,
+      intervaloMinutos: Number(p.intervaloMinutos) || 60,
+      diasSemana: p.diasSemana || [1, 2, 3, 4, 5],
+      afastamentos: (p.afastamentos || []).map(a => ({ inicio: a.inicio, fim: a.fim, motivo: a.motivo })),
+      totalHorasExtras: p.totalHorasExtras != null ? Number(p.totalHorasExtras) : null,
+      totalHorasNoturnas: p.totalHorasNoturnas != null ? Number(p.totalHorasNoturnas) : null,
     })),
 
     // Bases de cálculo dos atrasados

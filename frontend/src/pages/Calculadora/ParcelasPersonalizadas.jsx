@@ -16,10 +16,12 @@ const FREQUENCIA_LABELS = {
 
 // Templates de parcelas padrão do direito do trabalho
 // Podem ser adicionadas diretamente ao cálculo sem criar nova parcela do zero
+// opcoesPercentual → mostra seletor inline antes de "Usar"
+// campoPercentual → qual campo recebe o valor selecionado: 'adicional' | 'base'
 const TEMPLATES_PADRAO = [
   {
-    _templateId: 'tpl_he_50',
-    nome: 'Horas Extras (50%)',
+    _templateId: 'tpl_horas_extras',
+    nome: 'Horas Extras',
     natureza: 'salarial',
     periodoTipo: 'contrato',
     frequencia: 'horaria',
@@ -31,27 +33,14 @@ const TEMPLATES_PADRAO = [
     incideInss: true,
     incideIr: true,
     incideFgts: true,
-    descricao: 'Art. 59 CLT. Base: valor-hora × adicional 50% × qtde horas',
-  },
-  {
-    _templateId: 'tpl_he_100',
-    nome: 'Horas Extras (100%)',
-    natureza: 'salarial',
-    periodoTipo: 'contrato',
-    frequencia: 'horaria',
-    tipoValor: 'percentual_salario',
-    percentualBase: 100,
-    percentualAdicional: 100,
-    geraReflexos: true,
-    reflexosEm: ['rsr', 'aviso_previo', 'ferias', 'decimo_terceiro', 'fgts'],
-    incideInss: true,
-    incideIr: true,
-    incideFgts: true,
-    descricao: 'Domingos/feriados. Base: valor-hora × adicional 100% × qtde horas',
+    descricao: 'Art. 59 CLT. 50% para dias úteis; 100% para domingos e feriados.',
+    opcoesPercentual: [50, 100],
+    campoPercentual: 'adicional',
+    rotulosPercentual: ['50% — dias úteis', '100% — domingos/feriados'],
   },
   {
     _templateId: 'tpl_noturno',
-    nome: 'Adicional Noturno (20%)',
+    nome: 'Adicional Noturno',
     natureza: 'salarial',
     periodoTipo: 'contrato',
     frequencia: 'horaria',
@@ -63,11 +52,14 @@ const TEMPLATES_PADRAO = [
     incideInss: true,
     incideIr: true,
     incideFgts: true,
-    descricao: 'Art. 73 CLT. Trabalho entre 22h e 5h. Hora noturna reduzida: 52min30s',
+    descricao: 'Art. 73 CLT. Trabalho entre 22h–5h. Padrão: 20%; CCT pode prever percentual maior.',
+    opcoesPercentual: [20],
+    campoPercentual: 'adicional',
+    rotulosPercentual: ['20% (padrão CLT)'],
   },
   {
-    _templateId: 'tpl_insalubridade_min',
-    nome: 'Adicional de Insalubridade — Grau Mínimo (10%)',
+    _templateId: 'tpl_insalubridade',
+    nome: 'Adicional de Insalubridade',
     natureza: 'salarial',
     periodoTipo: 'contrato',
     frequencia: 'mensal',
@@ -79,43 +71,14 @@ const TEMPLATES_PADRAO = [
     incideInss: true,
     incideIr: true,
     incideFgts: true,
-    descricao: 'Art. 192 CLT. Base: salário mínimo × 10%',
-  },
-  {
-    _templateId: 'tpl_insalubridade_med',
-    nome: 'Adicional de Insalubridade — Grau Médio (20%)',
-    natureza: 'salarial',
-    periodoTipo: 'contrato',
-    frequencia: 'mensal',
-    tipoValor: 'percentual_sm',
-    percentualBase: 20,
-    percentualAdicional: 0,
-    geraReflexos: true,
-    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
-    incideInss: true,
-    incideIr: true,
-    incideFgts: true,
-    descricao: 'Art. 192 CLT. Base: salário mínimo × 20%',
-  },
-  {
-    _templateId: 'tpl_insalubridade_max',
-    nome: 'Adicional de Insalubridade — Grau Máximo (40%)',
-    natureza: 'salarial',
-    periodoTipo: 'contrato',
-    frequencia: 'mensal',
-    tipoValor: 'percentual_sm',
-    percentualBase: 40,
-    percentualAdicional: 0,
-    geraReflexos: true,
-    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
-    incideInss: true,
-    incideIr: true,
-    incideFgts: true,
-    descricao: 'Art. 192 CLT. Base: salário mínimo × 40%',
+    descricao: 'Art. 192 CLT. Base: salário mínimo. Grau: Mínimo=10%, Médio=20%, Máximo=40%.',
+    opcoesPercentual: [10, 20, 40],
+    campoPercentual: 'base',
+    rotulosPercentual: ['10% — Grau Mínimo', '20% — Grau Médio', '40% — Grau Máximo'],
   },
   {
     _templateId: 'tpl_periculosidade',
-    nome: 'Adicional de Periculosidade (30%)',
+    nome: 'Adicional de Periculosidade',
     natureza: 'salarial',
     periodoTipo: 'contrato',
     frequencia: 'mensal',
@@ -127,7 +90,10 @@ const TEMPLATES_PADRAO = [
     incideInss: true,
     incideIr: true,
     incideFgts: true,
-    descricao: 'Art. 193 CLT. Base: salário base × 30%',
+    descricao: 'Art. 193 CLT. Base: salário base × 30%. CCT pode prever percentual diferente.',
+    opcoesPercentual: [30],
+    campoPercentual: 'base',
+    rotulosPercentual: ['30% (padrão CLT)'],
   },
   {
     _templateId: 'tpl_intervalo',
@@ -328,14 +294,25 @@ export default function ParcelasPersonalizadas() {
   const { dados, setDados, setStep, tipoFluxo } = useCalculoStore();
 
   function onNext() {
-    // apenas_parcelas → Deduções (7); verbas_e_parcelas → Jornada (6)
-    setStep(tipoFluxo === 'apenas_parcelas' ? 7 : 6);
+    // Sempre vai para Configurar Parcelas (step 11) em fluxos com parcelas
+    setStep(11);
   }
   function onBack() {
-    // apenas_parcelas → TipoCalculo (2); verbas_e_parcelas → Adicionais (4)
-    setStep(tipoFluxo === 'apenas_parcelas' ? 2 : 4);
+    // apenas_parcelas → TipoCalculo (2); verbas_e_parcelas → Verbas (3)
+    setStep(tipoFluxo === 'apenas_parcelas' ? 2 : 3);
   }
   const [parcelasDoCalculo, setParcelasDoCalculo] = useState(dados.parcelasPersonalizadas || []);
+
+  // Estado de configuração inline por template (ex: percentual selecionado)
+  const [templateConfig, setTemplateConfig] = useState(() => {
+    const cfg = {};
+    TEMPLATES_PADRAO.forEach(t => {
+      if (t.opcoesPercentual?.length) {
+        cfg[t._templateId] = t.opcoesPercentual[0];
+      }
+    });
+    return cfg;
+  });
   const [editorAberto, setEditorAberto] = useState(false);
   const [parcelaEditando, setParcelaEditando] = useState(null);
   const [salvandoBiblioteca, setSalvandoBiblioteca] = useState(false);
@@ -349,9 +326,26 @@ export default function ParcelasPersonalizadas() {
     setDados({ parcelasPersonalizadas: lista });
   }
 
-  function adicionarAoCalculo(parcela) {
-    const nova = { ...parcela, _localId: Date.now() + Math.random() };
-    atualizarStore([...parcelasDoCalculo, nova]);
+  function adicionarAoCalculo(parcela, configOverride) {
+    let nova = { ...parcela, _localId: Date.now() + Math.random() };
+    // Se o template tem opções de percentual e há configuração selecionada, aplicá-la
+    if (parcela._templateId && templateConfig[parcela._templateId] !== undefined) {
+      const pct = configOverride ?? templateConfig[parcela._templateId];
+      if (parcela.campoPercentual === 'adicional') {
+        nova = { ...nova, percentualAdicional: pct, nome: `${parcela.nome} (${pct}%)` };
+      } else if (parcela.campoPercentual === 'base') {
+        nova = { ...nova, percentualBase: pct };
+        // Para insalubridade: incluir grau no nome
+        if (parcela._templateId === 'tpl_insalubridade') {
+          const grau = pct === 10 ? 'Grau Mínimo' : pct === 20 ? 'Grau Médio' : pct === 40 ? 'Grau Máximo' : `${pct}%`;
+          nova = { ...nova, nome: `Adicional de Insalubridade — ${grau} (${pct}%)` };
+        }
+      }
+    }
+    // Remover campos de controle de UI que não devem ir para o backend
+    // eslint-disable-next-line no-unused-vars
+    const { opcoesPercentual, campoPercentual, rotulosPercentual, ...parcelaSemUI } = nova;
+    atualizarStore([...parcelasDoCalculo, parcelaSemUI]);
   }
 
   function removerDoCalculo(idx) {
@@ -477,23 +471,45 @@ export default function ParcelasPersonalizadas() {
         <p className="text-xs text-gray-400 mb-4">Modelos pré-configurados do direito do trabalho. Clique em "Usar" para adicionar ao cálculo.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {TEMPLATES_PADRAO.map((t) => (
-            <div key={t._templateId} className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm leading-tight">{t.nome}</p>
-                <p className="text-xs text-gray-400 mt-0.5 leading-snug">{t.descricao}</p>
-                <div className="flex gap-1.5 mt-1 flex-wrap">
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${t.natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-                    {t.natureza}
-                  </span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-                    {FREQUENCIA_LABELS[t.frequencia] || t.frequencia}
-                  </span>
+            <div key={t._templateId} className="flex flex-col gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+              <div className="flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm leading-tight">{t.nome}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 leading-snug">{t.descricao}</p>
+                  <div className="flex gap-1.5 mt-1 flex-wrap">
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${t.natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                      {t.natureza}
+                    </span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                      {FREQUENCIA_LABELS[t.frequencia] || t.frequencia}
+                    </span>
+                  </div>
                 </div>
               </div>
+              {/* Seletor inline de percentual para templates configuráveis */}
+              {t.opcoesPercentual?.length > 0 && (
+                <div className="flex flex-wrap gap-1 items-center">
+                  <span className="text-xs text-gray-500 mr-1">%:</span>
+                  {t.rotulosPercentual.map((rotulo, i) => (
+                    <button
+                      key={t.opcoesPercentual[i]}
+                      type="button"
+                      onClick={() => setTemplateConfig(prev => ({ ...prev, [t._templateId]: t.opcoesPercentual[i] }))}
+                      className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                        templateConfig[t._templateId] === t.opcoesPercentual[i]
+                          ? 'border-primaria bg-blue-50 text-primaria font-medium'
+                          : 'border-gray-200 text-gray-500 hover:border-gray-400'
+                      }`}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => adicionarAoCalculo({ ...t })}
-                className="btn-secundario text-xs py-1 px-3 shrink-0"
+                className="btn-secundario text-xs py-1 px-3 self-end"
               >
                 Usar
               </button>

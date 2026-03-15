@@ -26,6 +26,14 @@ const dadosIniciais = {
   adicionalHoraNoturna: 0.2,
   qtdeHorasNoturnasMensais: 0,
 
+  // Jornada — modelo multi-período (substitui campos acima quando preenchido)
+  // Cada período: { id, dataInicio, dataFim, padraoApuracao, divisorJornada,
+  //   adicionalHoraExtra, adicionalHoraNoturna, modoEntrada,
+  //   mediaHorasExtrasDiarias, mediaHorasExtrasSemanais, mediaHorasExtrasPorTurno,
+  //   mediaHorasNoturnasDiarias, horaEntrada, horaSaida, intervaloMinutos,
+  //   diasSemana, afastamentos, totalHorasExtras, totalHorasNoturnas, distribuicaoMensal }
+  jornadaPeriodos: [],
+
   // Adicionais
   adicionalInsalubridadePercentual: 0,
   dataInicioInsalubridade: '',

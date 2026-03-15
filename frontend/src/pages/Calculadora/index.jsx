@@ -3,8 +3,8 @@ import { useCalculoStore } from '../../store/calculoStore.js';
 import DadosContrato from './DadosContrato.jsx';
 import TipoCalculo from './TipoCalculo.jsx';
 import Verbas from './Verbas.jsx';
-import Adicionais from './Adicionais.jsx';
 import ParcelasPersonalizadas from './ParcelasPersonalizadas.jsx';
+import ConfigurarParcelas from './ConfigurarParcelas.jsx';
 import HorarioTrabalho from './HorarioTrabalho.jsx';
 import Deducoes from './Deducoes.jsx';
 import MutasEDespesas from './MutasEDespesas.jsx';
@@ -13,54 +13,64 @@ import ResultadoTriplo from './ResultadoTriplo.jsx';
 
 /**
  * Step mapping:
- *   1 = DadosContrato
- *   2 = TipoCalculo
- *   3 = Verbas/Férias/13o       (verbas_rescisórias, verbas_e_parcelas)
- *   4 = Adicionais              (verbas_e_parcelas apenas)
- *   5 = Parcelas                (verbas_e_parcelas, apenas_parcelas)
- *   6 = Jornada/HE             (verbas_e_parcelas apenas)
- *   7 = Deduções               (todos os fluxos)
- *   8 = Multas e Despesas      (todos os fluxos)
- *   9 = Resultado              (todos os fluxos)
+ *   1  = DadosContrato
+ *   2  = TipoCalculo
+ *   3  = Verbas/Férias/13o       (verbas_rescisórias, verbas_e_parcelas)
+ *   5  = Parcelas                (verbas_e_parcelas, apenas_parcelas)
+ *   11 = ConfigurarParcelas      (verbas_e_parcelas, apenas_parcelas)
+ *   6  = Jornada/HE              (condicional — apenas se parcelas de jornada selecionadas)
+ *   7  = Deduções                (todos os fluxos)
+ *   8  = Multas e Despesas       (todos os fluxos)
+ *   9  = Resultado               (todos os fluxos)
  *
  * Navegação por fluxo:
- *   verbas_rescisórias:  1→2→3→7→8→9  (sem Adicionais nem Jornada)
- *   verbas_e_parcelas:   1→2→3→4→5→6→7→8→9
- *   apenas_parcelas:     1→2→5→7→8→9
+ *   verbas_rescisórias:  1→2→3→7→8→9
+ *   verbas_e_parcelas:   1→2→3→5→11→[6]→7→8→9
+ *   apenas_parcelas:     1→2→5→11→[6]→7→8→9
+ *
+ * [6] = somente se alguma parcela requer jornada (tpl_horas_extras, tpl_noturno, tpl_intervalo)
  */
 
-const STEPS_POR_FLUXO = {
-  'verbas_rescisórias': [
-    { num: 1, label: 'Contrato' },
-    { num: 2, label: 'Tipo' },
-    { num: 3, label: 'Verbas' },
-    { num: 7, label: 'Deduções' },
-    { num: 8, label: 'Despesas' },
-    { num: 9, label: 'Resultado' },
-  ],
-  'verbas_e_parcelas': [
-    { num: 1, label: 'Contrato' },
-    { num: 2, label: 'Tipo' },
-    { num: 3, label: 'Verbas' },
-    { num: 4, label: 'Adicionais' },
-    { num: 5, label: 'Parcelas' },
-    { num: 6, label: 'Jornada' },
-    { num: 7, label: 'Deduções' },
-    { num: 8, label: 'Despesas' },
-    { num: 9, label: 'Resultado' },
-  ],
-  'apenas_parcelas': [
-    { num: 1, label: 'Contrato' },
-    { num: 2, label: 'Tipo' },
-    { num: 5, label: 'Parcelas' },
-    { num: 7, label: 'Deduções' },
-    { num: 8, label: 'Despesas' },
-    { num: 9, label: 'Resultado' },
-  ],
-};
+const PARCELAS_JORNADA_IDS = ['tpl_horas_extras', 'tpl_noturno', 'tpl_intervalo'];
 
-function StepIndicator({ step, tipoFluxo }) {
-  const steps = STEPS_POR_FLUXO[tipoFluxo] || STEPS_POR_FLUXO['verbas_rescisórias'];
+function getStepsPorFluxo(tipoFluxo, precisaJornada) {
+  const jornadaStep = { num: 6, label: 'Jornada' };
+  const base = {
+    'verbas_rescisórias': [
+      { num: 1, label: 'Contrato' },
+      { num: 2, label: 'Tipo' },
+      { num: 3, label: 'Verbas' },
+      { num: 7, label: 'Deduções' },
+      { num: 8, label: 'Despesas' },
+      { num: 9, label: 'Resultado' },
+    ],
+    'verbas_e_parcelas': [
+      { num: 1, label: 'Contrato' },
+      { num: 2, label: 'Tipo' },
+      { num: 3, label: 'Verbas' },
+      { num: 5, label: 'Parcelas' },
+      { num: 11, label: 'Configurar' },
+      ...(precisaJornada ? [jornadaStep] : []),
+      { num: 7, label: 'Deduções' },
+      { num: 8, label: 'Despesas' },
+      { num: 9, label: 'Resultado' },
+    ],
+    'apenas_parcelas': [
+      { num: 1, label: 'Contrato' },
+      { num: 2, label: 'Tipo' },
+      { num: 5, label: 'Parcelas' },
+      { num: 11, label: 'Configurar' },
+      ...(precisaJornada ? [jornadaStep] : []),
+      { num: 7, label: 'Deduções' },
+      { num: 8, label: 'Despesas' },
+      { num: 9, label: 'Resultado' },
+    ],
+  };
+  return base[tipoFluxo] || base['verbas_rescisórias'];
+}
+
+function StepIndicator({ step, tipoFluxo, precisaJornada }) {
+  const steps = getStepsPorFluxo(tipoFluxo, precisaJornada);
   const stepNums = steps.map((s) => s.num);
   const stepAtualIdx = stepNums.indexOf(step);
 
@@ -88,7 +98,10 @@ function StepIndicator({ step, tipoFluxo }) {
 }
 
 export default function CalculadoraPage() {
-  const { step, tipoFluxo } = useCalculoStore();
+  const { step, tipoFluxo, dados } = useCalculoStore();
+
+  const precisaJornada = (dados.parcelasPersonalizadas || [])
+    .some(p => PARCELAS_JORNADA_IDS.includes(p._templateId));
 
   const mostrarResultadoTriplo =
     step === 9 && (tipoFluxo === 'verbas_rescisórias' || tipoFluxo === 'verbas_e_parcelas');
@@ -100,14 +113,14 @@ export default function CalculadoraPage() {
         <p className="text-blue-200 text-sm mt-1">Preencha os dados do contrato para calcular as verbas rescisórias</p>
       </div>
 
-      <StepIndicator step={step} tipoFluxo={tipoFluxo} />
+      <StepIndicator step={step} tipoFluxo={tipoFluxo} precisaJornada={precisaJornada} />
 
       <div className="p-6">
         {step === 1 && <DadosContrato />}
         {step === 2 && <TipoCalculo />}
         {step === 3 && <Verbas />}
-        {step === 4 && <Adicionais />}
         {step === 5 && <ParcelasPersonalizadas />}
+        {step === 11 && <ConfigurarParcelas />}
         {step === 6 && <HorarioTrabalho />}
         {step === 7 && <Deducoes />}
         {step === 8 && <MutasEDespesas />}
