@@ -1,6 +1,6 @@
 'use strict';
 
-const { calcularTemporais, format, toDate, differenceInMonths } = require('../../utils/datas');
+const { calcularTemporais, format, toDate } = require('../../utils/datas');
 const { round2, nonNegative } = require('../../utils/formatacao');
 const { Auditoria } = require('../../utils/auditoria');
 
@@ -18,6 +18,8 @@ const { calcularIntervaloIntrajornada } = require('./verbas/intervaloIntrajornad
 const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require('./verbas/inss');
 const { calcularJurosADC58 } = require('./verbas/jurosCorrecao');
 const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
+const { calcularParcelaGenerica, calcularReflexosParcela } = require('./verbas/parcelasGenericas');
+const db = require('../../config/database');
 
 /**
  * Motor Central de Cálculo Trabalhista
@@ -188,77 +190,46 @@ async function calcular(dados, modalidade) {
     });
   }
 
-  // ---- PARCELAS GENÉRICAS (fixo / percentual_salario) ----
+  // ---- PARCELAS GENÉRICAS (fixo / percentual_salario / percentual_sm / horaria custom) ----
   // Parcelas que não usam histórico salarial nem têm calculadora dedicada
   const TEMPLATES_DEDICADOS = new Set([
-    'tpl_horas_extras', 'tpl_noturno', 'tpl_feriados', // cálculo via jornada
+    'tpl_horas_extras', 'tpl_noturno', 'tpl_feriados', // cálculo via jornada (calcularHorasExtras)
     'tpl_insalubridade',                                // calcularInsalubridade
     'tpl_periculosidade',                               // calcularPericulosidade
     'tpl_intervalo',                                    // calcularIntervaloIntrajornada
   ]);
-  verbas.parcelasCustom = [];
-  const parcelasGenericas = (dados.parcelasPersonalizadas || []).filter((p) =>
-    !p.baseHistoricoId &&
-    p.tipoValor !== 'percentual_historico' &&
-    p.tipoValor !== 'percentual_sm' &&
-    p.frequencia !== 'horaria' &&
-    !TEMPLATES_DEDICADOS.has(p.templateId)
+
+  // Buscar SM vigente na data de dispensa (necessário para parcelas percentual_sm)
+  let smVigente = 0;
+  const hasSmParcela = (dados.parcelasPersonalizadas || []).some(
+    (p) => p.tipoValor === 'percentual_sm' && !p.baseHistoricoId && !TEMPLATES_DEDICADOS.has(p.templateId)
   );
+  if (hasSmParcela) {
+    const smRow = await db.query(
+      `SELECT valor FROM salario_minimo_historico
+       WHERE mes_ano <= DATE_TRUNC('month', $1::date)
+       ORDER BY mes_ano DESC LIMIT 1`,
+      [dados.dataDispensa]
+    );
+    smVigente = parseFloat(smRow.rows[0]?.valor || 0);
+  }
+
+  verbas.parcelasCustom = [];
+  const parcelasGenericas = (dados.parcelasPersonalizadas || []).filter(
+    (p) =>
+      !p.baseHistoricoId &&
+      p.tipoValor !== 'percentual_historico' &&
+      !TEMPLATES_DEDICADOS.has(p.templateId)
+  );
+
   for (let idx = 0; idx < parcelasGenericas.length; idx++) {
     const parcela = parcelasGenericas[idx];
-    let valorMensal = 0;
-    if (parcela.tipoValor === 'fixo') {
-      valorMensal = parcela.valorBase || 0;
-    } else if (parcela.tipoValor === 'percentual_salario') {
-      valorMensal = (dados.ultimoSalario || 0) * ((parcela.percentualBase || 0) / 100);
-    }
-    if (valorMensal === 0 && parcela.tipoValor !== 'fixo') continue;
-
-    const inicioData = parcela.periodoTipo === 'especifico' && parcela.periodoInicio
-      ? new Date(parcela.periodoInicio)
-      : temporal.marcoPrescricional || new Date(dados.dataAdmissao);
-    const fimData = parcela.periodoTipo === 'especifico' && parcela.periodoFim
-      ? new Date(parcela.periodoFim)
-      : temporal.dataDispensa || new Date(dados.dataDispensa);
-    const nMeses = Math.max(1, differenceInMonths(fimData, inicioData) + 1);
-
-    let total = 0;
-    let formulaFreq = '';
-    switch (parcela.frequencia) {
-      case 'mensal':
-        total = round2(valorMensal * nMeses);
-        formulaFreq = `× ${nMeses} meses`;
-        break;
-      case 'unica':
-        total = round2(parcela.valorBase || 0);
-        formulaFreq = '(valor único)';
-        break;
-      case 'semestral': {
-        const nSem = Math.floor(nMeses / 6);
-        total = round2(valorMensal * nSem);
-        formulaFreq = `× ${nSem} semestres`;
-        break;
-      }
-      case 'anual': {
-        const nAnos = Math.floor(nMeses / 12);
-        total = round2(valorMensal * nAnos);
-        formulaFreq = `× ${nAnos} anos`;
-        break;
-      }
-      case 'diaria_6d':
-        total = round2(valorMensal * Math.round(nMeses * 26));
-        formulaFreq = `× ${Math.round(nMeses * 26)} dias (6d/sem)`;
-        break;
-      case 'diaria_5d':
-        total = round2(valorMensal * Math.round(nMeses * 22));
-        formulaFreq = `× ${Math.round(nMeses * 22)} dias (5d/sem)`;
-        break;
-      default:
-        total = round2(parcela.valorBase || 0);
-        formulaFreq = '(valor único)';
-    }
+    const { valorMensal, total, nMeses, formulaFreq } =
+      calcularParcelaGenerica(parcela, dados, temporal, smVigente);
 
     if (total === 0 && parcela.frequencia !== 'unica') continue;
+
+    const reflexos = calcularReflexosParcela(total, nMeses, parcela, dados, temporal, modalidade);
 
     const codBase = parcela.nome.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 30);
     verbas.parcelasCustom.push({
@@ -269,6 +240,7 @@ async function calcular(dados, modalidade) {
       incideInss: parcela.incideInss || false,
       valor: total,
       excluida: false,
+      reflexos,
       memoria: {
         formula: `${parcela.nome}: R$ ${valorMensal.toFixed(2)} ${formulaFreq} = R$ ${total.toFixed(2)}`,
         valorMensal,
@@ -453,7 +425,7 @@ function montarListaVerbas(verbas, reflexos) {
     });
   }
 
-  // Parcelas genéricas (fixo / percentual_salario)
+  // Parcelas genéricas (fixo / percentual_salario / percentual_sm) + seus reflexos
   for (const pc of (verbas.parcelasCustom || [])) {
     lista.push({
       codigo: pc.codigo,
@@ -467,6 +439,25 @@ function montarListaVerbas(verbas, reflexos) {
       memoria: pc.memoria,
       ordemExibicao: ordem++,
     });
+    const r = pc.reflexos || {};
+    if (r.rsr?.valor) {
+      lista.push({ codigo: `${pc.codigo}_rsr`, nome: `Reflexo ${pc.nome} no RSR`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, valor: r.rsr.valor, excluida: false, memoria: r.rsr.memoria || {}, ordemExibicao: ordem++ });
+    }
+    if (r.avisoPrevio?.valor) {
+      lista.push({ codigo: `${pc.codigo}_ap`, nome: `Reflexo ${pc.nome} no Aviso Prévio`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, valor: r.avisoPrevio.valor, excluida: false, memoria: r.avisoPrevio.memoria || {}, ordemExibicao: ordem++ });
+    }
+    if (r.ferias?.valor) {
+      lista.push({ codigo: `${pc.codigo}_fer`, nome: `Reflexo ${pc.nome} nas Férias`, categoria: 'salarial', natureza: 'salarial', incideFgts: false, incideInss: false, valor: r.ferias.valor, excluida: false, memoria: r.ferias.memoria || {}, ordemExibicao: ordem++ });
+    }
+    if (r.decimoTerceiro?.valor) {
+      lista.push({ codigo: `${pc.codigo}_13`, nome: `Reflexo ${pc.nome} no 13º`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, valor: r.decimoTerceiro.valor, excluida: false, memoria: r.decimoTerceiro.memoria || {}, ordemExibicao: ordem++ });
+    }
+    if (r.fgts?.valor) {
+      lista.push({ codigo: `${pc.codigo}_fgts`, nome: `Reflexo ${pc.nome} no FGTS`, categoria: 'fgts', natureza: 'indenizatoria', incideFgts: false, incideInss: false, valor: r.fgts.valor, excluida: false, memoria: r.fgts.memoria || {}, ordemExibicao: ordem++ });
+    }
+    if (r.mulFgts?.valor) {
+      lista.push({ codigo: `${pc.codigo}_mfgts`, nome: `Reflexo ${pc.nome} na Multa FGTS`, categoria: 'fgts', natureza: 'indenizatoria', incideFgts: false, incideInss: false, valor: r.mulFgts.valor, excluida: false, memoria: r.mulFgts.memoria || {}, ordemExibicao: ordem++ });
+    }
   }
 
   return lista;
