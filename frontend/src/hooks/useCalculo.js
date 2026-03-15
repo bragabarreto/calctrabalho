@@ -105,6 +105,7 @@ export function prepararDadosContrato(dados) {
       incidePrevidenciaPrivada: Boolean(p.incidePrevidenciaPrivada),
       ...(p.aliquotaPrevidenciaPrivada != null ? { aliquotaPrevidenciaPrivada: Number(p.aliquotaPrevidenciaPrivada) } : {}),
       baseHistoricoId: p.baseHistoricoId || null,
+      templateId: p._templateId || p.templateId || null,
     })),
 
     // Deduções detalhadas

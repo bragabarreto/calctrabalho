@@ -98,6 +98,8 @@ const schemaDadosContrato = Joi.object({
     aliquotaPrevidenciaPrivada: Joi.number().min(0).max(1).allow(null).optional(),
     // Histórico salarial como base de cálculo (substitui valorBase para parcelas mensais)
     baseHistoricoId: Joi.string().allow(null, '').optional(),
+    // Template de origem (controla qual calculadora usar no engine)
+    templateId: Joi.string().allow(null, '').optional(),
   })).default([]),
 
   // Deduções detalhadas

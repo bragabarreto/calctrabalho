@@ -1,6 +1,6 @@
 'use strict';
 
-const { calcularTemporais, format, toDate } = require('../../utils/datas');
+const { calcularTemporais, format, toDate, differenceInMonths } = require('../../utils/datas');
 const { round2, nonNegative } = require('../../utils/formatacao');
 const { Auditoria } = require('../../utils/auditoria');
 
@@ -135,26 +135,26 @@ async function calcular(dados, modalidade) {
   verbas.multaArt467 = { valor: 0, excluida: false, memoria: {} };
   verbas.multaArt477 = calcularMultaArt477(dados, temporal);
 
-  // ---- HORAS EXTRAS ----
+  } // fim if (!apenasParc)
+
+  // ---- HORAS EXTRAS (todos os fluxos — retorna 0 se sem dados de jornada) ----
   verbas.horasExtras = calcularHorasExtras(dados, temporal);
   reflexos.horasExtras = calcularReflexosHE(verbas.horasExtras, dados, temporal, modalidade);
 
-  // ---- ADICIONAL NOTURNO ----
+  // ---- ADICIONAL NOTURNO (todos os fluxos) ----
   verbas.adicionalNoturno = calcularAdicionalNoturno(dados, temporal);
   reflexos.adicionalNoturno = calcularReflexosAN(verbas.adicionalNoturno, dados, temporal, modalidade);
 
-  // ---- INSALUBRIDADE ----
+  // ---- INSALUBRIDADE (todos os fluxos) ----
   verbas.insalubridade = await calcularInsalubridade(dados, temporal);
   reflexos.insalubridade = calcularReflexosInsalubridade(verbas.insalubridade, dados, temporal, modalidade);
 
-  // ---- PERICULOSIDADE ----
+  // ---- PERICULOSIDADE (todos os fluxos) ----
   verbas.periculosidade = calcularPericulosidade(dados, temporal);
   reflexos.periculosidade = calcularReflexosPericulosidade(verbas.periculosidade, dados, temporal, modalidade);
 
-  // ---- INTERVALO INTRAJORNADA ----
+  // ---- INTERVALO INTRAJORNADA (todos os fluxos) ----
   verbas.intervaloIntrajornada = calcularIntervaloIntrajornada(dados, temporal);
-
-  } // fim if (!apenasParc)
 
   // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
   // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId
@@ -184,6 +184,97 @@ async function calcular(dados, modalidade) {
           valorBase: m.valor,
           valor: m.valorComPercentual,
         })),
+      },
+    });
+  }
+
+  // ---- PARCELAS GENÉRICAS (fixo / percentual_salario) ----
+  // Parcelas que não usam histórico salarial nem têm calculadora dedicada
+  const TEMPLATES_DEDICADOS = new Set([
+    'tpl_horas_extras', 'tpl_noturno', 'tpl_feriados', // cálculo via jornada
+    'tpl_insalubridade',                                // calcularInsalubridade
+    'tpl_periculosidade',                               // calcularPericulosidade
+    'tpl_intervalo',                                    // calcularIntervaloIntrajornada
+  ]);
+  verbas.parcelasCustom = [];
+  const parcelasGenericas = (dados.parcelasPersonalizadas || []).filter((p) =>
+    !p.baseHistoricoId &&
+    p.tipoValor !== 'percentual_historico' &&
+    p.tipoValor !== 'percentual_sm' &&
+    p.frequencia !== 'horaria' &&
+    !TEMPLATES_DEDICADOS.has(p.templateId)
+  );
+  for (let idx = 0; idx < parcelasGenericas.length; idx++) {
+    const parcela = parcelasGenericas[idx];
+    let valorMensal = 0;
+    if (parcela.tipoValor === 'fixo') {
+      valorMensal = parcela.valorBase || 0;
+    } else if (parcela.tipoValor === 'percentual_salario') {
+      valorMensal = (dados.ultimoSalario || 0) * ((parcela.percentualBase || 0) / 100);
+    }
+    if (valorMensal === 0 && parcela.tipoValor !== 'fixo') continue;
+
+    const inicioData = parcela.periodoTipo === 'especifico' && parcela.periodoInicio
+      ? new Date(parcela.periodoInicio)
+      : temporal.marcoPrescricional || new Date(dados.dataAdmissao);
+    const fimData = parcela.periodoTipo === 'especifico' && parcela.periodoFim
+      ? new Date(parcela.periodoFim)
+      : temporal.dataDispensa || new Date(dados.dataDispensa);
+    const nMeses = Math.max(1, differenceInMonths(fimData, inicioData) + 1);
+
+    let total = 0;
+    let formulaFreq = '';
+    switch (parcela.frequencia) {
+      case 'mensal':
+        total = round2(valorMensal * nMeses);
+        formulaFreq = `× ${nMeses} meses`;
+        break;
+      case 'unica':
+        total = round2(parcela.valorBase || 0);
+        formulaFreq = '(valor único)';
+        break;
+      case 'semestral': {
+        const nSem = Math.floor(nMeses / 6);
+        total = round2(valorMensal * nSem);
+        formulaFreq = `× ${nSem} semestres`;
+        break;
+      }
+      case 'anual': {
+        const nAnos = Math.floor(nMeses / 12);
+        total = round2(valorMensal * nAnos);
+        formulaFreq = `× ${nAnos} anos`;
+        break;
+      }
+      case 'diaria_6d':
+        total = round2(valorMensal * Math.round(nMeses * 26));
+        formulaFreq = `× ${Math.round(nMeses * 26)} dias (6d/sem)`;
+        break;
+      case 'diaria_5d':
+        total = round2(valorMensal * Math.round(nMeses * 22));
+        formulaFreq = `× ${Math.round(nMeses * 22)} dias (5d/sem)`;
+        break;
+      default:
+        total = round2(parcela.valorBase || 0);
+        formulaFreq = '(valor único)';
+    }
+
+    if (total === 0 && parcela.frequencia !== 'unica') continue;
+
+    const codBase = parcela.nome.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 30);
+    verbas.parcelasCustom.push({
+      codigo: `parcela_${codBase}_${idx}`,
+      nome: parcela.nome,
+      natureza: parcela.natureza || 'salarial',
+      incideFgts: parcela.incideFgts || false,
+      incideInss: parcela.incideInss || false,
+      valor: total,
+      excluida: false,
+      memoria: {
+        formula: `${parcela.nome}: R$ ${valorMensal.toFixed(2)} ${formulaFreq} = R$ ${total.toFixed(2)}`,
+        valorMensal,
+        nMeses,
+        frequencia: parcela.frequencia,
+        tipoValor: parcela.tipoValor,
       },
     });
   }
@@ -358,6 +449,22 @@ function montarListaVerbas(verbas, reflexos) {
       valor: ph.valor,
       excluida: false,
       memoria: ph.memoria,
+      ordemExibicao: ordem++,
+    });
+  }
+
+  // Parcelas genéricas (fixo / percentual_salario)
+  for (const pc of (verbas.parcelasCustom || [])) {
+    lista.push({
+      codigo: pc.codigo,
+      nome: pc.nome,
+      categoria: pc.natureza,
+      natureza: pc.natureza,
+      incideFgts: pc.incideFgts,
+      incideInss: pc.incideInss,
+      valor: pc.valor,
+      excluida: pc.excluida,
+      memoria: pc.memoria,
       ordemExibicao: ordem++,
     });
   }
