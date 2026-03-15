@@ -34,8 +34,8 @@ async function criar(req, res, next) {
       `INSERT INTO parcelas_personalizadas (
         nome, descricao, natureza, periodo_tipo, periodo_inicio, periodo_fim,
         frequencia, tipo_valor, valor_base, percentual_base, percentual_adicional,
-        gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, template_id
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, template_id, base_historico_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       RETURNING *`,
       [
         d.nome, d.descricao || null, d.natureza, d.periodoTipo || 'contrato',
@@ -44,7 +44,7 @@ async function criar(req, res, next) {
         d.valorBase || null, d.percentualBase || null, d.percentualAdicional || 0,
         d.geraReflexos || false, d.reflexosEm || [],
         d.incideInss || false, d.incideIr || false, d.incideFgts || false,
-        d.templateId || null,
+        d.templateId || null, d.baseHistoricoId || null,
       ]
     );
     res.status(201).json({ sucesso: true, parcela: rows[0] });
@@ -62,8 +62,8 @@ async function atualizar(req, res, next) {
         nome=$1, descricao=$2, natureza=$3, periodo_tipo=$4, periodo_inicio=$5, periodo_fim=$6,
         frequencia=$7, tipo_valor=$8, valor_base=$9, percentual_base=$10, percentual_adicional=$11,
         gera_reflexos=$12, reflexos_em=$13, incide_inss=$14, incide_ir=$15, incide_fgts=$16,
-        template_id=$17, atualizado_em=NOW()
-      WHERE id=$18 AND ativo=TRUE RETURNING *`,
+        template_id=$17, base_historico_id=$18, atualizado_em=NOW()
+      WHERE id=$19 AND ativo=TRUE RETURNING *`,
       [
         d.nome, d.descricao || null, d.natureza, d.periodoTipo || 'contrato',
         d.periodoInicio || null, d.periodoFim || null,
@@ -71,7 +71,7 @@ async function atualizar(req, res, next) {
         d.valorBase || null, d.percentualBase || null, d.percentualAdicional || 0,
         d.geraReflexos || false, d.reflexosEm || [],
         d.incideInss || false, d.incideIr || false, d.incideFgts || false,
-        d.templateId || null,
+        d.templateId || null, d.baseHistoricoId || null,
         id,
       ]
     );

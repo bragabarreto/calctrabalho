@@ -339,6 +339,7 @@ function mapParcelaBDParaForm(p) {
     incideIr: p.incide_ir,
     incideFgts: p.incide_fgts,
     templateId: p.template_id,
+    baseHistoricoId: p.base_historico_id || '',
   };
 }
 
@@ -438,21 +439,28 @@ export default function ParcelasPersonalizadas() {
         // Salvar na biblioteca como customização do template + adicionar ao cálculo
         const salva = await criarNaBiblioteca({ ...form, templateId: editorCtx.template._templateId });
         adicionarAoCalculo({ ...form, id: salva.id });
-        setEditorCtx(null);
+
       } else if (editorCtx.mode === 'biblioteca') {
-        // Atualizar parcela existente na biblioteca
-        await atualizarNaBiblioteca({ id: editorCtx.parcela.id, ...form });
-        setEditorCtx(null);
-      } else {
-        // Nova parcela — perguntar se salva na biblioteca
-        if (window.confirm('Salvar esta parcela na biblioteca para uso futuro?')) {
-          const salva = await criarNaBiblioteca(form);
-          adicionarAoCalculo({ ...form, id: salva.id });
+        // LOCAL apenas — não altera a biblioteca. Se já está em parcelasDoCalculo, atualiza em-place; senão adiciona como cópia local.
+        const idOrig = editorCtx.parcela.id;
+        const jaNoCalculo = parcelasDoCalculo.findIndex(p => p.id === idOrig);
+        if (jaNoCalculo >= 0) {
+          atualizarStore(parcelasDoCalculo.map((p, i) => i === jaNoCalculo ? { ...p, ...form } : p));
         } else {
-          adicionarAoCalculo(form);
+          adicionarAoCalculo({ ...form });
         }
-        setEditorCtx(null);
+
+      } else if (editorCtx.mode === 'editar_local') {
+        // Editar item já presente em parcelasDoCalculo — apenas local, sem API
+        const { idx } = editorCtx;
+        atualizarStore(parcelasDoCalculo.map((p, i) => i === idx ? { ...p, ...form } : p));
+
+      } else {
+        // Nova parcela — SEMPRE salva na biblioteca permanentemente + adiciona ao cálculo
+        const salva = await criarNaBiblioteca(form);
+        adicionarAoCalculo({ ...form, id: salva.id });
       }
+      setEditorCtx(null);
     } catch (e) {
       alert('Erro ao salvar: ' + e.message);
     } finally {
@@ -566,13 +574,17 @@ export default function ParcelasPersonalizadas() {
               ? editorCtx.template
               : editorCtx.mode === 'biblioteca'
               ? mapParcelaBDParaForm(editorCtx.parcela)
+              : editorCtx.mode === 'editar_local'
+              ? editorCtx.parcela
               : null
           }
           titulo={
             editorCtx.mode === 'template'
               ? `Personalizar: ${editorCtx.template.nome}`
               : editorCtx.mode === 'biblioteca'
-              ? 'Editar Parcela da Biblioteca'
+              ? 'Editar Parcela (apenas neste cálculo)'
+              : editorCtx.mode === 'editar_local'
+              ? 'Editar Parcela (apenas neste cálculo)'
               : 'Nova Parcela Personalizada'
           }
           historicos={dados.historicosSalariais || []}
@@ -619,6 +631,14 @@ export default function ParcelasPersonalizadas() {
                     {p.percentualBase && <span className="text-xs text-gray-400">{Number(p.percentualBase).toFixed(1)}%</span>}
                   </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setEditorCtx({ mode: 'editar_local', idx, parcela: p })}
+                  className="text-gray-400 hover:text-primaria p-1"
+                  title="Editar (apenas neste cálculo)"
+                >
+                  <Edit2 size={16} />
+                </button>
                 <button type="button" onClick={() => removerDoCalculo(idx)} className="text-red-400 hover:text-red-600 p-1">
                   <Trash2 size={16} />
                 </button>

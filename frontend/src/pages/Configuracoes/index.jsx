@@ -612,6 +612,7 @@ function mapParcelaBDParaForm(p) {
     incideIr: p.incide_ir,
     incideFgts: p.incide_fgts,
     templateId: p.template_id,
+    baseHistoricoId: p.base_historico_id || '',
   };
 }
 
