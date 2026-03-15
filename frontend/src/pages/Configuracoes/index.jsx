@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronUp } from 'lucide-react';
-import { useParcelas, useCriarParcela, useExcluirParcela } from '../../hooks/useParcelas.js';
+import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import { useParcelas, useCriarParcela, useAtualizarParcela, useExcluirParcela } from '../../hooks/useParcelas.js';
 import { useSalarioMinimo, useSalvarSalarioMinimo, useRemoverSalarioMinimo } from '../../hooks/useSalarioMinimo.js';
 import { useIpcaE, useSalvarIpcaE, useRemoverIpcaE, useBacenSyncIpcaE } from '../../hooks/useIpcaE.js';
 import ParcelaEditor from '../../components/ParcelaEditor/index.jsx';
@@ -592,12 +592,39 @@ function TabVerbas() {
   );
 }
 
+// Converte registro DB (snake_case) para form (camelCase) para pré-preencher ParcelaEditor
+function mapParcelaBDParaForm(p) {
+  return {
+    nome: p.nome,
+    descricao: p.descricao || '',
+    natureza: p.natureza,
+    periodoTipo: p.periodo_tipo,
+    periodoInicio: p.periodo_inicio,
+    periodoFim: p.periodo_fim,
+    frequencia: p.frequencia,
+    tipoValor: p.tipo_valor,
+    valorBase: p.valor_base,
+    percentualBase: p.percentual_base ? p.percentual_base * 100 : null,
+    percentualAdicional: p.percentual_adicional ? p.percentual_adicional * 100 : 0,
+    geraReflexos: p.gera_reflexos ?? false,
+    reflexosEm: p.reflexos_em || [],
+    incideInss: p.incide_inss,
+    incideIr: p.incide_ir,
+    incideFgts: p.incide_fgts,
+    templateId: p.template_id,
+  };
+}
+
 // ---- ABA BIBLIOTECA DE PARCELAS ----
 function TabBiblioteca() {
   const { data: parcelas = [], isLoading } = useParcelas();
   const { mutateAsync: excluir } = useExcluirParcela();
   const { mutateAsync: criar } = useCriarParcela();
-  const [editorAberto, setEditorAberto] = useState(false);
+  const { mutateAsync: atualizar } = useAtualizarParcela();
+
+  // editorCtx: null | { mode: 'nova' } | { mode: 'editar', parcela }
+  const [editorCtx, setEditorCtx] = useState(null);
+  const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(null);
 
   async function handleExcluir(id) {
@@ -607,19 +634,30 @@ function TabBiblioteca() {
     finally { setExcluindo(null); }
   }
 
-  async function handleCriar(form) {
-    try { await criar(form); setEditorAberto(false); }
-    catch (e) { alert('Erro ao salvar: ' + e.message); }
+  async function handleSalvar(form) {
+    setSalvando(true);
+    try {
+      if (editorCtx?.mode === 'editar') {
+        await atualizar({ id: editorCtx.parcela.id, ...form });
+      } else {
+        await criar(form);
+      }
+      setEditorCtx(null);
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+    } finally {
+      setSalvando(false);
+    }
   }
 
   return (
     <div className="space-y-4">
-      {editorAberto && (
+      {editorCtx && (
         <ParcelaEditor
-          parcela={null}
-          titulo="Nova Parcela na Biblioteca"
-          onSalvar={handleCriar}
-          onCancelar={() => setEditorAberto(false)}
+          parcela={editorCtx.mode === 'editar' ? mapParcelaBDParaForm(editorCtx.parcela) : null}
+          titulo={editorCtx.mode === 'editar' ? `Editar: ${editorCtx.parcela.nome}` : 'Nova Parcela na Biblioteca'}
+          onSalvar={handleSalvar}
+          onCancelar={() => setEditorCtx(null)}
         />
       )}
 
@@ -629,7 +667,7 @@ function TabBiblioteca() {
             <BookOpen size={18} className="text-primaria" />
             <h3 className="font-titulo text-lg text-primaria">Parcelas Salvas</h3>
           </div>
-          <button type="button" className="btn-primario flex items-center gap-2 text-sm" onClick={() => setEditorAberto(true)}>
+          <button type="button" className="btn-primario flex items-center gap-2 text-sm" onClick={() => setEditorCtx({ mode: 'nova' })}>
             <Plus size={16} /> Nova Parcela
           </button>
         </div>
@@ -660,6 +698,10 @@ function TabBiblioteca() {
                     </span>
                   </div>
                 </div>
+                <button type="button" onClick={() => setEditorCtx({ mode: 'editar', parcela: p })}
+                  className="text-gray-400 hover:text-primaria p-1 flex-shrink-0" title="Editar">
+                  <Edit2 size={16} />
+                </button>
                 <button type="button" onClick={() => handleExcluir(p.id)} disabled={excluindo === p.id}
                   className="text-red-400 hover:text-red-600 p-1 flex-shrink-0" title="Remover">
                   <Trash2 size={16} />
