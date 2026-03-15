@@ -404,7 +404,7 @@ export default function ParcelasPersonalizadas() {
       }
     }
     // eslint-disable-next-line no-unused-vars
-    const { opcoesPercentual, campoPercentual, rotulosPercentual, _templateId, grupo, ...parcelaSemUI } = nova;
+    const { opcoesPercentual, campoPercentual, rotulosPercentual, grupo, ...parcelaSemUI } = nova;
     atualizarStore([...parcelasDoCalculo, parcelaSemUI]);
   }
 
