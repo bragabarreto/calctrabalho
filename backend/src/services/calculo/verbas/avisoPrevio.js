@@ -20,21 +20,16 @@ function calcularAvisoPrevio(dados, temporal, modalidade) {
   }
 
   const base = (dados.ultimoSalario || 0) + (dados.comissoes || 0);
-  const anosServico = differenceInYears(temporal.dataDispensa, temporal.dataAdmissao);
-  const dias = Math.min(30 + anosServico * 3, 90);
-  let valor = round2((base / 30) * dias);
-
-  if (modalidade === 'culpa_reciproca') {
-    valor = round2(valor / 2);
-  }
+  // dias vem de temporal.diasAvisoPrevio (já dividido por 2 e arredondado pra cima em culpa recíproca)
+  const dias = temporal.diasAvisoPrevio;
+  const valor = round2((base / 30) * dias);
 
   return {
     valor,
     excluida: false,
     memoria: {
-      formula: `(R$ ${base.toFixed(2)} / 30) × ${dias} dias${modalidade === 'culpa_reciproca' ? ' / 2 (culpa recíproca)' : ''} = R$ ${valor.toFixed(2)}`,
+      formula: `(R$ ${base.toFixed(2)} / 30) × ${dias} dias${modalidade === 'culpa_reciproca' ? ' (metade — culpa recíproca)' : ''} = R$ ${valor.toFixed(2)}`,
       base,
-      anosServico,
       dias,
       modalidade,
     },

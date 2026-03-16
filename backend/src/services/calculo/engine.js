@@ -29,7 +29,7 @@ const db = require('../../config/database');
  */
 async function calcular(dados, modalidade) {
   const auditoria = new Auditoria();
-  const temporal = calcularTemporais(dados);
+  const temporal = calcularTemporais(dados, modalidade);
   const verbas = {};
   const reflexos = {};
 
@@ -319,9 +319,9 @@ async function calcular(dados, modalidade) {
     : dados.dataDispensa;
   const juros = await calcularJurosADC58(totalComHonorarios, dataEncerramentoStr, dados.dataAjuizamento);
 
-  // ---- ENCARGOS DO EMPREGADO (INSS + IR — informativo) ----
+  // ---- ENCARGOS DO EMPREGADO + PATRONAL (INSS + IR — informativo) ----
   const lapsoMeses = temporal.lapsoComAviso?.meses || temporal.lapsoSemAviso?.meses || 1;
-  const encargosEmpregado = calcularEncargosEmpregado(listaVerbas, lapsoMeses);
+  const encargosEmpregado = calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial);
 
   return {
     verbas: listaVerbas,

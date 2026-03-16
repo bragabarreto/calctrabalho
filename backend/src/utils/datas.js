@@ -60,7 +60,7 @@ function datedifMD(start, end) {
 /**
  * Calcula os cálculos temporais base da rescisão
  */
-function calcularTemporais(dados) {
+function calcularTemporais(dados, modalidade) {
   const dataAdmissao = toDate(dados.dataAdmissao);
   const dataDispensa = toDate(dados.dataDispensa);
   const dataAjuizamento = toDate(dados.dataAjuizamento);
@@ -71,7 +71,12 @@ function calcularTemporais(dados) {
 
   // Anos completos até dispensa (para cálculo do aviso)
   const anosCompletos = differenceInYears(dataDispensa, dataAdmissao);
-  const diasAvisoPrevio = Math.min(30 + anosCompletos * 3, 90);
+  let diasAvisoPrevio = Math.min(30 + anosCompletos * 3, 90);
+
+  // Culpa recíproca: aviso prévio apurado pela metade dos dias (arredondar pra cima frações)
+  if (modalidade === 'culpa_reciproca' && !dados.avisoPrevioTrabalhado) {
+    diasAvisoPrevio = Math.ceil(diasAvisoPrevio / 2);
+  }
 
   // Data de encerramento com aviso projetado (se não trabalhado)
   const dataEncerramentoComAviso = dados.avisoPrevioTrabalhado

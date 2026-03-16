@@ -105,14 +105,24 @@ function calcularIR_RRA(baseCalculo, mesesReferencia) {
 }
 
 /**
- * Calcula INSS + IR devidos pelo trabalhador sobre as verbas salariais
+ * Contribuição patronal INSS (20% — alíquota padrão, art. 22 Lei 8.212/91)
+ * Na Justiça do Trabalho apura-se normalmente apenas a contribuição básica (20%)
+ */
+function calcularINSSEmpregador(baseInss) {
+  return round2(baseInss * 0.20);
+}
+
+/**
+ * Calcula INSS + IR devidos pelo trabalhador sobre as verbas salariais,
+ * mais contribuição patronal (20%).
  * (Para informação na memória de cálculo — não deduzido automaticamente)
  *
  * @param {Array} listaVerbas - Lista de verbas calculadas
  * @param {number} lapsoMeses - Meses de contrato (para RRA)
- * @returns {Object} { inssEmpregado, irRetido, baseInss, baseTributavel }
+ * @param {number} percentualSalarial - Fração salarial sobre o subtotal (0–1)
+ * @returns {Object} encargos completos empregado + empregador
  */
-function calcularEncargosEmpregado(listaVerbas, lapsoMeses) {
+function calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial) {
   // Base INSS: soma das verbas que incideInss === true e não excluídas
   const baseInss = round2(
     listaVerbas
@@ -120,7 +130,18 @@ function calcularEncargosEmpregado(listaVerbas, lapsoMeses) {
       .reduce((acc, v) => acc + v.valor, 0)
   );
 
+  const subtotal = round2(
+    listaVerbas.filter(v => !v.excluida).reduce((acc, v) => acc + v.valor, 0)
+  );
+  const baseSalarial = round2(
+    listaVerbas.filter(v => v.natureza === 'salarial' && !v.excluida).reduce((acc, v) => acc + v.valor, 0)
+  );
+  const baseIndenizatoria = round2(subtotal - baseSalarial);
+  const pctSalarial = subtotal > 0 ? round2(baseSalarial / subtotal) : (percentualSalarial || 0);
+  const pctIndenizatorio = round2(1 - pctSalarial);
+
   const inssEmpregado = calcularINSS(baseInss);
+  const inssEmpregador = calcularINSSEmpregador(baseInss);
 
   // Base IR = base INSS - INSS empregado (rendimentos tributáveis depois do INSS)
   const baseTributavel = round2(Math.max(0, baseInss - inssEmpregado));
@@ -128,16 +149,22 @@ function calcularEncargosEmpregado(listaVerbas, lapsoMeses) {
 
   return {
     baseInss,
+    baseSalarial,
+    baseIndenizatoria,
+    pctSalarial,
+    pctIndenizatorio,
     inssEmpregado,
+    inssEmpregador,
     baseTributavel,
     irRetido,
     memoria: {
       baseInss: `R$ ${baseInss.toFixed(2)} (verbas com incidência INSS, não excluídas)`,
       inssEmpregado: `R$ ${inssEmpregado.toFixed(2)} (tabela progressiva 2025)`,
+      inssEmpregador: `R$ ${inssEmpregador.toFixed(2)} (20% patronal — art. 22 Lei 8.212/91)`,
       baseTributavel: `R$ ${baseTributavel.toFixed(2)} (base INSS − INSS empregado)`,
       aviso: 'Valores informativos — o IR em reclamações trabalhistas segue o método RRA (art. 12-A da Lei 7.713/88). Confirme com o perito contábil.',
     },
   };
 }
 
-module.exports = { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado };
+module.exports = { calcularINSS, calcularINSSEmpregador, calcularINSS_Acordo, calcularEncargosEmpregado };
