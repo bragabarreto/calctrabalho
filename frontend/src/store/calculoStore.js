@@ -98,6 +98,9 @@ const dadosIniciais = {
   // Verbas excluídas
   verbasExcluidas: [],
 
+  // Overrides manuais de valores/nomes de verbas { codigo: { nome?, valor? } }
+  verbasEditadas: {},
+
   // Parcelas personalizadas (lista de objetos com parâmetros completos)
   parcelasPersonalizadas: [],
 
@@ -146,6 +149,14 @@ export const useCalculoStore = create((set, get) => ({
       return { dados: { ...state.dados, verbasExcluidas: novas } };
     }),
 
+  setVerbasEditadas: (edits) =>
+    set((state) => ({
+      dados: {
+        ...state.dados,
+        verbasEditadas: { ...(state.dados.verbasEditadas || {}), ...edits },
+      },
+    })),
+
   setPeriodosFerias: (periodos) =>
     set((state) => ({ dados: { ...state.dados, periodosFerias: periodos } })),
 
@@ -164,5 +175,6 @@ export const useCalculoStore = create((set, get) => ({
     resultado: null,
     resultadosTriplos: null,
     erro: null,
+    carregando: false,
   }),
 }));
