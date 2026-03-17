@@ -15,6 +15,11 @@ const { calcularAdicionalNoturno, calcularReflexosAN } = require('./verbas/adici
 const { calcularInsalubridade, calcularReflexosInsalubridade } = require('./verbas/insalubridade');
 const { calcularPericulosidade, calcularReflexosPericulosidade } = require('./verbas/periculosidade');
 const { calcularIntervaloIntrajornada } = require('./verbas/intervaloIntrajornada');
+const { calcularIntervaloInterjornada } = require('./verbas/intervaloInterjornada');
+const { calcularRSRNaoConcedido, calcularFeriadosLaborados, calcularReflexosRSRFeriados } = require('./verbas/rsrFeriados');
+const { calcularIntervaloTermico, calcularReflexosIntervaloTermico } = require('./verbas/intervaloTermico');
+const { calcularIntervaloDigitacao, calcularReflexosIntervaloDigitacao } = require('./verbas/intervaloDigitacao');
+const { gerarDiasCartao } = require('./verbas/cartaoPontoVirtual');
 const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require('./verbas/inss');
 const { calcularJurosADC58 } = require('./verbas/jurosCorrecao');
 const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
@@ -139,13 +144,25 @@ async function calcular(dados, modalidade) {
 
   } // fim if (!apenasParc)
 
-  // ---- HORAS EXTRAS (todos os fluxos — retorna 0 se sem dados de jornada) ----
-  verbas.horasExtras = calcularHorasExtras(dados, temporal);
-  reflexos.horasExtras = calcularReflexosHE(verbas.horasExtras, dados, temporal, modalidade);
+  // ---- CARTÃO DE PONTO VIRTUAL (gerado uma vez, compartilhado por todos os módulos de jornada) ----
+  const diasCartao = gerarDiasCartao(dados);
 
-  // ---- ADICIONAL NOTURNO (todos os fluxos) ----
+  // ---- ADICIONAL NOTURNO (calculado ANTES das HE para OJ 97 SDI-1 TST) ----
   verbas.adicionalNoturno = calcularAdicionalNoturno(dados, temporal);
   reflexos.adicionalNoturno = calcularReflexosAN(verbas.adicionalNoturno, dados, temporal, modalidade);
+
+  // ---- HORAS EXTRAS (todos os fluxos — retorna 0 se sem dados de jornada) ----
+  // OJ 97 SDI-1 TST: quando ativo, AN compõe a base de cálculo das HE
+  // Injeta os valores resolvidos de HN/AHN no dados para que HE os use na fórmula
+  const dadosParaHE = (dados.adicionalNoturnoOJ97 && verbas.adicionalNoturno.memoriaInputs)
+    ? {
+        ...dados,
+        qtdeHorasNoturnasMensais: verbas.adicionalNoturno.memoriaInputs.HN,
+        adicionalHoraNoturna: verbas.adicionalNoturno.memoriaInputs.AHN,
+      }
+    : dados;
+  verbas.horasExtras = calcularHorasExtras(dadosParaHE, temporal);
+  reflexos.horasExtras = calcularReflexosHE(verbas.horasExtras, dadosParaHE, temporal, modalidade);
 
   // ---- INSALUBRIDADE (todos os fluxos) ----
   verbas.insalubridade = await calcularInsalubridade(dados, temporal);
@@ -156,7 +173,26 @@ async function calcular(dados, modalidade) {
   reflexos.periculosidade = calcularReflexosPericulosidade(verbas.periculosidade, dados, temporal, modalidade);
 
   // ---- INTERVALO INTRAJORNADA (todos os fluxos) ----
-  verbas.intervaloIntrajornada = calcularIntervaloIntrajornada(dados, temporal);
+  verbas.intervaloIntrajornada = calcularIntervaloIntrajornada(dados, temporal, diasCartao);
+
+  // ---- INTERVALO INTERJORNADA (quando habilitado — requer cartão de ponto) ----
+  verbas.intervaloInterjornada = calcularIntervaloInterjornada(dados, temporal, diasCartao);
+
+  // ---- RSR NÃO CONCEDIDO (quando habilitado — requer cartão de ponto) ----
+  verbas.rsrNaoConcedido = calcularRSRNaoConcedido(dados, temporal, diasCartao);
+  reflexos.rsrNaoConcedido = calcularReflexosRSRFeriados(verbas.rsrNaoConcedido, dados, temporal, modalidade);
+
+  // ---- FERIADOS LABORADOS (quando habilitado — requer cartão de ponto) ----
+  verbas.feriadosLaborados = calcularFeriadosLaborados(dados, temporal, diasCartao);
+  reflexos.feriadosLaborados = calcularReflexosRSRFeriados(verbas.feriadosLaborados, dados, temporal, modalidade);
+
+  // ---- INTERVALO TÉRMICO (quando habilitado) ----
+  verbas.intervaloTermico = calcularIntervaloTermico(dados, temporal);
+  reflexos.intervaloTermico = calcularReflexosIntervaloTermico(verbas.intervaloTermico, dados, temporal, modalidade);
+
+  // ---- INTERVALO POR DIGITAÇÃO (quando habilitado) ----
+  verbas.intervaloDigitacao = calcularIntervaloDigitacao(dados, temporal);
+  reflexos.intervaloDigitacao = calcularReflexosIntervaloDigitacao(verbas.intervaloDigitacao, dados, temporal, modalidade);
 
   // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
   // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId
@@ -387,7 +423,8 @@ function montarListaVerbas(verbas, reflexos) {
   add('reflexo_he_13', 'Reflexo HE no 13º', 'salarial', 'salarial', true, true, reflexos.horasExtras?.decimoTerceiro);
   add('reflexo_he_fgts', 'Reflexo HE no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.horasExtras?.fgts);
   add('reflexo_he_mul_fgts', 'Reflexo HE na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.horasExtras?.mulFgts);
-  add('intervalo_intrajornada', 'Intervalo Intrajornada', 'salarial', 'salarial', true, true, verbas.intervaloIntrajornada);
+  add('intervalo_intrajornada', 'Intervalo Intrajornada', 'indenizatoria', 'indenizatoria', false, false, verbas.intervaloIntrajornada);
+  add('intervalo_interjornada', 'Intervalo Interjornada', 'indenizatoria', 'indenizatoria', false, false, verbas.intervaloInterjornada);
   add('adicional_noturno', 'Adicional Noturno', 'salarial', 'salarial', true, true, verbas.adicionalNoturno);
   add('reflexo_an_rsr', 'Reflexo AN no RSR', 'salarial', 'salarial', true, true, reflexos.adicionalNoturno?.rsr);
   add('reflexo_an_aviso', 'Reflexo AN no Aviso', 'salarial', 'salarial', true, true, reflexos.adicionalNoturno?.avisoPrevio);
@@ -408,6 +445,32 @@ function montarListaVerbas(verbas, reflexos) {
   add('reflexo_per_fgts', 'Reflexo Peric. FGTS', 'fgts', 'indenizatoria', false, false, reflexos.periculosidade?.fgts);
   add('reflexo_per_mul_fgts', 'Reflexo Peric. Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.periculosidade?.mulFgts);
   add('dano_moral', 'Indenização por Danos Morais', 'indenizatoria', 'indenizatoria', false, false, verbas.danoMoral);
+  add('rsr_nao_concedido', 'RSR Não Concedido', 'salarial', 'salarial', true, true, verbas.rsrNaoConcedido);
+  add('reflexo_rsr_ferias', 'Reflexo RSR nas Férias', 'salarial', 'salarial', true, true, reflexos.rsrNaoConcedido?.ferias);
+  add('reflexo_rsr_13', 'Reflexo RSR no 13º', 'salarial', 'salarial', true, true, reflexos.rsrNaoConcedido?.decimoTerceiro);
+  add('reflexo_rsr_aviso', 'Reflexo RSR no Aviso', 'salarial', 'salarial', true, true, reflexos.rsrNaoConcedido?.avisoPrevio);
+  add('reflexo_rsr_fgts', 'Reflexo RSR no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.rsrNaoConcedido?.fgts);
+  add('reflexo_rsr_mul_fgts', 'Reflexo RSR na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.rsrNaoConcedido?.mulFgts);
+  add('feriados_laborados', 'Feriados Laborados', 'salarial', 'salarial', true, true, verbas.feriadosLaborados);
+  add('reflexo_fer_ferias', 'Reflexo Feriados nas Férias', 'salarial', 'salarial', true, true, reflexos.feriadosLaborados?.ferias);
+  add('reflexo_fer_13', 'Reflexo Feriados no 13º', 'salarial', 'salarial', true, true, reflexos.feriadosLaborados?.decimoTerceiro);
+  add('reflexo_fer_aviso', 'Reflexo Feriados no Aviso', 'salarial', 'salarial', true, true, reflexos.feriadosLaborados?.avisoPrevio);
+  add('reflexo_fer_fgts', 'Reflexo Feriados no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.feriadosLaborados?.fgts);
+  add('reflexo_fer_mul_fgts', 'Reflexo Feriados na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.feriadosLaborados?.mulFgts);
+  add('intervalo_termico', 'Intervalo Térmico', 'salarial', 'salarial', true, true, verbas.intervaloTermico);
+  add('reflexo_it_rsr', 'Reflexo Interv. Térmico no RSR', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.rsr);
+  add('reflexo_it_ferias', 'Reflexo Interv. Térmico nas Férias', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.ferias);
+  add('reflexo_it_13', 'Reflexo Interv. Térmico no 13º', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.decimoTerceiro);
+  add('reflexo_it_aviso', 'Reflexo Interv. Térmico no Aviso', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.avisoPrevio);
+  add('reflexo_it_fgts', 'Reflexo Interv. Térmico no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloTermico?.fgts);
+  add('reflexo_it_mul_fgts', 'Reflexo Interv. Térmico Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloTermico?.mulFgts);
+  add('intervalo_digitacao', 'Intervalo por Digitação', 'salarial', 'salarial', true, true, verbas.intervaloDigitacao);
+  add('reflexo_id_rsr', 'Reflexo Interv. Digitação no RSR', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.rsr);
+  add('reflexo_id_ferias', 'Reflexo Interv. Digitação nas Férias', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.ferias);
+  add('reflexo_id_13', 'Reflexo Interv. Digitação no 13º', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.decimoTerceiro);
+  add('reflexo_id_aviso', 'Reflexo Interv. Digitação no Aviso', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.avisoPrevio);
+  add('reflexo_id_fgts', 'Reflexo Interv. Digitação no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloDigitacao?.fgts);
+  add('reflexo_id_mul_fgts', 'Reflexo Interv. Digitação Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloDigitacao?.mulFgts);
 
   // Parcelas calculadas a partir de históricos salariais
   for (const ph of (verbas.parcelasHistorico || [])) {

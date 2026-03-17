@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp, Calendar, Info } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Calendar, Info, Settings2 } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
 import { useMutation } from '@tanstack/react-query';
 
@@ -194,6 +194,7 @@ function novoPeriodo(dataAdmissao, dataDispensa) {
     intervaloMinutos: 60,
     diasSemana: [1, 2, 3, 4, 5],
     horasJornadaPadrao12x36: 12,
+    prorrogacaoNoturna: false,
     afastamentos: [],
     // Resultado cartão
     totalHorasExtras: null,
@@ -211,6 +212,57 @@ async function calcularCartaoPonto(payload) {
   const json = await resp.json();
   if (!resp.ok) throw new Error(json.erro || 'Erro ao calcular');
   return json;
+}
+
+// ── Toggle switch reutilizável ────────────────────────────────────────────────
+function Toggle({ value, onChange, label, desc }) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${value ? 'bg-indigo-600' : 'bg-gray-300'}`}
+      >
+        <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${value ? 'translate-x-4' : 'translate-x-0'}`} />
+      </button>
+      <div>
+        <p className="text-sm font-medium text-gray-700">{label}</p>
+        {desc && <p className="text-xs text-gray-400">{desc}</p>}
+      </div>
+    </div>
+  );
+}
+
+// ── Seção colapsável ──────────────────────────────────────────────────────────
+function SecaoJornada({ titulo, badge, ativo, onToggleAtivo, children }) {
+  const [aberta, setAberta] = useState(false);
+
+  return (
+    <div className={`border rounded-lg overflow-hidden ${ativo ? 'border-indigo-300 bg-indigo-50/30' : 'border-gray-200'}`}>
+      <div
+        className={`flex items-center justify-between px-4 py-3 cursor-pointer ${ativo ? 'bg-indigo-50 hover:bg-indigo-100' : 'bg-gray-50 hover:bg-gray-100'}`}
+        onClick={() => setAberta(!aberta)}
+      >
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleAtivo(!ativo); if (!ativo) setAberta(true); }}
+            className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${ativo ? 'bg-indigo-600' : 'bg-gray-300'}`}
+          >
+            <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${ativo ? 'translate-x-4' : 'translate-x-0'}`} />
+          </button>
+          <span className={`text-sm font-medium ${ativo ? 'text-indigo-800' : 'text-gray-700'}`}>{titulo}</span>
+          {badge && <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{badge}</span>}
+        </div>
+        {aberta ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+      </div>
+      {aberta && (
+        <div className="px-4 py-3 border-t border-gray-200 space-y-3">
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa, podRemover }) {
@@ -473,6 +525,14 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                 </div>
               </div>
 
+              {/* Prorrogação noturna — art. 73 §5 CLT */}
+              <Toggle
+                value={periodo.prorrogacaoNoturna || false}
+                onChange={v => set('prorrogacaoNoturna', v)}
+                label="Prorrogação noturna (CLT art. 73 §5)"
+                desc="Horas após 5h, em continuação ao turno noturno, mantêm caráter noturno (ficção legal)"
+              />
+
               <SemanaPadrao periodo={periodo} />
 
               {/* Afastamentos */}
@@ -547,6 +607,7 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
   );
 }
 
+// ── Componente principal ──────────────────────────────────────────────────────
 export default function HorarioTrabalho() {
   const { dados, setDados, setStep } = useCalculoStore();
 
@@ -554,6 +615,27 @@ export default function HorarioTrabalho() {
     if ((dados.jornadaPeriodos || []).length > 0) return dados.jornadaPeriodos;
     return [novoPeriodo(dados.dataAdmissao, dados.dataDispensa)];
   });
+
+  // ── Estado das verbas adicionais de jornada ────────────────────────────────
+  const [adicionalNoturnoOJ97, setAdicionalNoturnoOJ97] = useState(dados.adicionalNoturnoOJ97 || false);
+
+  const [intrajornadaModo, setIntrajornadaModo] = useState(dados.intrajornadaModo || 'automatico');
+  const [intervaloIntrajornadaMensalHoras, setIntervaloIntrajornadaMensalHoras] = useState(dados.intervaloIntrajornadaMensalHoras || 0);
+
+  const [intervaloInterjornada, setIntervaloInterjornada] = useState(dados.intervaloInterjornada || false);
+
+  const [rsrNaoConcedido, setRsrNaoConcedido] = useState(dados.rsrNaoConcedido || false);
+
+  const [feriadosLaborados, setFeriadosLaborados] = useState(dados.feriadosLaborados || false);
+  const [feriadosAdicionais, setFeriadosAdicionais] = useState(dados.feriadosAdicionais || []);
+
+  const [intervaloTermico, setIntervaloTermico] = useState(dados.intervaloTermico || false);
+  const [tipoAmbienteTermico, setTipoAmbienteTermico] = useState(dados.tipoAmbienteTermico || 'calor');
+  const [minIntervaloTermicoConcedido, setMinIntervaloTermicoConcedido] = useState(dados.minIntervaloTermicoConcedido || 0);
+
+  const [intervaloDigitacao, setIntervaloDigitacao] = useState(dados.intervaloDigitacao || false);
+  const [regimeDigitacao, setRegimeDigitacao] = useState(dados.regimeDigitacao || '90min');
+  const [horasIntervaloDigitacaoConcedido, setHorasIntervaloDigitacaoConcedido] = useState(dados.horasIntervaloDigitacaoConcedido || 0);
 
   function addPeriodo() {
     setPeriodos(prev => [...prev, novoPeriodo('', '')]);
@@ -567,10 +649,37 @@ export default function HorarioTrabalho() {
     setPeriodos(prev => prev.filter(p => p.id !== id));
   }
 
+  function addFeriadoAdicional() {
+    setFeriadosAdicionais(prev => [...prev, '']);
+  }
+  function updateFeriado(idx, val) {
+    setFeriadosAdicionais(prev => prev.map((f, i) => i === idx ? val : f));
+  }
+  function removeFeriado(idx) {
+    setFeriadosAdicionais(prev => prev.filter((_, i) => i !== idx));
+  }
+
   function salvarEIr(step) {
-    setDados({ jornadaPeriodos: periodos });
+    setDados({
+      jornadaPeriodos: periodos,
+      adicionalNoturnoOJ97,
+      intrajornadaModo,
+      intervaloIntrajornadaMensalHoras,
+      intervaloInterjornada,
+      rsrNaoConcedido,
+      feriadosLaborados,
+      feriadosAdicionais: feriadosAdicionais.filter(Boolean),
+      intervaloTermico,
+      tipoAmbienteTermico,
+      minIntervaloTermicoConcedido,
+      intervaloDigitacao,
+      regimeDigitacao,
+      horasIntervaloDigitacaoConcedido,
+    });
     setStep(step);
   }
+
+  const temCartaoPonto = periodos.some(p => p.modoEntrada === 'cartao_ponto');
 
   return (
     <div className="max-w-3xl">
@@ -580,8 +689,9 @@ export default function HorarioTrabalho() {
         Divisor bancários: Súm. 431 TST (150h). Padrão CLT: 220h (44h/sem).
       </div>
 
-      {/* Lista de períodos */}
-      <div className="space-y-3 mb-4">
+      {/* ── Períodos de jornada ────────────────────────────────────────────── */}
+      <h3 className="font-titulo text-sm text-gray-700 mb-2 mt-2">Períodos de Jornada</h3>
+      <div className="space-y-3 mb-3">
         {periodos.map(p => (
           <FormPeriodo
             key={p.id}
@@ -599,6 +709,238 @@ export default function HorarioTrabalho() {
         className="btn-secundario flex items-center gap-2 text-sm mb-6">
         <Plus size={14} /> Adicionar período de jornada
       </button>
+
+      {/* ── Verbas de Duração do Trabalho ─────────────────────────────────── */}
+      <div className="flex items-center gap-2 mb-3">
+        <Settings2 size={15} className="text-indigo-600" />
+        <h3 className="font-titulo text-sm text-gray-700">Verbas de Duração do Trabalho</h3>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        Ative as verbas que se aplicam ao caso. Cada verba é apurada conforme a jornada configurada acima.
+        Verbas que requerem cartão de ponto são marcadas com *.
+      </p>
+
+      <div className="space-y-2 mb-6">
+
+        {/* Adicional Noturno — OJ 97 */}
+        <div className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
+          <p className="text-sm font-medium text-gray-700 mb-2">Adicional Noturno — opções</p>
+          <Toggle
+            value={adicionalNoturnoOJ97}
+            onChange={setAdicionalNoturnoOJ97}
+            label="OJ 97 SDI-1 TST — AN compõe base das horas extras"
+            desc="Quando ativo, o adicional noturno integra a base de cálculo do valor da hora extra"
+          />
+        </div>
+
+        {/* Intervalo Intrajornada */}
+        <SecaoJornada
+          titulo="Intervalo Intrajornada"
+          badge="Súm. 437 TST"
+          ativo={intrajornadaModo !== 'desabilitado'}
+          onToggleAtivo={(v) => setIntrajornadaModo(v ? 'automatico' : 'desabilitado')}
+        >
+          <p className="text-xs text-gray-500">
+            Quando o intervalo concedido é inferior ao mínimo legal (60min para jornadas &gt;6h).
+            Natureza indenizatória — sem reflexos (Súm. 437 TST).
+          </p>
+          <div className="flex gap-3">
+            {[
+              { value: 'automatico', label: 'Automático (cartão de ponto)*', desc: 'Deriva o déficit dia a dia' },
+              { value: 'manual', label: 'Manual (h/mês)', desc: 'Informar total de horas suprimidas' },
+            ].map(m => (
+              <label key={m.value} className={`flex-1 flex flex-col gap-0.5 p-2 rounded-lg border-2 cursor-pointer text-xs transition-colors ${
+                intrajornadaModo === m.value ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <div className="flex items-center gap-1">
+                  <input type="radio" name="intrajornada_modo" value={m.value}
+                    checked={intrajornadaModo === m.value}
+                    onChange={() => setIntrajornadaModo(m.value)} />
+                  <span className="font-medium">{m.label}</span>
+                </div>
+                <span className="text-gray-400">{m.desc}</span>
+              </label>
+            ))}
+          </div>
+          {intrajornadaModo === 'manual' && (
+            <div>
+              <label className="campo-label">Horas suprimidas por mês (h)</label>
+              <input type="number" value={intervaloIntrajornadaMensalHoras}
+                onChange={e => setIntervaloIntrajornadaMensalHoras(Number(e.target.value))}
+                className="campo-input" step="0.25" min="0" />
+            </div>
+          )}
+          {intrajornadaModo === 'automatico' && !temCartaoPonto && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
+              * Configure ao menos um período no modo "Cartão de ponto virtual" para usar apuração automática.
+            </p>
+          )}
+        </SecaoJornada>
+
+        {/* Intervalo Interjornada */}
+        <SecaoJornada
+          titulo="Intervalo Interjornada *"
+          badge="CLT art. 66 + OJ 355"
+          ativo={intervaloInterjornada}
+          onToggleAtivo={setIntervaloInterjornada}
+        >
+          <p className="text-xs text-gray-500">
+            Mínimo de 11 horas consecutivas entre o fim de uma jornada e o início da seguinte (CLT art. 66).
+            Violação apurada via cartão de ponto. Natureza indenizatória — sem reflexos (OJ 355 SDI-1 TST).
+          </p>
+          {!temCartaoPonto && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
+              * Requer cartão de ponto virtual. Configure ao menos um período no modo cartão.
+            </p>
+          )}
+        </SecaoJornada>
+
+        {/* RSR Não Concedido */}
+        <SecaoJornada
+          titulo="RSR Não Concedido *"
+          badge="Súm. 146 TST + OJ 410"
+          ativo={rsrNaoConcedido}
+          onToggleAtivo={setRsrNaoConcedido}
+        >
+          <p className="text-xs text-gray-500">
+            Trabalho no dia de repouso semanal remunerado = pagamento em dobro (Súmula 146 TST).
+            RSR trabalhados apurados via cartão de ponto. Natureza salarial — com reflexos.
+          </p>
+          {!temCartaoPonto && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
+              * Requer cartão de ponto virtual. Configure ao menos um período no modo cartão.
+            </p>
+          )}
+        </SecaoJornada>
+
+        {/* Feriados Laborados */}
+        <SecaoJornada
+          titulo="Feriados Laborados *"
+          badge="Súm. 146 TST"
+          ativo={feriadosLaborados}
+          onToggleAtivo={setFeriadosLaborados}
+        >
+          <p className="text-xs text-gray-500">
+            Trabalho em feriado nacional = pagamento em dobro (Súmula 146 TST).
+            Feriados nacionais (fixos e móveis) detectados automaticamente.
+            Natureza salarial — com reflexos.
+          </p>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs font-medium text-gray-600">Feriados estaduais/municipais adicionais</p>
+              <button type="button" onClick={addFeriadoAdicional}
+                className="btn-secundario text-xs py-0.5 px-2 flex items-center gap-1">
+                <Plus size={11} /> Adicionar
+              </button>
+            </div>
+            {feriadosAdicionais.length === 0 ? (
+              <p className="text-xs text-gray-400">Somente feriados nacionais serão considerados.</p>
+            ) : (
+              <div className="space-y-1">
+                {feriadosAdicionais.map((f, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input type="date" value={f}
+                      onChange={e => updateFeriado(idx, e.target.value)}
+                      className="campo-input text-sm flex-1" />
+                    <button type="button" onClick={() => removeFeriado(idx)}
+                      className="text-red-400 hover:text-red-600"><Trash2 size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {!temCartaoPonto && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
+              * Requer cartão de ponto virtual. Configure ao menos um período no modo cartão.
+            </p>
+          )}
+        </SecaoJornada>
+
+        {/* Intervalo Térmico */}
+        <SecaoJornada
+          titulo="Intervalo Térmico"
+          badge="CLT art. 253 + Súm. 438"
+          ativo={intervaloTermico}
+          onToggleAtivo={setIntervaloTermico}
+        >
+          <p className="text-xs text-gray-500">
+            20 minutos de descanso para cada 1h40 trabalhado em câmara fria ou ambiente com calor excessivo.
+            Natureza salarial — com reflexos (Súmula 438 TST).
+          </p>
+          <div>
+            <label className="campo-label mb-2 block">Tipo de ambiente</label>
+            <div className="flex gap-3">
+              {[
+                { value: 'calor', label: 'Calor excessivo', badge: 'Súm. 438 TST' },
+                { value: 'frio', label: 'Câmara fria/frigorífica', badge: 'CLT art. 253' },
+              ].map(t => (
+                <label key={t.value} className={`flex-1 flex items-center gap-2 p-2 rounded-lg border-2 cursor-pointer text-sm transition-colors ${
+                  tipoAmbienteTermico === t.value ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <input type="radio" name="tipo_termico" value={t.value}
+                    checked={tipoAmbienteTermico === t.value}
+                    onChange={() => setTipoAmbienteTermico(t.value)} />
+                  <div>
+                    <p className="font-medium text-xs">{t.label}</p>
+                    <p className="text-gray-400 text-xs">{t.badge}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="campo-label">Intervalo efetivamente concedido por dia (min)</label>
+            <input type="number" value={minIntervaloTermicoConcedido}
+              onChange={e => setMinIntervaloTermicoConcedido(Number(e.target.value))}
+              className="campo-input" step="5" min="0" />
+            <p className="text-xs text-gray-400 mt-0.5">
+              O mínimo exigido é 1/5 da jornada diária (ex.: 8h → 96min). Deixe 0 se não concedido.
+            </p>
+          </div>
+        </SecaoJornada>
+
+        {/* Intervalo por Digitação */}
+        <SecaoJornada
+          titulo="Intervalo por Digitação"
+          badge="CLT art. 72 + NR-17"
+          ativo={intervaloDigitacao}
+          onToggleAtivo={setIntervaloDigitacao}
+        >
+          <p className="text-xs text-gray-500">
+            Trabalho em digitação/datilografia: descanso obrigatório entre ciclos de trabalho.
+            Natureza salarial — com reflexos.
+          </p>
+          <div>
+            <label className="campo-label mb-2 block">Regime</label>
+            <div className="flex gap-3">
+              {[
+                { value: '90min', label: '10min / 90min', desc: 'CLT art. 72 — digitação clássica' },
+                { value: '50min', label: '10min / 50min', desc: 'NR-17 — operador de caixa/trabalho intenso' },
+              ].map(r => (
+                <label key={r.value} className={`flex-1 flex flex-col gap-0.5 p-2 rounded-lg border-2 cursor-pointer text-xs transition-colors ${
+                  regimeDigitacao === r.value ? 'border-indigo-400 bg-indigo-50' : 'border-gray-200 hover:border-gray-300'
+                }`}>
+                  <div className="flex items-center gap-1">
+                    <input type="radio" name="regime_digitacao" value={r.value}
+                      checked={regimeDigitacao === r.value}
+                      onChange={() => setRegimeDigitacao(r.value)} />
+                    <span className="font-semibold">{r.label}</span>
+                  </div>
+                  <span className="text-gray-400">{r.desc}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="campo-label">Horas de intervalo efetivamente concedidas por mês (h)</label>
+            <input type="number" value={horasIntervaloDigitacaoConcedido}
+              onChange={e => setHorasIntervaloDigitacaoConcedido(Number(e.target.value))}
+              className="campo-input" step="0.25" min="0" />
+            <p className="text-xs text-gray-400 mt-0.5">Deixe 0 se nenhum intervalo foi concedido.</p>
+          </div>
+        </SecaoJornada>
+
+      </div>
 
       <div className="flex justify-between">
         <button type="button" className="btn-secundario" onClick={() => salvarEIr(11)}>

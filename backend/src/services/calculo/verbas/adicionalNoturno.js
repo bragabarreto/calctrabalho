@@ -4,7 +4,7 @@ const { round2 } = require('../../../utils/formatacao');
 const { calcularPeriodoJornada } = require('./cartaoPontoVirtual');
 
 /** Deriva qtdeHorasNoturnasMensais ponderado por período */
-function resolverHorasNoturnasPeriodos(dados) {
+function resolverHorasNoturnasPeriodos(dados, feriadosAdicionais) {
   const periodos = dados.jornadaPeriodos || [];
   if (!periodos.length) return null;
 
@@ -13,7 +13,7 @@ function resolverHorasNoturnasPeriodos(dados) {
   let adicionalPonderado = 0;
 
   for (const p of periodos) {
-    const res = calcularPeriodoJornada(p, dados.dataAdmissao, dados.dataDispensa);
+    const res = calcularPeriodoJornada(p, dados.dataAdmissao, dados.dataDispensa, feriadosAdicionais);
     const meses = res.numMeses || 1;
     totalHN += res.totalHorasNoturnas;
     adicionalPonderado += (p.adicionalHoraNoturna || 0.2) * meses;
@@ -28,15 +28,24 @@ function resolverHorasNoturnasPeriodos(dados) {
 }
 
 /**
- * Adicional Noturno (20% sobre hora noturna)
- * Hora noturna = 52min30s = hora normal / (60/52.5)
+ * Adicional Noturno (CLT art. 73)
+ *
+ * Hora noturna = 52min30s (hora reduzida — equivale a multiplicar por 60/52.5)
+ * Período noturno: 22h–05h
+ * Prorrogação (art. 73 §5): se a jornada prossegue após 5h, as horas da prorrogação
+ * mantêm o caráter noturno (ficção legal) — ativado por periodo.prorrogacaoNoturna = true
+ *
+ * OJ 97 SDI-1 TST: o adicional noturno compõe a base de cálculo das horas extras.
+ * Quando ativado (dados.adicionalNoturnoOJ97 = true), o valorHora calculado aqui
+ * é retornado para que o módulo de horas extras possa incorporá-lo.
  */
 function calcularAdicionalNoturno(dados, temporal) {
   if (dados.verbasExcluidas?.includes('adicional_noturno')) {
     return { valor: 0, excluida: true, valorHora: 0, memoria: { motivo: 'Excluída do cálculo' } };
   }
 
-  const periodoResolvido = resolverHorasNoturnasPeriodos(dados);
+  const feriadosAdicionais = dados.feriadosAdicionais || [];
+  const periodoResolvido = resolverHorasNoturnasPeriodos(dados, feriadosAdicionais);
 
   const M = dados.mediaSalarial || dados.ultimoSalario || 0;
   const D = dados.divisorJornada || 220;
@@ -44,23 +53,37 @@ function calcularAdicionalNoturno(dados, temporal) {
   const HN = periodoResolvido?.qtdeHorasNoturnasMensais ?? dados.qtdeHorasNoturnasMensais ?? 0;
   const AF = dados.mesesAfastamento || 0;
 
+  // Verifica se algum período tem prorrogação configurada (informativo na memória)
+  const temProrrogacao = (dados.jornadaPeriodos || []).some(p => p.prorrogacaoNoturna);
+
   if (HN === 0) return { valor: 0, excluida: false, valorHora: 0, memoria: { motivo: 'Qtde horas noturnas = 0' } };
 
   const mesesEfetivos = temporal.lapsoSemAviso.meses - AF;
-  const valorHora = M / D;
-  const adicionalHora = valorHora * AHN;
+
+  // Valor da hora noturna = M/D × AHN
+  // A hora noturna real = 52min30s, mas o cálculo monetário já incorpora a ficção via AHN
+  const valorHoraBase = M / D;
+  const adicionalHora = valorHoraBase * AHN;
   const valor = round2(adicionalHora * HN * mesesEfetivos);
 
   return {
     valor,
     excluida: false,
     valorHora: round2(adicionalHora),
+    valorHoraBase: round2(valorHoraBase),
+    adicionalHoraNoturna: AHN,
     memoriaInputs: { M, D, AHN, HN, mesesEfetivos },
     memoria: {
       formula: `R$ ${M.toFixed(2)} / ${D} × ${(AHN * 100).toFixed(0)}% × ${HN}h × ${mesesEfetivos} meses = R$ ${valor.toFixed(2)}`,
-      valorHora: valorHora.toFixed(6),
+      valorHora: valorHoraBase.toFixed(6),
       adicionalHora: adicionalHora.toFixed(6),
       mesesEfetivos,
+      prorrogacaoNoturna: temProrrogacao
+        ? 'Ativa — horas após 5h mantêm caráter noturno (CLT art. 73 §5)'
+        : 'Não configurada',
+      oj97: dados.adicionalNoturnoOJ97
+        ? 'OJ 97 SDI-1 ativo — adicional noturno compõe base das horas extras'
+        : 'OJ 97 SDI-1 não ativo',
     },
   };
 }
@@ -83,7 +106,6 @@ function calcularReflexosAN(anResult, dados, temporal, modalidade) {
   const mediaANMensal = meses > 0 ? anResult.valor / meses : 0;
   const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
   const ferias = round2(mediaANMensal * (mesesFerias / 12) * (4 / 3));
-  // OJ 82 SDI1 TST: aviso projeta para 13º
   const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
   const decimoTerceiro = round2((mediaANMensal / 12) * meses13);
   const fgts = round2((anResult.valor + rsr + ferias + decimoTerceiro) * 0.08);
