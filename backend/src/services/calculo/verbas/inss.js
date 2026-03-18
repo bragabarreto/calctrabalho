@@ -167,4 +167,4 @@ function calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial) 
   };
 }
 
-module.exports = { calcularINSS, calcularINSSEmpregador, calcularINSS_Acordo, calcularEncargosEmpregado };
+module.exports = { calcularINSS, calcularINSSEmpregador, calcularINSS_Acordo, calcularEncargosEmpregado, calcularIR_RRA };

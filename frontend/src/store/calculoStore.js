@@ -47,6 +47,7 @@ const dadosIniciais = {
 
   // Deduções básicas
   fgtsDepositado: 0,
+  fgtsIntegralizado: false,
   valorPago: 0,
 
   // Honorários e despesas processuais (etapa "Multas e Despesas")

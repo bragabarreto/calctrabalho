@@ -1,6 +1,6 @@
 'use strict';
 
-const { round2 } = require('../../../utils/formatacao');
+const { round2, nonNegative } = require('../../../utils/formatacao');
 
 /**
  * Férias Vencidas Dobradas (+ 1/3 constitucional)
@@ -62,6 +62,11 @@ function calcularFeriasProporcionais(dados, temporal) {
     return { valor: 0, excluida: true, memoria: { motivo: 'Excluída do cálculo' } };
   }
 
+  // Se informadas como integralmente pagas (sem valor de desconto), nada é devido
+  if (dados.feriasProporcionaisPagas && !dados.valorPagoFeriasProporcionais) {
+    return { valor: 0, excluida: false, memoria: { motivo: 'Férias proporcionais informadas como integralmente pagas' } };
+  }
+
   const base = (dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
   const meses = temporal.mesesUltimoAno;
   const diasRestantes = temporal.diasUltimoAno;
@@ -71,18 +76,23 @@ function calcularFeriasProporcionais(dados, temporal) {
     return { valor: 0, excluida: false, memoria: { motivo: 'Período aquisitivo < 15 dias — férias não devidas' } };
   }
 
-  const valor = round2(base * (mesesEfetivos / 12) * (4 / 3));
+  const bruto = round2(base * (mesesEfetivos / 12) * (4 / 3));
+  const desconto = dados.valorPagoFeriasProporcionais || 0;
+  const valor = desconto > 0 ? nonNegative(round2(bruto - desconto)) : bruto;
 
   return {
     valor,
     excluida: false,
     memoria: {
-      formula: `R$ ${base.toFixed(2)} × (${mesesEfetivos}/12) × 4/3 = R$ ${valor.toFixed(2)}`,
+      formula: desconto > 0
+        ? `R$ ${base.toFixed(2)} × (${mesesEfetivos}/12) × 4/3 = R$ ${bruto.toFixed(2)} − R$ ${desconto.toFixed(2)} (pago parcialmente) = R$ ${valor.toFixed(2)}`
+        : `R$ ${base.toFixed(2)} × (${mesesEfetivos}/12) × 4/3 = R$ ${valor.toFixed(2)}`,
       base,
       mesesTrabalhados: meses,
       diasRestantes,
       mesesEfetivos,
       regraQuinze: diasRestantes >= 15 ? 'Aplicada (+1 mês)' : 'Não aplicada',
+      ...(desconto > 0 && { descontoPagoParcialmente: desconto }),
     },
   };
 }

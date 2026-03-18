@@ -6,12 +6,14 @@ import HistoricoDetalhe from './pages/Historico/Detalhe.jsx';
 import ComparacaoPage from './pages/Comparacao/index.jsx';
 import ComparacaoPainel from './pages/Comparacao/Painel.jsx';
 import ConfiguracoesPage from './pages/Configuracoes/index.jsx';
+import SimuladorAcordoPage from './pages/SimuladorAcordo/index.jsx';
 
 function Sidebar() {
   const links = [
     { to: '/', label: 'Calculadora', icon: '⚖️' },
     { to: '/historico', label: 'Histórico', icon: '📋' },
     { to: '/comparacao', label: 'Comparação', icon: '↔️' },
+    { to: '/simulador-acordo', label: 'Simular Acordo', icon: '🤝' },
     { to: '/configuracoes', label: 'Configurações', icon: '⚙️' },
   ];
 
@@ -66,6 +68,7 @@ export default function App() {
             <Route path="/historico/:id" element={<HistoricoDetalhe />} />
             <Route path="/comparacao" element={<ComparacaoPage />} />
             <Route path="/comparacao/:id" element={<ComparacaoPainel />} />
+            <Route path="/simulador-acordo" element={<SimuladorAcordoPage />} />
             <Route path="/configuracoes" element={<ConfiguracoesPage />} />
           </Routes>
         </main>

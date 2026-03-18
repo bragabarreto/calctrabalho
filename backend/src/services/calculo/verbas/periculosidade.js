@@ -61,12 +61,55 @@ function calcularReflexosPericulosidade(perResult, dados, temporal, modalidade) 
   const pctMul = { sem_justa_causa: 0.40, rescisao_indireta: 0.40, culpa_reciproca: 0.20 }[modalidade] || 0;
   const mulFgts = round2(fgts * pctMul);
 
+  const mediaPerMensal = round2(mediaPer);
+  const baseGts = round2(perResult.valor + ferias + decimoTerceiro);
+
   return {
-    avisoPrevio: { valor: avisoPrevio },
-    ferias: { valor: ferias },
-    decimoTerceiro: { valor: decimoTerceiro },
-    fgts: { valor: fgts },
-    mulFgts: { valor: mulFgts },
+    avisoPrevio: {
+      valor: avisoPrevio,
+      memoria: avisoPrevio > 0
+        ? {
+            formula: `Média per. R$ ${mediaPerMensal.toFixed(2)}/mês × (${temporal.diasAvisoPrevio} dias ÷ 30) = R$ ${avisoPrevio.toFixed(2)}`,
+            mediaPerMensal,
+            diasAviso: temporal.diasAvisoPrevio,
+          }
+        : { motivo: 'Não aplicável para esta modalidade de rescisão' },
+    },
+    ferias: {
+      valor: ferias,
+      memoria: {
+        formula: `Média per. R$ ${mediaPerMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
+        mediaPerMensal,
+        mesesFerias,
+        avos: `${mesesFerias}/12`,
+      },
+    },
+    decimoTerceiro: {
+      valor: decimoTerceiro,
+      memoria: {
+        formula: `Média per. R$ ${mediaPerMensal.toFixed(2)}/mês ÷ 12 × ${meses13} meses = R$ ${decimoTerceiro.toFixed(2)}`,
+        mediaPerMensal,
+        meses13,
+      },
+    },
+    fgts: {
+      valor: fgts,
+      memoria: {
+        formula: `(Per. + Férias + 13º = R$ ${baseGts.toFixed(2)}) × 8% = R$ ${fgts.toFixed(2)}`,
+        base: baseGts,
+        aliquota: '8%',
+      },
+    },
+    mulFgts: {
+      valor: mulFgts,
+      memoria: mulFgts > 0
+        ? {
+            formula: `R$ ${fgts.toFixed(2)} × ${(pctMul * 100).toFixed(0)}% = R$ ${mulFgts.toFixed(2)}`,
+            baseFgts: fgts,
+            percentual: `${(pctMul * 100).toFixed(0)}%`,
+          }
+        : { motivo: 'Multa rescisória não aplicável para esta modalidade' },
+    },
   };
 }
 

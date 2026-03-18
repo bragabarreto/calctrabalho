@@ -44,6 +44,7 @@ const schemaDadosContrato = Joi.object({
 
   // Deduções
   fgtsDepositado: Joi.number().min(0).default(0),
+  fgtsIntegralizado: Joi.boolean().default(false),
   valorPago: Joi.number().min(0).default(0),
 
   // Honorários
@@ -128,6 +129,11 @@ const schemaDadosContrato = Joi.object({
   periodosFerias: Joi.array().items(Joi.object().unknown(true)).default([]),
   periodosDecimoTerceiro: Joi.array().items(Joi.object().unknown(true)).default([]),
   feriasDeducaoPagas: Joi.number().min(0).default(0),
+  feriasProporcionaisPagas: Joi.boolean().default(false),
+  valorPagoFeriasProporcionais: Joi.number().min(0).default(0),
+  decimoProporcionalPago: Joi.boolean().default(false),
+  valorPagoDecimoTerceiroProporcional: Joi.number().min(0).default(0),
+  valorPagoParcialDecimo: Joi.number().min(0).default(0),
 
   // Jornada multi-período
   jornadaPeriodos: Joi.array().items(Joi.object({

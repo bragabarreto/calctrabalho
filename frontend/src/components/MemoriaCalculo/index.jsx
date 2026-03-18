@@ -5,6 +5,78 @@ function formatBRL(valor) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
 }
 
+const MEMORIA_LABELS = {
+  base: 'Base de cálculo',
+  baseGts: 'Base FGTS',
+  baseFgts: 'Base FGTS',
+  base13: 'Base 13º',
+  baseFerias: 'Base férias',
+  valorHoraNormal: 'Valor hora normal',
+  valorHora: 'Valor hora (c/ adicional)',
+  adicionalHora: 'Adicional por hora',
+  heFixo: 'HE s/ salário fixo',
+  heComissoes: 'HE s/ comissões',
+  mesesEfetivos: 'Meses efetivos',
+  mediaHeMensal: 'Média HE mensal',
+  mediaANMensal: 'Média adicional noturno mensal',
+  mediaInsMensal: 'Média insalubridade mensal',
+  mediaPerMensal: 'Média periculosidade mensal',
+  mesesFerias: 'Meses p/ férias (avos)',
+  meses13: 'Meses p/ 13º',
+  meses: 'Meses trabalhados',
+  mesesTrabalhados: 'Meses trabalhados',
+  mesesCompletos: 'Meses completos',
+  mesesEfetivos: 'Meses efetivos',
+  diasRestantes: 'Dias restantes',
+  diasNoMes: 'Dias no mês',
+  dias: 'Dias',
+  diasAviso: 'Dias de aviso prévio',
+  avos: 'Avos (fração do período)',
+  qtde: 'Quantidade de períodos',
+  aliquota: 'Alíquota',
+  percentual: 'Percentual',
+  multiplicador: 'Multiplicador',
+  modalidade: 'Modalidade',
+  criterio: 'Critério legal',
+  regraQuinze: 'Regra dos 15 dias',
+  prorrogacaoNoturna: 'Prorrogação noturna',
+  oj97: 'OJ 97 SDI-1 TST',
+  descontoPagoParcialmente: 'Desconto (pago parcialmente)',
+  integralizado: 'FGTS integralizado',
+  depositado: 'FGTS depositado',
+  fgtsBruto: 'FGTS bruto (sem depósito)',
+};
+
+const VALOR_KEYS = new Set([
+  'base', 'baseGts', 'baseFgts', 'base13', 'baseFerias',
+  'valorHoraNormal', 'valorHora', 'adicionalHora',
+  'heFixo', 'heComissoes', 'mediaHeMensal', 'mediaANMensal', 'mediaInsMensal', 'mediaPerMensal',
+  'descontoPagoParcialmente', 'depositado', 'fgtsBruto',
+]);
+
+const PCT_KEYS = new Set(['aliquota', 'percentual']);
+
+function formatMemoriaValue(key, val) {
+  if (val === null || val === undefined) return '—';
+  if (PCT_KEYS.has(key)) {
+    const num = parseFloat(val);
+    if (!isNaN(num) && num <= 1) return `${(num * 100).toFixed(2)}%`;
+    return String(val);
+  }
+  if (VALOR_KEYS.has(key)) {
+    const num = parseFloat(val);
+    if (!isNaN(num)) return formatBRL(num);
+  }
+  // Auto-detect: numeric keys that look like monetary values (> 1 or contain decimal)
+  if (typeof val === 'number' && (String(val).includes('.') || val > 100)) {
+    // Could be a monetary value — but only if the key suggests it
+    if (/valor|salario|base|total|bruto|liquido|desconto|depositado/i.test(key)) {
+      return formatBRL(val);
+    }
+  }
+  return String(val);
+}
+
 function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, editarVerba }) {
   const [expandida, setExpandida] = useState(false);
   const [mostrarDistribuicao, setMostrarDistribuicao] = useState(false);
@@ -75,7 +147,7 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
           <td colSpan={6} className="bg-slate-50 px-4 py-3 border-b border-slate-200">
             <div className="text-xs text-slate-600 space-y-1">
               {verba.memoria.formula && (
-                <p className="font-mono bg-white border border-slate-200 rounded px-3 py-2 text-slate-700">
+                <p className="font-mono bg-white border border-slate-200 rounded px-3 py-2 text-slate-700 break-words">
                   {verba.memoria.formula}
                 </p>
               )}
@@ -83,13 +155,18 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
                 <p className="italic text-slate-500">{verba.memoria.motivo}</p>
               )}
               {Object.entries(verba.memoria)
-                .filter(([k]) => !['formula', 'motivo', 'distribuicaoMensal', 'itens'].includes(k))
-                .map(([k, v]) => (
-                  <p key={k}>
-                    <span className="font-medium capitalize">{k.replace(/_/g, ' ')}: </span>
-                    <span>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>
-                  </p>
-                ))}
+                .filter(([k]) => !['formula', 'motivo', 'distribuicaoMensal', 'itens', 'detalhes'].includes(k))
+                .map(([k, v]) => {
+                  if (typeof v === 'object' && v !== null) return null;
+                  const label = MEMORIA_LABELS[k] || k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').toLowerCase();
+                  const displayVal = formatMemoriaValue(k, v);
+                  return (
+                    <p key={k} className="flex gap-1 flex-wrap">
+                      <span className="font-medium text-slate-700">{label}:</span>
+                      <span className="font-mono">{displayVal}</span>
+                    </p>
+                  );
+                })}
               {/* Demonstrativo mensal para parcelas calculadas sobre histórico salarial */}
               {verba.memoria.distribuicaoMensal?.length > 0 && (
                 <div className="mt-2">

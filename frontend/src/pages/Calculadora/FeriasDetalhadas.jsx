@@ -83,7 +83,6 @@ export default function FeriasDetalhadas() {
 
   function togglePagas(idx) {
     const p = periodos[idx];
-    if (p.tipo === 'proporcional') return;
     const novoPagas = !p.pagas;
     atualizar(idx, {
       pagas: novoPagas,
@@ -101,7 +100,7 @@ export default function FeriasDetalhadas() {
   return (
     <div>
       <div className="aviso-judicial mb-3">
-        <strong>Férias:</strong> Marque independentemente se cada período foi <strong>Gozado</strong> (descanso efetivo) e/ou <strong>Pago</strong> (recebeu a remuneração). O valor pago será deduzido da condenação. Períodos cujo prazo concessivo expirou sem gozo são devidos em dobro (art. 137 CLT).
+        <strong>Férias:</strong> Marque independentemente se cada período foi <strong>Gozado</strong> (descanso efetivo) e/ou <strong>Pago</strong> (recebeu a remuneração). Ao marcar como <strong>Pago</strong>, informe o valor se o pagamento foi parcial — se deixar em branco, o sistema considera pagamento integral (sem saldo). Períodos cujo prazo concessivo expirou sem gozo são devidos em dobro (art. 137 CLT).
       </div>
 
       <div className="space-y-3">
@@ -146,8 +145,8 @@ export default function FeriasDetalhadas() {
                 </div>
 
                 {/* Controles */}
-                {!ehProporcional && (
-                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                  {!ehProporcional && (
                     <button
                       type="button"
                       onClick={() => toggleGozadas(idx)}
@@ -157,20 +156,20 @@ export default function FeriasDetalhadas() {
                     >
                       Gozadas
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => togglePagas(idx)}
-                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                        p.pagas ? 'bg-green-500 text-white border-green-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      Pagas
-                    </button>
-                  </div>
-                )}
-                {ehProporcional && (
-                  <span className="text-xs px-3 py-1.5 rounded-full bg-orange-500 text-white font-medium">Devidas</span>
-                )}
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => togglePagas(idx)}
+                    className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
+                      p.pagas ? 'bg-green-500 text-white border-green-500' : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Pagas
+                  </button>
+                  {ehProporcional && !p.pagas && (
+                    <span className="text-xs px-3 py-1.5 rounded-full bg-orange-500 text-white font-medium">Devidas</span>
+                  )}
+                </div>
                 {p.prescrita && (
                   <button
                     type="button"
@@ -210,7 +209,7 @@ export default function FeriasDetalhadas() {
               )}
 
               {/* Campo valor pago */}
-              {p.pagas && !ehProporcional && (
+              {p.pagas && (
                 <div className="mt-3 pt-3 border-t border-gray-100">
                   <p className="text-xs text-green-700 bg-green-50 border border-green-100 rounded px-3 py-2 mb-3">
                     O valor pago será deduzido do total devido a título de férias neste período.

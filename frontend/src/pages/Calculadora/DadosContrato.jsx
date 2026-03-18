@@ -52,9 +52,16 @@ export default function DadosContrato() {
     setDados({ periodosAfastamento: periodosAfastamento.filter((p) => p.id !== id) });
   }
 
+  const temPeriodosCarregados =
+    (dados.periodosFerias?.length > 0) || (dados.periodosDecimoTerceiro?.length > 0);
+
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
     setDados({ [name]: type === 'checkbox' ? checked : value });
+  }
+
+  function regenerarPeriodos() {
+    setDados({ periodosFerias: [], periodosDecimoTerceiro: [] });
   }
 
   function avancar(e) {
@@ -68,6 +75,26 @@ export default function DadosContrato() {
 
   return (
     <form onSubmit={avancar} className="max-w-3xl">
+      {/* Banner de aviso quando há períodos aquisitivos carregados */}
+      {temPeriodosCarregados && (
+        <div className="mb-4 flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+          <span className="text-amber-500 text-lg leading-none mt-0.5">⚠</span>
+          <div className="flex-1">
+            <p className="font-semibold text-amber-800">Períodos aquisitivos já carregados</p>
+            <p className="text-amber-700 text-xs mt-0.5">
+              Se você alterou datas de admissão/dispensa ou o tipo de aviso prévio, os períodos de férias e 13º precisam ser regenerados.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={regenerarPeriodos}
+            className="text-xs px-3 py-1.5 bg-amber-500 text-white rounded-lg font-semibold hover:bg-amber-600 transition-colors whitespace-nowrap"
+          >
+            Regerar períodos
+          </button>
+        </div>
+      )}
+
       <div className="card p-6 mb-4">
         <h3 className="font-titulo text-lg mb-4 text-primaria">Dados do Contrato</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

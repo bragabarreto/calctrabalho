@@ -54,16 +54,41 @@ export default function Deducoes() {
       {/* FGTS e Pagamentos — apenas para verbas rescisórias */}
       {tipoFluxo !== 'apenas_parcelas' && <div className="card p-6 mb-4">
         <h3 className="font-titulo text-lg mb-4 text-primaria">FGTS e Pagamentos Rescisórios</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        {/* Toggle: FGTS Integralizado */}
+        <div className="flex items-start gap-3 mb-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setDados({ fgtsIntegralizado: !dados.fgtsIntegralizado })}
+            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors mt-0.5 ${
+              dados.fgtsIntegralizado ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${
+              dados.fgtsIntegralizado ? 'translate-x-4' : 'translate-x-0'
+            }`} />
+          </button>
           <div>
-            <label className="campo-label">FGTS já Depositado (R$)</label>
-            <input
-              type="number" value={dados.fgtsDepositado}
-              onChange={(e) => setDados({ fgtsDepositado: Number(e.target.value) })}
-              className="campo-input" step="0.01" min="0" placeholder="0.00"
-            />
-            <p className="text-xs text-gray-400 mt-1">Conforme extrato FGTS/CAIXA</p>
+            <p className="text-sm font-semibold text-gray-700">FGTS integralizado (já depositado integralmente)</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Quando ativo, considera o FGTS do período como integralmente depositado na CAIXA.
+              Será apurada apenas a indenização rescisória (40% ou 20% sobre o FGTS bruto do período).
+            </p>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {!dados.fgtsIntegralizado && (
+            <div>
+              <label className="campo-label">FGTS já Depositado (R$)</label>
+              <input
+                type="number" value={dados.fgtsDepositado}
+                onChange={(e) => setDados({ fgtsDepositado: Number(e.target.value) })}
+                className="campo-input" step="0.01" min="0" placeholder="0.00"
+              />
+              <p className="text-xs text-gray-400 mt-1">Conforme extrato FGTS/CAIXA</p>
+            </div>
+          )}
           <div>
             <label className="campo-label">Valor Pago na Rescisão (R$)</label>
             <input

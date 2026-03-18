@@ -48,6 +48,7 @@ export function prepararDadosContrato(dados) {
 
     // Deduções
     fgtsDepositado: toNum(dados.fgtsDepositado, 0),
+    fgtsIntegralizado: Boolean(dados.fgtsIntegralizado),
     valorPago: toNum(dados.valorPago, 0),
     percentualHonorarios: toNum(dados.percentualHonorarios, 0.15),
 
@@ -125,12 +126,15 @@ export function prepararDadosContrato(dados) {
       if (pf.length === 0) return {};
       const ativos = pf.filter(p => !p.excluida);
       const vencidos = ativos.filter(p => p.tipo === 'vencida');
+      const proporcionalFerias = ativos.find(p => p.tipo === 'proporcional');
       return {
         qtdeFeriasVencidasDobradas: vencidos.filter(p => p.vencidas && !p.gozadas).length,
         qtdeFeriasVencidasSimples: vencidos.filter(p =>
           (!p.vencidas && !p.gozadas) || (p.gozadas && !p.pagas)
         ).length,
-        feriasDeducaoPagas: ativos.reduce((sum, p) => sum + (p.pagas ? Number(p.valorPago || 0) : 0), 0),
+        feriasDeducaoPagas: ativos.filter(p => p.tipo === 'vencida').reduce((sum, p) => sum + (p.pagas ? Number(p.valorPago || 0) : 0), 0),
+        feriasProporcionaisPagas: proporcionalFerias?.pagas || false,
+        valorPagoFeriasProporcionais: proporcionalFerias?.pagas ? (Number(proporcionalFerias.valorPago) || 0) : 0,
       };
     })(),
     periodosDecimoTerceiro: dados.periodosDecimoTerceiro || [],
@@ -140,8 +144,20 @@ export function prepararDadosContrato(dados) {
       const pd = dados.periodosDecimoTerceiro || [];
       if (pd.length === 0) return {};
       const ativos = pd.filter(p => !p.excluido);
-      const integraisDevidos = ativos.filter(p => p.tipo === 'integral' && p.status !== 'pago').length;
-      return { qtdeDecimoTerceiroVencidos: integraisDevidos };
+      // Devidos = 'devido' + 'pago' com valor parcial (pagamento parcial → ainda há saldo)
+      const integraisDevidos = ativos.filter(p =>
+        p.tipo === 'integral' && (p.status !== 'pago' || parseFloat(p.valorPago) > 0)
+      ).length;
+      // Soma dos valores já pagos parcialmente (integrais marcados como 'pago' mas com valor < integral)
+      const valorPagoParcialDecimo = ativos
+        .filter(p => p.tipo === 'integral' && p.status === 'pago' && parseFloat(p.valorPago) > 0)
+        .reduce((sum, p) => sum + (parseFloat(p.valorPago) || 0), 0);
+      // Proporcional
+      const proporcionalDecimo = ativos.find(p => p.tipo === 'proporcional');
+      const decimoProporcionalPago = proporcionalDecimo?.status === 'pago';
+      const valorPagoDecimoTerceiroProporcional = decimoProporcionalPago ? (parseFloat(proporcionalDecimo.valorPago) || 0) : 0;
+      return { qtdeDecimoTerceiroVencidos: integraisDevidos, valorPagoParcialDecimo,
+               decimoProporcionalPago, valorPagoDecimoTerceiroProporcional };
     })(),
 
     // Honorários e despesas processuais

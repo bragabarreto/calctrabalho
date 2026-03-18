@@ -172,4 +172,81 @@ router.post('/cartao-ponto', (req, res, next) => {
   }
 });
 
+/**
+ * Simulador de Acordo Externo
+ * Calcula INSS, IR (RRA), INSS patronal e FGTS sobre um acordo trabalhista
+ * a partir do valor total, parcelas indenizatórias e período do contrato.
+ */
+router.post('/simular-acordo-externo', (req, res, next) => {
+  try {
+    const { calcularINSS, calcularINSSEmpregador, calcularIR_RRA } = require('../services/calculo/verbas/inss');
+    const { round2 } = require('../utils/formatacao');
+
+    const {
+      valorAcordo,
+      dataAdmissao,
+      dataDispensa,
+      salario,
+      parcelasIndenizatorias = [],
+    } = req.body;
+
+    if (!valorAcordo || valorAcordo <= 0) {
+      return res.status(400).json({ erro: 'valorAcordo é obrigatório e deve ser positivo' });
+    }
+
+    // Total indenizatório
+    const totalIndenizatorio = round2(
+      parcelasIndenizatorias.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0)
+    );
+
+    // Base salarial = acordoTotal - indenizatório
+    const baseSalarial = round2(Math.max(0, valorAcordo - totalIndenizatorio));
+
+    // Período: meses entre admissão e dispensa
+    let periodoMeses = 1;
+    if (dataAdmissao && dataDispensa) {
+      const ini = new Date(dataAdmissao);
+      const fim = new Date(dataDispensa);
+      periodoMeses = Math.max(1, Math.round((fim - ini) / (1000 * 60 * 60 * 24 * 30)));
+    }
+
+    // INSS
+    const inssEmpregado = calcularINSS(baseSalarial);
+    const inssEmpregador = calcularINSSEmpregador(baseSalarial);
+
+    // IR (RRA)
+    const baseTributavelIR = round2(Math.max(0, baseSalarial - inssEmpregado));
+    const ir = calcularIR_RRA(baseTributavelIR, periodoMeses);
+
+    // FGTS (informativo)
+    const fgts = round2(baseSalarial * 0.08);
+
+    // Percentuais
+    const pctIndenizatorio = valorAcordo > 0 ? round2(totalIndenizatorio / valorAcordo) : 0;
+    const pctSalarial = round2(1 - pctIndenizatorio);
+
+    res.json({
+      sucesso: true,
+      resultado: {
+        valorAcordo,
+        totalIndenizatorio,
+        baseSalarial,
+        pctSalarial,
+        pctIndenizatorio,
+        periodoMeses,
+        inssEmpregado,
+        inssEmpregador,
+        baseTributavelIR,
+        ir,
+        fgts,
+        totalEncargosEmpregado: round2(inssEmpregado + ir.valor),
+        totalEncargosEmpregador: round2(inssEmpregador),
+        liquidoEmpregado: round2(valorAcordo - inssEmpregado - ir.valor),
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;

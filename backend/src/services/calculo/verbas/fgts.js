@@ -14,7 +14,7 @@ function calcularFGTS(dados, temporal) {
   const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
   const meses = temporal.lapsoComAviso.meses;
   const fgtsBruto = round2(base * FGTS_ALIQUOTA * meses);
-  const depositado = dados.fgtsDepositado || 0;
+  const depositado = dados.fgtsIntegralizado ? fgtsBruto : (dados.fgtsDepositado || 0);
   const valor = nonNegative(round2(fgtsBruto - depositado));
 
   return {
@@ -23,10 +23,13 @@ function calcularFGTS(dados, temporal) {
     fgtsBruto,
     depositado,
     memoria: {
-      formula: `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) − R$ ${depositado.toFixed(2)} (depositado) = R$ ${valor.toFixed(2)}`,
+      formula: dados.fgtsIntegralizado
+        ? `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) — FGTS integralizado (depositado = R$ ${depositado.toFixed(2)}) = R$ ${valor.toFixed(2)}`
+        : `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) − R$ ${depositado.toFixed(2)} (depositado) = R$ ${valor.toFixed(2)}`,
       base,
       meses,
       aliquota: '8%',
+      ...(dados.fgtsIntegralizado && { integralizado: true }),
     },
   };
 }

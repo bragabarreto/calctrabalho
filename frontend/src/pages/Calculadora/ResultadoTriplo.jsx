@@ -26,6 +26,27 @@ function ColoredValue({ valor, max, min }) {
   return <span>{formatBRL(valor)}</span>;
 }
 
+function LinhaResumo({ label, valor, cor = 'normal', sublabel }) {
+  const corMap = {
+    normal: 'text-gray-700',
+    verde: 'text-green-700 font-semibold',
+    vermelho: 'text-red-700',
+    azul: 'text-blue-700 font-semibold',
+    negativo: 'text-amber-700',
+  };
+  return (
+    <div className="flex justify-between items-baseline py-1 border-b border-gray-100 gap-2">
+      <div>
+        <span className={`text-sm ${corMap[cor]}`}>{label}</span>
+        {sublabel && <p className="text-xs text-gray-400">{sublabel}</p>}
+      </div>
+      <span className={`font-mono text-sm font-semibold shrink-0 ${corMap[cor]}`}>
+        {formatBRL(valor)}
+      </span>
+    </div>
+  );
+}
+
 /**
  * Aplica verbasExcluidas e verbasEditadas sobre o array de verbas de uma modalidade.
  * Retorna o array transformado + totais reativos.
@@ -47,12 +68,13 @@ function computarModalidade(verbas, deducoes, dadosCalculo) {
   const honorarios = Math.round(total * pctHon * 100) / 100;
   const honPericiais = honorariosPericiais || 0;
   const custas = aplicarCustas ? Math.round(total * 0.02 * 100) / 100 : 0;
-  const totalComHonorarios = Math.round((total + honorarios + honPericiais + custas) * 100) / 100;
-  return { verbasExibidas, subtotal, total, honorarios, custas, totalComHonorarios };
+  const despesasProcessuais = Math.round((honPericiais + custas) * 100) / 100;
+  const totalComHonorarios = Math.round((total + honorarios) * 100) / 100;
+  return { verbasExibidas, subtotal, total, honorarios, custas, honPericiais, despesasProcessuais, totalComHonorarios };
 }
 
 export default function ResultadoTriplo() {
-  const { resultadosTriplos, dados, setStep, toggleVerbaExcluida, setVerbasEditadas } =
+  const { resultadosTriplos, dados, setStep, toggleVerbaExcluida, setVerbasEditadas, resetar } =
     useCalculoStore();
   const { mutateAsync: salvar } = useSalvarSimulacao();
   const [abaAtiva, setAbaAtiva] = useState('sem_justa_causa');
@@ -119,6 +141,8 @@ export default function ResultadoTriplo() {
       </div>
     );
   }
+
+  const [mostrarDadosContrato, setMostrarDadosContrato] = useState(false);
 
   const totaisLiquidos = ORDEM.map((m) => computado[m]?.total || 0);
   const maxTotal = Math.max(...totaisLiquidos);
@@ -230,129 +254,124 @@ export default function ResultadoTriplo() {
         </div>
 
         {resultadoAtivo && (
-          <div className="p-4">
-            {/* Dados do Contrato — por modalidade */}
-            <div className="mb-4 p-4 border border-gray-200 rounded-lg bg-white">
-              <h5 className="font-titulo text-sm text-primaria mb-3">
-                Dados do Contrato — {MODALIDADES[abaAtiva]}
-              </h5>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <p className="campo-label">Data de Admissão</p>
-                  <p className="font-mono text-xs">
-                    {dados.dataAdmissao
-                      ? new Date(dados.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR')
-                      : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="campo-label">Data de Dispensa</p>
-                  <p className="font-mono text-xs">
-                    {dados.dataDispensa
-                      ? new Date(dados.dataDispensa + 'T12:00:00').toLocaleDateString('pt-BR')
-                      : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="campo-label">Remuneração Base</p>
-                  <p className="font-mono text-xs font-semibold">
-                    {formatBRL(dados.ultimoSalario)}
-                    {dados.comissoes > 0 ? ` + com. ${formatBRL(dados.comissoes)}` : ''}
-                    {dados.gorjetas > 0 ? ` + gorj. ${formatBRL(dados.gorjetas)}` : ''}
-                  </p>
-                </div>
-                <div>
-                  <p className="campo-label">Aviso Prévio</p>
-                  <p className="font-mono text-xs">
-                    {dados.avisoPrevioTrabalhado ? 'Trabalhado' : 'Indenizado'}
-                    {resultadoAtivo.temporal
-                      ? ` — ${resultadoAtivo.temporal.diasAvisoPrevio} dias`
-                      : ''}
-                  </p>
-                </div>
-                {resultadoAtivo.temporal?.dataEncerramentoComAviso && (
-                  <div>
-                    <p className="campo-label">Término c/ aviso</p>
-                    <p className="font-mono text-xs">
-                      {new Date(
-                        resultadoAtivo.temporal.dataEncerramentoComAviso
-                      ).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                )}
-                {resultadoAtivo.temporal?.marcoPrescricional && (
-                  <div>
-                    <p className="campo-label">Marco Prescricional</p>
-                    <p className="font-mono text-xs">
-                      {new Date(resultadoAtivo.temporal.marcoPrescricional).toLocaleDateString(
-                        'pt-BR'
-                      )}
-                    </p>
-                  </div>
-                )}
-                {resultadoAtivo.temporal && (
-                  <div>
-                    <p className="campo-label">Lapso s/ aviso</p>
-                    <p className="font-mono text-xs">
-                      {resultadoAtivo.temporal.lapsoSemAviso?.meses} meses
-                    </p>
-                  </div>
-                )}
-                {resultadoAtivo.temporal && (
-                  <div>
-                    <p className="campo-label">Lapso c/ aviso</p>
-                    <p className="font-mono text-xs">
-                      {resultadoAtivo.temporal.lapsoComAviso?.meses} meses
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="p-4 space-y-4">
 
-            {/* Encargos Previdenciários e Fiscais — por aba */}
-            {resultadoAtivo.encargosEmpregado &&
-              resultadoAtivo.encargosEmpregado.baseInss > 0 && (
-                <EncargosPrevidenciarios
-                  encargos={resultadoAtivo.encargosEmpregado}
-                  verbas={compAtivo.verbasExibidas}
-                />
+            {/* ── DADOS DO CONTRATO (colapsável) ── */}
+            <div className="border border-gray-200 rounded-lg bg-white">
+              <button
+                type="button"
+                onClick={() => setMostrarDadosContrato(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors rounded-lg"
+              >
+                <span className="font-titulo text-sm text-primaria">
+                  Dados do Contrato — {MODALIDADES[abaAtiva]}
+                </span>
+                <span className="text-gray-400 text-xs">{mostrarDadosContrato ? '▲ ocultar' : '▼ expandir'}</span>
+              </button>
+              {mostrarDadosContrato && (
+                <div className="px-4 pb-4 border-t border-gray-100">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mt-3">
+                    <div>
+                      <p className="campo-label">Data de Admissão</p>
+                      <p className="font-mono text-xs">{dados.dataAdmissao ? new Date(dados.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="campo-label">Data de Dispensa</p>
+                      <p className="font-mono text-xs">{dados.dataDispensa ? new Date(dados.dataDispensa + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p>
+                    </div>
+                    <div>
+                      <p className="campo-label">Remuneração Base</p>
+                      <p className="font-mono text-xs font-semibold">
+                        {formatBRL(dados.ultimoSalario)}
+                        {dados.comissoes > 0 ? ` + com. ${formatBRL(dados.comissoes)}` : ''}
+                        {dados.gorjetas > 0 ? ` + gorj. ${formatBRL(dados.gorjetas)}` : ''}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="campo-label">Aviso Prévio</p>
+                      <p className="font-mono text-xs">
+                        {dados.avisoPrevioTrabalhado ? 'Trabalhado' : 'Indenizado'}
+                        {resultadoAtivo.temporal ? ` — ${resultadoAtivo.temporal.diasAvisoPrevio} dias` : ''}
+                      </p>
+                    </div>
+                    {resultadoAtivo.temporal?.marcoPrescricional && (
+                      <div>
+                        <p className="campo-label">Marco Prescricional</p>
+                        <p className="font-mono text-xs">{new Date(resultadoAtivo.temporal.marcoPrescricional).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                    )}
+                    {resultadoAtivo.temporal && (
+                      <div>
+                        <p className="campo-label">Lapso c/ aviso</p>
+                        <p className="font-mono text-xs">{resultadoAtivo.temporal.lapsoComAviso?.meses} meses</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
-
-            {/* Memória de cálculo */}
-            <div className="px-2 py-2 border-b border-gray-100 mb-2">
-              <h5 className="font-titulo text-base text-primaria">
-                Memória de Cálculo — {MODALIDADES[abaAtiva]}
-              </h5>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Desmarque INCL. para excluir parcela. Use "Editar valores" para ajustar manualmente.
-                Clique na verba para ver a fórmula.
-              </p>
             </div>
-            <MemoriaCalculo
-              verbas={compAtivo.verbasExibidas}
-              subtotal={compAtivo.subtotal}
-              deducoes={resultadoAtivo.deducoes}
-              total={compAtivo.total}
-              honorarios={compAtivo.honorarios}
-              honorariosPericiais={resultadoAtivo.honorariosPericiais || 0}
-              custas={compAtivo.custas}
-              totalComHonorarios={compAtivo.totalComHonorarios}
-              onToggle={toggleVerbaExcluida}
-              onSalvarEdicao={(edits) => setVerbasEditadas(edits)}
-              apenasComValor
-            />
 
-            {/* Total sem juros */}
-            <div className="flex justify-between items-center px-4 py-3 bg-gray-800 text-white rounded-lg mt-4">
-              <span className="font-semibold text-sm">
-                Total devido pelo Reclamado (sem juros)
-              </span>
+            {/* ── VERBAS TRABALHISTAS ── */}
+            <div>
+              <div className="px-2 py-2 border-b border-gray-100 mb-2">
+                <h5 className="font-titulo text-base text-primaria">Verbas Trabalhistas — {MODALIDADES[abaAtiva]}</h5>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Desmarque INCL. para excluir. Clique na verba para ver a fórmula. Use "Editar valores" para ajustar.
+                </p>
+              </div>
+              <MemoriaCalculo
+                verbas={compAtivo.verbasExibidas}
+                subtotal={compAtivo.subtotal}
+                deducoes={resultadoAtivo.deducoes}
+                total={compAtivo.total}
+                honorarios={compAtivo.honorarios}
+                honorariosPericiais={0}
+                custas={0}
+                totalComHonorarios={compAtivo.totalComHonorarios}
+                onToggle={toggleVerbaExcluida}
+                onSalvarEdicao={(edits) => setVerbasEditadas(edits)}
+                apenasComValor
+              />
+            </div>
+
+            {/* Subtotal Verbas + Honorários */}
+            <div className="flex justify-between items-center px-4 py-3 bg-gray-800 text-white rounded-lg">
+              <span className="font-bold text-sm">Subtotal Verbas + Honorários Advocatícios</span>
               <span className="font-mono font-bold">{formatBRL(compAtivo.totalComHonorarios)}</span>
             </div>
 
-            {/* Juros ADC 58 STF */}
+            {/* ── DESPESAS PROCESSUAIS ── */}
+            {(compAtivo.custas > 0 || compAtivo.honPericiais > 0) && (
+              <div className="border border-gray-200 rounded-lg p-4">
+                <h5 className="font-titulo text-sm text-primaria mb-3">Despesas Processuais</h5>
+                <div className="space-y-1">
+                  {compAtivo.custas > 0 && (
+                    <LinhaResumo label="Custas Processuais (2% sobre o total líquido)" valor={compAtivo.custas} />
+                  )}
+                  {compAtivo.honPericiais > 0 && (
+                    <LinhaResumo label="Honorários Periciais" valor={compAtivo.honPericiais} />
+                  )}
+                  {compAtivo.despesasProcessuais > 0 && (
+                    <div className="flex justify-between items-center py-2 bg-gray-100 rounded px-3 mt-2">
+                      <span className="font-semibold text-sm text-gray-800">Total Despesas Processuais</span>
+                      <span className="font-mono font-bold text-gray-800">{formatBRL(compAtivo.despesasProcessuais)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── ENCARGOS PREVIDENCIÁRIOS E FISCAIS ── */}
+            {resultadoAtivo.encargosEmpregado && resultadoAtivo.encargosEmpregado.baseInss > 0 && (
+              <EncargosPrevidenciarios
+                encargos={resultadoAtivo.encargosEmpregado}
+                verbas={compAtivo.verbasExibidas}
+              />
+            )}
+
+            {/* ── JUROS E CORREÇÃO MONETÁRIA ── */}
             {resultadoAtivo.juros && resultadoAtivo.juros.valor > 0 && (
-              <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
                 <p className="font-semibold text-blue-900 mb-1">
                   Juros e Correção (ADC 58 STF / Lei 14.905/2024)
                   {resultadoAtivo.juros.estimado && (
@@ -362,49 +381,111 @@ export default function ResultadoTriplo() {
                 <p className="text-xs text-blue-700 mb-2">
                   Apurado até:{' '}
                   {resultadoAtivo.juros.dataApuracao
-                    ? new Date(
-                        resultadoAtivo.juros.dataApuracao + 'T12:00:00'
-                      ).toLocaleDateString('pt-BR')
+                    ? new Date(resultadoAtivo.juros.dataApuracao + 'T12:00:00').toLocaleDateString('pt-BR')
                     : resultadoAtivo.juros.memoria?.dataApuracao || '—'}.
                 </p>
                 {resultadoAtivo.juros.fases?.length > 0 && (
                   <div className="space-y-1 mb-3">
                     {resultadoAtivo.juros.fases.map((f, i) => (
-                      <div
-                        key={i}
-                        className="flex justify-between text-xs bg-white/60 rounded px-2 py-1"
-                      >
+                      <div key={i} className="flex justify-between text-xs bg-white/60 rounded px-2 py-1">
                         <span className="text-gray-600 truncate pr-2">{f.descricao}</span>
                         <span className="font-mono font-semibold text-blue-800 shrink-0">
-                          {f.percentual >= 0 ? '+' : ''}
-                          {f.percentual?.toFixed(4)}%
+                          {f.percentual >= 0 ? '+' : ''}{f.percentual?.toFixed(4)}%
                         </span>
                       </div>
                     ))}
                   </div>
                 )}
-                <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="grid grid-cols-2 gap-3 mb-2">
                   <div>
                     <p className="campo-label">Taxa Total</p>
                     <p className="font-mono">{resultadoAtivo.juros.percentual?.toFixed(4)}%</p>
                   </div>
                   <div>
                     <p className="campo-label">Valor dos Juros</p>
-                    <p className="font-mono font-bold text-blue-800">
-                      {formatBRL(resultadoAtivo.juros.valor)}
-                    </p>
+                    <p className="font-mono font-bold text-blue-800">{formatBRL(resultadoAtivo.juros.valor)}</p>
                   </div>
-                </div>
-                <div className="flex justify-between items-center bg-blue-900 text-white rounded px-4 py-2">
-                  <span className="font-bold text-sm">Total devido pelo Reclamado com Juros</span>
-                  <span className="font-mono font-bold">
-                    {formatBRL(
-                      (compAtivo.totalComHonorarios || 0) + (resultadoAtivo.juros.valor || 0)
-                    )}
-                  </span>
                 </div>
               </div>
             )}
+
+            {/* ── RESUMO GERAL DO CÁLCULO ── */}
+            {(() => {
+              const jurosV = resultadoAtivo.juros?.valor || 0;
+              const encargos = resultadoAtivo.encargosEmpregado;
+              const pctHon = dados.percentualHonorarios ?? 0.15;
+              const fgtsTotal = compAtivo.verbasExibidas
+                .filter(v => !v.excluida && /fgts/i.test(v.codigo))
+                .reduce((acc, v) => acc + v.valor, 0);
+              const totalGeral = Math.round((
+                compAtivo.totalComHonorarios +
+                compAtivo.despesasProcessuais +
+                jurosV +
+                (encargos?.inssEmpregador || 0)
+              ) * 100) / 100;
+              return (
+                <div className="border-2 border-gray-800 rounded-lg p-4">
+                  <h5 className="font-titulo text-sm text-primaria mb-3">Resumo Geral do Cálculo</h5>
+
+                  <p className="text-xs font-semibold uppercase text-gray-500 tracking-wide mb-2">Crédito do Reclamante</p>
+                  <div className="space-y-0.5 mb-3">
+                    <LinhaResumo label="Total Líquido das Verbas Trabalhistas" valor={compAtivo.total} />
+                    <LinhaResumo label={`(+) Honorários Advocatícios (${(pctHon * 100).toFixed(0)}%)`} valor={compAtivo.honorarios} />
+                    {encargos?.inssEmpregado > 0 && (
+                      <LinhaResumo
+                        label="(−) INSS a deduzir do crédito do autor"
+                        valor={-encargos.inssEmpregado}
+                        cor="negativo"
+                        sublabel="Tabela progressiva 2025 — a reter na fonte"
+                      />
+                    )}
+                    {encargos?.irRetido?.valor > 0 && (
+                      <LinhaResumo
+                        label="(−) IR Estimado a deduzir do crédito do autor"
+                        valor={-encargos.irRetido.valor}
+                        cor="negativo"
+                        sublabel="RRA — art. 12-A Lei 7.713/88"
+                      />
+                    )}
+                    {fgtsTotal > 0 && (
+                      <LinhaResumo
+                        label="FGTS + Multa Rescisória (a recolher à CAIXA)"
+                        valor={fgtsTotal}
+                        sublabel="Não integra o crédito do reclamante"
+                      />
+                    )}
+                  </div>
+
+                  <p className="text-xs font-semibold uppercase text-gray-500 tracking-wide mb-2 border-t pt-3">Total Devido pelo Reclamado</p>
+                  <div className="space-y-0.5 mb-3">
+                    <LinhaResumo label="Subtotal Verbas + Honorários Advocatícios" valor={compAtivo.totalComHonorarios} />
+                    {encargos?.inssEmpregador > 0 && (
+                      <LinhaResumo
+                        label="(+) INSS Patronal (20% sobre parcelas salariais)"
+                        valor={encargos.inssEmpregador}
+                        sublabel="Art. 22 Lei 8.212/91 — custo do empregador"
+                      />
+                    )}
+                    {compAtivo.despesasProcessuais > 0 && (
+                      <LinhaResumo label="(+) Despesas Processuais (custas + periciais)" valor={compAtivo.despesasProcessuais} />
+                    )}
+                    {jurosV > 0 && (
+                      <LinhaResumo label="(+) Juros e Correção Monetária (ADC 58 STF)" valor={jurosV} cor="azul" />
+                    )}
+                  </div>
+
+                  <div className="flex justify-between items-center py-3 bg-gray-900 text-white rounded-lg px-4">
+                    <span className="font-bold text-sm tracking-wide">TOTAL GERAL DEVIDO PELO RECLAMADO</span>
+                    <div className="text-right">
+                      <p className="font-mono font-bold text-lg">{formatBRL(totalGeral)}</p>
+                      {jurosV > 0 && (
+                        <p className="text-xs text-blue-300 mt-0.5">incl. juros/correção: {formatBRL(jurosV)}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -451,7 +532,7 @@ export default function ResultadoTriplo() {
         <button className="btn-secundario" onClick={() => setStep(8)}>
           ← Editar Multas/Despesas
         </button>
-        <button className="btn-secundario" onClick={() => setStep(1)}>
+        <button className="btn-secundario" onClick={resetar}>
           Nova Simulação
         </button>
       </div>
