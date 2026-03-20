@@ -23,16 +23,64 @@ const PARCELAS_PREDEFINIDAS = [
   'Personalizada...',
 ];
 
-/** Avalia expressão matemática segura (apenas dígitos, operadores e parênteses) */
+/**
+ * Parser de descida recursiva para expressões matemáticas simples (+, -, *, /, parênteses).
+ * Não usa eval nem Function — compatível com CSP restrito.
+ */
 function evalExpr(raw) {
   if (!raw || !String(raw).trim()) return 0;
-  const limpo = String(raw).replace(',', '.').replace(/[^0-9.+\-*/()\s]/g, '');
+  const str = String(raw).replace(',', '.').trim();
+
+  const tokens = [];
+  let i = 0;
+  while (i < str.length) {
+    if (/\s/.test(str[i])) { i++; continue; }
+    if (/[\d.]/.test(str[i])) {
+      let num = '';
+      while (i < str.length && /[\d.]/.test(str[i])) num += str[i++];
+      tokens.push({ t: 'n', v: parseFloat(num) });
+    } else if (/[+\-*/()]/.test(str[i])) {
+      tokens.push({ t: 'o', v: str[i++] });
+    } else {
+      return parseFloat(str) || 0;
+    }
+  }
+
+  let pos = 0;
+  const peek = () => (pos < tokens.length ? tokens[pos] : null);
+  const consume = () => tokens[pos++];
+
+  function expr() {
+    let left = term();
+    while (peek() && (peek().v === '+' || peek().v === '-')) {
+      const op = consume().v;
+      left = op === '+' ? left + term() : left - term();
+    }
+    return left;
+  }
+  function term() {
+    let left = factor();
+    while (peek() && (peek().v === '*' || peek().v === '/')) {
+      const op = consume().v;
+      const r = factor();
+      left = op === '*' ? left * r : (r !== 0 ? left / r : 0);
+    }
+    return left;
+  }
+  function factor() {
+    const t = peek();
+    if (!t) return 0;
+    if (t.v === '(') { consume(); const v = expr(); if (peek()?.v === ')') consume(); return v; }
+    if (t.t === 'n') { consume(); return t.v; }
+    if (t.v === '-') { consume(); return -factor(); }
+    return 0;
+  }
+
   try {
-    // eslint-disable-next-line no-new-func
-    const r = Function('return (' + limpo + ')')();
-    if (typeof r === 'number' && isFinite(r)) return Math.round(r * 100) / 100;
+    const result = expr();
+    if (isFinite(result)) return Math.round(result * 100) / 100;
   } catch (_) {}
-  return parseFloat(String(raw).replace(',', '.')) || 0;
+  return parseFloat(str) || 0;
 }
 
 export default function SimuladorAcordoPage() {
@@ -61,7 +109,7 @@ export default function SimuladorAcordoPage() {
 
   function handleValorBlur(idx, raw) {
     const n = evalExpr(raw);
-    if (n > 0 && String(n) !== raw) {
+    if (n > 0 && n.toFixed(2) !== raw) {
       updateParcela(idx, 'valorRaw', n.toFixed(2));
     }
   }
@@ -70,7 +118,6 @@ export default function SimuladorAcordoPage() {
     return p.seletor === 'Personalizada...' ? p.nomeCustom : p.seletor;
   }
 
-  // Total indenizatório em tempo real
   const totalIndenizatorio = useMemo(
     () => parcelas.reduce((sum, p) => sum + evalExpr(p.valorRaw), 0),
     [parcelas]
@@ -129,7 +176,7 @@ export default function SimuladorAcordoPage() {
                   onChange={e => setValorAcordo(e.target.value)}
                   onBlur={e => {
                     const n = evalExpr(e.target.value);
-                    if (n > 0 && String(n) !== e.target.value) setValorAcordo(n.toFixed(2));
+                    if (n > 0 && n.toFixed(2) !== e.target.value) setValorAcordo(n.toFixed(2));
                   }}
                   className="campo-input font-mono"
                   placeholder="0,00 ou ex.: 5000+1500"
@@ -163,7 +210,7 @@ export default function SimuladorAcordoPage() {
                   onChange={e => setSalario(e.target.value)}
                   onBlur={e => {
                     const n = evalExpr(e.target.value);
-                    if (n > 0 && String(n) !== e.target.value) setSalario(n.toFixed(2));
+                    if (n > 0 && n.toFixed(2) !== e.target.value) setSalario(n.toFixed(2));
                   }}
                   className="campo-input font-mono"
                   placeholder="Para referência — limite INSS/IR"
@@ -185,12 +232,19 @@ export default function SimuladorAcordoPage() {
               </button>
             </div>
             <div className="aviso-judicial mb-3 text-xs">
-              Informe as parcelas de natureza <strong>indenizatória</strong> — estas não sofrem incidência de INSS e IR. O saldo restante será considerado salarial.
+              Informe as parcelas de natureza <strong>indenizatória</strong> — estas não sofrem
+              incidência de INSS e IR. O saldo restante será considerado salarial.
             </div>
+
             <div className="space-y-3">
               {parcelas.map((p, idx) => (
-                <div key={idx} className="flex gap-2 items-start">
-                  <div className="flex-1 space-y-1">
+                <div
+                  key={idx}
+                  className="grid gap-2 items-start"
+                  style={{ gridTemplateColumns: '1fr 9rem 1.5rem' }}
+                >
+                  {/* Coluna nome */}
+                  <div className="min-w-0 space-y-1">
                     <select
                       value={p.seletor}
                       onChange={e => updateParcela(idx, 'seletor', e.target.value)}
@@ -212,22 +266,28 @@ export default function SimuladorAcordoPage() {
                       />
                     )}
                   </div>
+
+                  {/* Coluna valor */}
                   <input
                     type="text"
                     value={p.valorRaw}
                     onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
                     onBlur={e => handleValorBlur(idx, e.target.value)}
-                    className="campo-input w-36 text-right font-mono text-sm flex-shrink-0"
+                    className="campo-input w-full text-right font-mono text-sm"
                     placeholder="0,00 ou 1000+200"
                   />
-                  {parcelas.length > 1 && (
+
+                  {/* Coluna excluir */}
+                  {parcelas.length > 1 ? (
                     <button
                       type="button"
                       onClick={() => removeParcela(idx)}
-                      className="text-red-400 hover:text-red-600 flex-shrink-0 mt-1"
+                      className="text-red-400 hover:text-red-600 mt-2"
                     >
                       <Trash2 size={16} />
                     </button>
+                  ) : (
+                    <span />
                   )}
                 </div>
               ))}
@@ -245,7 +305,7 @@ export default function SimuladorAcordoPage() {
                     className={`h-2 rounded-full transition-all ${
                       totalIndenizatorio > valorAcordoNum ? 'bg-red-500' : 'bg-amber-400'
                     }`}
-                    style={{ width: `${Math.min(100, (totalIndenizatorio / valorAcordoNum) * 100)}%` }}
+                    style={{ width: `${Math.min(100, valorAcordoNum > 0 ? (totalIndenizatorio / valorAcordoNum) * 100 : 0)}%` }}
                   />
                 </div>
                 {totalIndenizatorio > valorAcordoNum && (
@@ -307,7 +367,6 @@ export default function SimuladorAcordoPage() {
               <div className="card p-5">
                 <h3 className="font-titulo text-base mb-3 text-primaria">Encargos Previdenciários e Fiscais</h3>
                 <div className="space-y-2">
-
                   <div className="bg-orange-50 border border-orange-100 rounded-lg p-3 mb-2">
                     <p className="text-xs font-semibold text-orange-700 mb-1">A deduzir do crédito do Reclamante</p>
                     <div className="space-y-1">
@@ -366,7 +425,6 @@ export default function SimuladorAcordoPage() {
                   </div>
                 </div>
 
-                {/* Fórmula IR */}
                 {resultado.ir?.memoria?.formula && (
                   <div className="mt-4 pt-3 border-t border-gray-100">
                     <p className="text-xs font-semibold text-gray-500 mb-1">Cálculo IR (RRA)</p>
@@ -378,7 +436,8 @@ export default function SimuladorAcordoPage() {
               </div>
 
               <div className="aviso-judicial text-xs">
-                Simulação estimativa. O cálculo exato de INSS e IR em liquidações trabalhistas depende de perícia contábil e das particularidades de cada caso. IR calculado pelo método RRA (art. 12-A da Lei 7.713/88).
+                Simulação estimativa. O cálculo exato de INSS e IR em liquidações trabalhistas depende de perícia
+                contábil e das particularidades de cada caso. IR calculado pelo método RRA (art. 12-A da Lei 7.713/88).
               </div>
             </div>
           ) : (

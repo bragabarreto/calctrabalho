@@ -39,16 +39,64 @@ const PARCELAS_PREDEFINIDAS = [
   'Personalizada...',
 ];
 
-/** Avalia expressão matemática segura (apenas dígitos, operadores e parênteses) */
+/**
+ * Parser de descida recursiva para expressões matemáticas simples (+, -, *, /, parênteses).
+ * Não usa eval nem Function — compatível com CSP restrito.
+ */
 function evalExpr(raw) {
   if (!raw || !String(raw).trim()) return 0;
-  const limpo = String(raw).replace(',', '.').replace(/[^0-9.+\-*/()\s]/g, '');
+  const str = String(raw).replace(',', '.').trim();
+
+  const tokens = [];
+  let i = 0;
+  while (i < str.length) {
+    if (/\s/.test(str[i])) { i++; continue; }
+    if (/[\d.]/.test(str[i])) {
+      let num = '';
+      while (i < str.length && /[\d.]/.test(str[i])) num += str[i++];
+      tokens.push({ t: 'n', v: parseFloat(num) });
+    } else if (/[+\-*/()]/.test(str[i])) {
+      tokens.push({ t: 'o', v: str[i++] });
+    } else {
+      return parseFloat(str) || 0;
+    }
+  }
+
+  let pos = 0;
+  const peek = () => (pos < tokens.length ? tokens[pos] : null);
+  const consume = () => tokens[pos++];
+
+  function expr() {
+    let left = term();
+    while (peek() && (peek().v === '+' || peek().v === '-')) {
+      const op = consume().v;
+      left = op === '+' ? left + term() : left - term();
+    }
+    return left;
+  }
+  function term() {
+    let left = factor();
+    while (peek() && (peek().v === '*' || peek().v === '/')) {
+      const op = consume().v;
+      const r = factor();
+      left = op === '*' ? left * r : (r !== 0 ? left / r : 0);
+    }
+    return left;
+  }
+  function factor() {
+    const t = peek();
+    if (!t) return 0;
+    if (t.v === '(') { consume(); const v = expr(); if (peek()?.v === ')') consume(); return v; }
+    if (t.t === 'n') { consume(); return t.v; }
+    if (t.v === '-') { consume(); return -factor(); }
+    return 0;
+  }
+
   try {
-    // eslint-disable-next-line no-new-func
-    const r = Function('return (' + limpo + ')')();
-    if (typeof r === 'number' && isFinite(r)) return Math.round(r * 100) / 100;
+    const result = expr();
+    if (isFinite(result)) return Math.round(result * 100) / 100;
   } catch (_) {}
-  return parseFloat(String(raw).replace(',', '.')) || 0;
+  return parseFloat(str) || 0;
 }
 
 function calcINSS(base) {
@@ -103,7 +151,7 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
       })
   );
 
-  const valorAcordoNum = evalExpr(String(valorAcordo).replace(',', '.')) || 0;
+  const valorAcordoNum = evalExpr(valorAcordo) || 0;
 
   // Soma das parcelas indenizatórias discriminadas
   const totalIndenizatorio = useMemo(
@@ -147,7 +195,7 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
 
   function handleValorBlur(id, raw) {
     const n = evalExpr(raw);
-    if (n > 0 && String(n) !== raw) {
+    if (n > 0 && n.toFixed(2) !== raw) {
       updateParcela(id, 'valorRaw', n.toFixed(2));
     }
   }
