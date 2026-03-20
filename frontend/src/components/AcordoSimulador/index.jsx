@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { PlusCircle, Trash2 } from 'lucide-react';
 
 const fmt = (v) =>
@@ -23,6 +23,33 @@ const IR_TABELA = [
   { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
   { ate: Infinity, aliquota: 0.275, deducao: 896.00 },
 ];
+
+const PARCELAS_PREDEFINIDAS = [
+  'Aviso prévio indenizado',
+  'Férias + 1/3 constitucional',
+  'Depósitos de FGTS',
+  'Indenização rescisória FGTS (40%)',
+  'Indenização rescisória FGTS (20% – culpa recíproca)',
+  'Multa do art. 477 da CLT',
+  'Indenização do intervalo intrajornada',
+  'Indenização do intervalo interjornada',
+  'Indenização vale-transporte',
+  'Indenização vale-alimentação',
+  'Honorários advocatícios',
+  'Personalizada...',
+];
+
+/** Avalia expressão matemática segura (apenas dígitos, operadores e parênteses) */
+function evalExpr(raw) {
+  if (!raw || !String(raw).trim()) return 0;
+  const limpo = String(raw).replace(',', '.').replace(/[^0-9.+\-*/()\s]/g, '');
+  try {
+    // eslint-disable-next-line no-new-func
+    const r = Function('return (' + limpo + ')')();
+    if (typeof r === 'number' && isFinite(r)) return Math.round(r * 100) / 100;
+  } catch (_) {}
+  return parseFloat(String(raw).replace(',', '.')) || 0;
+}
 
 function calcINSS(base) {
   let inss = 0;
@@ -59,18 +86,28 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
   const [modoDiscriminacao, setModoDiscriminacao] = useState(false);
 
   // Parcelas indenizatórias discriminadas no acordo
-  // Inicializadas com as verbas indenizatórias do cálculo (editáveis pelo usuário)
   const [parcelas, setParcelas] = useState(() =>
     (verbas || [])
       .filter(v => v.natureza === 'indenizatoria' && !v.excluida && v.valor > 0)
-      .map(v => ({ id: v.codigo, nome: v.nome, valor: String(v.valor) }))
+      .map(v => {
+        const match = PARCELAS_PREDEFINIDAS.find(
+          o => o !== 'Personalizada...' &&
+               o.toLowerCase().includes((v.nome || '').toLowerCase().slice(0, 10))
+        );
+        return {
+          id: v.codigo,
+          seletor: match || 'Personalizada...',
+          nomeCustom: match ? '' : (v.nome || ''),
+          valorRaw: String(v.valor),
+        };
+      })
   );
 
-  const valorAcordoNum = parseFloat(String(valorAcordo).replace(',', '.')) || 0;
+  const valorAcordoNum = evalExpr(String(valorAcordo).replace(',', '.')) || 0;
 
   // Soma das parcelas indenizatórias discriminadas
-  const totalIndenizatorio = useMemo(() =>
-    parcelas.reduce((acc, p) => acc + (parseFloat(String(p.valor).replace(',', '.')) || 0), 0),
+  const totalIndenizatorio = useMemo(
+    () => parcelas.reduce((acc, p) => acc + evalExpr(p.valorRaw), 0),
     [parcelas]
   );
 
@@ -95,9 +132,9 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
 
   const valorLiquido = Math.max(0, valorAcordoNum - inssEmpregado - irEstimado);
 
-  // ── Gerenciamento das parcelas discriminadas ──────────────────────
+  // ── Gerenciamento das parcelas ──────────────────────────────────────────────
   function addParcela() {
-    setParcelas(prev => [...prev, { id: `manual_${Date.now()}`, nome: '', valor: '' }]);
+    setParcelas(prev => [...prev, { id: `manual_${Date.now()}`, seletor: '', nomeCustom: '', valorRaw: '' }]);
   }
 
   function removeParcela(id) {
@@ -106,6 +143,13 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
 
   function updateParcela(id, campo, valor) {
     setParcelas(prev => prev.map(p => p.id === id ? { ...p, [campo]: valor } : p));
+  }
+
+  function handleValorBlur(id, raw) {
+    const n = evalExpr(raw);
+    if (n > 0 && String(n) !== raw) {
+      updateParcela(id, 'valorRaw', n.toFixed(2));
+    }
   }
 
   return (
@@ -124,13 +168,15 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
         <div>
           <label className="campo-label">Valor do Acordo (R$)</label>
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
             value={valorAcordo}
             onChange={e => setValorAcordo(e.target.value)}
+            onBlur={e => {
+              const n = evalExpr(e.target.value);
+              if (n > 0 && String(n) !== e.target.value) setValorAcordo(n.toFixed(2));
+            }}
             className="campo-input w-44 text-right font-mono text-lg"
-            placeholder="0,00"
+            placeholder="0,00 ou ex.: 5000+1500"
           />
         </div>
         <div className="flex items-center gap-2 pb-1">
@@ -174,8 +220,8 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
                 <table className="w-full text-sm border border-gray-200 rounded">
                   <thead>
                     <tr className="bg-gray-50">
-                      <th className="text-left px-3 py-2 font-medium text-gray-600" style={{ width: '60%' }}>Natureza / Descrição</th>
-                      <th className="text-right px-3 py-2 font-medium text-gray-600" style={{ width: '30%' }}>Valor (R$)</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600" style={{ width: '58%' }}>Natureza / Descrição</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600" style={{ width: '32%' }}>Valor (R$)</th>
                       <th style={{ width: '10%' }} />
                     </tr>
                   </thead>
@@ -183,23 +229,35 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
                     {parcelas.map((p) => (
                       <tr key={p.id} className="border-t border-gray-100">
                         <td className="px-2 py-1">
-                          <input
-                            type="text"
-                            value={p.nome}
-                            onChange={e => updateParcela(p.id, 'nome', e.target.value)}
+                          <select
+                            value={p.seletor}
+                            onChange={e => updateParcela(p.id, 'seletor', e.target.value)}
                             className="campo-input w-full text-sm py-1"
-                            placeholder="Ex: Danos morais, Multa FGTS..."
-                          />
+                          >
+                            <option value="">— selecionar parcela —</option>
+                            {PARCELAS_PREDEFINIDAS.map(o => (
+                              <option key={o} value={o}>{o}</option>
+                            ))}
+                          </select>
+                          {p.seletor === 'Personalizada...' && (
+                            <input
+                              type="text"
+                              value={p.nomeCustom}
+                              onChange={e => updateParcela(p.id, 'nomeCustom', e.target.value)}
+                              className="campo-input w-full text-sm py-1 mt-1"
+                              placeholder="Descreva a parcela..."
+                              autoFocus
+                            />
+                          )}
                         </td>
                         <td className="px-2 py-1">
                           <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={p.valor}
-                            onChange={e => updateParcela(p.id, 'valor', e.target.value)}
+                            type="text"
+                            value={p.valorRaw}
+                            onChange={e => updateParcela(p.id, 'valorRaw', e.target.value)}
+                            onBlur={e => handleValorBlur(p.id, e.target.value)}
                             className="campo-input w-full text-right font-mono text-sm py-1"
-                            placeholder="0,00"
+                            placeholder="0,00 ou 1000+500"
                           />
                         </td>
                         <td className="px-2 py-1 text-center">

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 
 function fmt(v) {
@@ -8,20 +8,47 @@ function pct(v) {
   return `${((v || 0) * 100).toFixed(1)}%`;
 }
 
+const PARCELAS_PREDEFINIDAS = [
+  'Aviso prévio indenizado',
+  'Férias + 1/3 constitucional',
+  'Depósitos de FGTS',
+  'Indenização rescisória FGTS (40%)',
+  'Indenização rescisória FGTS (20% – culpa recíproca)',
+  'Multa do art. 477 da CLT',
+  'Indenização do intervalo intrajornada',
+  'Indenização do intervalo interjornada',
+  'Indenização vale-transporte',
+  'Indenização vale-alimentação',
+  'Honorários advocatícios',
+  'Personalizada...',
+];
+
+/** Avalia expressão matemática segura (apenas dígitos, operadores e parênteses) */
+function evalExpr(raw) {
+  if (!raw || !String(raw).trim()) return 0;
+  const limpo = String(raw).replace(',', '.').replace(/[^0-9.+\-*/()\s]/g, '');
+  try {
+    // eslint-disable-next-line no-new-func
+    const r = Function('return (' + limpo + ')')();
+    if (typeof r === 'number' && isFinite(r)) return Math.round(r * 100) / 100;
+  } catch (_) {}
+  return parseFloat(String(raw).replace(',', '.')) || 0;
+}
+
 export default function SimuladorAcordoPage() {
   const [valorAcordo, setValorAcordo] = useState('');
   const [dataAdmissao, setDataAdmissao] = useState('');
   const [dataDispensa, setDataDispensa] = useState('');
   const [salario, setSalario] = useState('');
   const [parcelas, setParcelas] = useState([
-    { nome: '', valor: '' },
+    { seletor: '', nomeCustom: '', valorRaw: '' },
   ]);
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState('');
 
   function addParcela() {
-    setParcelas(prev => [...prev, { nome: '', valor: '' }]);
+    setParcelas(prev => [...prev, { seletor: '', nomeCustom: '', valorRaw: '' }]);
   }
 
   function removeParcela(idx) {
@@ -32,13 +59,23 @@ export default function SimuladorAcordoPage() {
     setParcelas(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   }
 
+  function handleValorBlur(idx, raw) {
+    const n = evalExpr(raw);
+    if (n > 0 && String(n) !== raw) {
+      updateParcela(idx, 'valorRaw', n.toFixed(2));
+    }
+  }
+
+  function nomeFinal(p) {
+    return p.seletor === 'Personalizada...' ? p.nomeCustom : p.seletor;
+  }
+
   // Total indenizatório em tempo real
   const totalIndenizatorio = useMemo(
-    () => parcelas.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0),
+    () => parcelas.reduce((sum, p) => sum + evalExpr(p.valorRaw), 0),
     [parcelas]
   );
-  const valorAcordoNum = parseFloat(valorAcordo) || 0;
-  const baseSalarialPrevia = Math.max(0, valorAcordoNum - totalIndenizatorio);
+  const valorAcordoNum = evalExpr(valorAcordo) || 0;
   const restante = Math.max(0, valorAcordoNum - totalIndenizatorio);
 
   async function calcular() {
@@ -53,10 +90,10 @@ export default function SimuladorAcordoPage() {
           valorAcordo: valorAcordoNum,
           dataAdmissao: dataAdmissao || null,
           dataDispensa: dataDispensa || null,
-          salario: parseFloat(salario) || null,
+          salario: evalExpr(salario) || null,
           parcelasIndenizatorias: parcelas
-            .filter(p => p.nome && parseFloat(p.valor) > 0)
-            .map(p => ({ nome: p.nome, valor: parseFloat(p.valor) })),
+            .filter(p => nomeFinal(p) && evalExpr(p.valorRaw) > 0)
+            .map(p => ({ nome: nomeFinal(p), valor: evalExpr(p.valorRaw) })),
         }),
       });
       const json = await resp.json();
@@ -87,12 +124,15 @@ export default function SimuladorAcordoPage() {
               <div>
                 <label className="campo-label">Valor Total do Acordo (R$) *</label>
                 <input
-                  type="number"
+                  type="text"
                   value={valorAcordo}
                   onChange={e => setValorAcordo(e.target.value)}
+                  onBlur={e => {
+                    const n = evalExpr(e.target.value);
+                    if (n > 0 && String(n) !== e.target.value) setValorAcordo(n.toFixed(2));
+                  }}
                   className="campo-input font-mono"
-                  step="0.01" min="0"
-                  placeholder="0,00"
+                  placeholder="0,00 ou ex.: 5000+1500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -118,11 +158,14 @@ export default function SimuladorAcordoPage() {
               <div>
                 <label className="campo-label">Último Salário (R$)</label>
                 <input
-                  type="number"
+                  type="text"
                   value={salario}
                   onChange={e => setSalario(e.target.value)}
+                  onBlur={e => {
+                    const n = evalExpr(e.target.value);
+                    if (n > 0 && String(n) !== e.target.value) setSalario(n.toFixed(2));
+                  }}
                   className="campo-input font-mono"
-                  step="0.01" min="0"
                   placeholder="Para referência — limite INSS/IR"
                 />
               </div>
@@ -142,31 +185,46 @@ export default function SimuladorAcordoPage() {
               </button>
             </div>
             <div className="aviso-judicial mb-3 text-xs">
-              Informe as parcelas de natureza <strong>indenizatória</strong> (FGTS, multa rescisória, indenização por dano moral, etc.) — estas não sofrem incidência de INSS e IR. O saldo restante será considerado salarial.
+              Informe as parcelas de natureza <strong>indenizatória</strong> — estas não sofrem incidência de INSS e IR. O saldo restante será considerado salarial.
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {parcelas.map((p, idx) => (
-                <div key={idx} className="flex gap-2 items-center">
+                <div key={idx} className="flex gap-2 items-start">
+                  <div className="flex-1 space-y-1">
+                    <select
+                      value={p.seletor}
+                      onChange={e => updateParcela(idx, 'seletor', e.target.value)}
+                      className="campo-input w-full text-sm"
+                    >
+                      <option value="">— selecionar parcela —</option>
+                      {PARCELAS_PREDEFINIDAS.map(o => (
+                        <option key={o} value={o}>{o}</option>
+                      ))}
+                    </select>
+                    {p.seletor === 'Personalizada...' && (
+                      <input
+                        type="text"
+                        value={p.nomeCustom}
+                        onChange={e => updateParcela(idx, 'nomeCustom', e.target.value)}
+                        className="campo-input w-full text-sm"
+                        placeholder="Descreva a parcela..."
+                        autoFocus
+                      />
+                    )}
+                  </div>
                   <input
                     type="text"
-                    value={p.nome}
-                    onChange={e => updateParcela(idx, 'nome', e.target.value)}
-                    className="campo-input flex-1 text-sm"
-                    placeholder="Nome da parcela (ex.: Multa FGTS 40%)"
-                  />
-                  <input
-                    type="number"
-                    value={p.valor}
-                    onChange={e => updateParcela(idx, 'valor', e.target.value)}
-                    className="campo-input w-36 text-right font-mono text-sm"
-                    step="0.01" min="0"
-                    placeholder="R$ 0,00"
+                    value={p.valorRaw}
+                    onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
+                    onBlur={e => handleValorBlur(idx, e.target.value)}
+                    className="campo-input w-36 text-right font-mono text-sm flex-shrink-0"
+                    placeholder="0,00 ou 1000+200"
                   />
                   {parcelas.length > 1 && (
                     <button
                       type="button"
                       onClick={() => removeParcela(idx)}
-                      className="text-red-400 hover:text-red-600 flex-shrink-0"
+                      className="text-red-400 hover:text-red-600 flex-shrink-0 mt-1"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -271,21 +329,13 @@ export default function SimuladorAcordoPage() {
                     </div>
                   </div>
 
-                  <div className="bg-red-50 border border-red-100 rounded-lg p-3 mb-2">
+                  <div className="bg-red-50 border border-red-100 rounded-lg p-3">
                     <p className="text-xs font-semibold text-red-700 mb-1">Custo adicional do Reclamado</p>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">INSS Patronal (20% sobre base salarial)</span>
                       <span className="font-mono text-red-700 font-semibold">{fmt(resultado.inssEmpregador)}</span>
                     </div>
                     <p className="text-xs text-gray-400 mt-1">Art. 22 Lei 8.212/91 — não integra o valor do acordo</p>
-                  </div>
-
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <p className="text-xs font-semibold text-gray-600 mb-1">FGTS (informativo — já incluído no acordo)</p>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">FGTS s/ base salarial (8%)</span>
-                      <span className="font-mono text-gray-700">{fmt(resultado.fgts)}</span>
-                    </div>
                   </div>
                 </div>
               </div>
