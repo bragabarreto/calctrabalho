@@ -277,25 +277,34 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
                     {parcelas.map((p) => (
                       <tr key={p.id} className="border-t border-gray-100">
                         <td className="px-2 py-1">
-                          <select
-                            value={p.seletor}
-                            onChange={e => updateParcela(p.id, 'seletor', e.target.value)}
-                            className="campo-input w-full text-sm py-1"
-                          >
-                            <option value="">— selecionar parcela —</option>
-                            {PARCELAS_PREDEFINIDAS.map(o => (
-                              <option key={o} value={o}>{o}</option>
-                            ))}
-                          </select>
-                          {p.seletor === 'Personalizada...' && (
-                            <input
-                              type="text"
-                              value={p.nomeCustom}
-                              onChange={e => updateParcela(p.id, 'nomeCustom', e.target.value)}
-                              className="campo-input w-full text-sm py-1 mt-1"
-                              placeholder="Descreva a parcela..."
-                              autoFocus
-                            />
+                          {p.seletor !== 'Personalizada...' ? (
+                            <select
+                              value={p.seletor}
+                              onChange={e => updateParcela(p.id, 'seletor', e.target.value)}
+                              className="campo-input w-full text-sm py-1"
+                            >
+                              <option value="">— selecionar parcela —</option>
+                              {PARCELAS_PREDEFINIDAS.map(o => (
+                                <option key={o} value={o}>{o}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={p.nomeCustom}
+                                onChange={e => updateParcela(p.id, 'nomeCustom', e.target.value)}
+                                className="campo-input flex-1 text-sm py-1"
+                                placeholder="Descrição da parcela..."
+                                autoFocus
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateParcela(p.id, 'seletor', '')}
+                                title="Voltar à lista"
+                                className="text-gray-400 hover:text-gray-600 text-xs shrink-0"
+                              >✕</button>
+                            </div>
                           )}
                         </td>
                         <td className="px-2 py-1">

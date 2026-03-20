@@ -240,11 +240,11 @@ export default function SimuladorAcordoPage() {
               {parcelas.map((p, idx) => (
                 <div
                   key={idx}
-                  className="grid gap-2 items-start"
+                  className="grid gap-2 items-center"
                   style={{ gridTemplateColumns: '1fr 9rem 1.5rem' }}
                 >
-                  {/* Coluna nome */}
-                  <div className="min-w-0 space-y-1">
+                  {/* Coluna nome — sempre um único elemento */}
+                  {p.seletor !== 'Personalizada...' ? (
                     <select
                       value={p.seletor}
                       onChange={e => updateParcela(idx, 'seletor', e.target.value)}
@@ -255,17 +255,24 @@ export default function SimuladorAcordoPage() {
                         <option key={o} value={o}>{o}</option>
                       ))}
                     </select>
-                    {p.seletor === 'Personalizada...' && (
+                  ) : (
+                    <div className="flex items-center gap-1 min-w-0">
                       <input
                         type="text"
                         value={p.nomeCustom}
                         onChange={e => updateParcela(idx, 'nomeCustom', e.target.value)}
-                        className="campo-input w-full text-sm"
-                        placeholder="Descreva a parcela..."
+                        className="campo-input flex-1 text-sm min-w-0"
+                        placeholder="Descrição da parcela..."
                         autoFocus
                       />
-                    )}
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => updateParcela(idx, 'seletor', '')}
+                        title="Voltar à lista"
+                        className="text-gray-400 hover:text-gray-600 shrink-0 text-xs leading-none"
+                      >✕</button>
+                    </div>
+                  )}
 
                   {/* Coluna valor */}
                   <input
@@ -282,7 +289,7 @@ export default function SimuladorAcordoPage() {
                     <button
                       type="button"
                       onClick={() => removeParcela(idx)}
-                      className="text-red-400 hover:text-red-600 mt-2"
+                      className="text-red-400 hover:text-red-600"
                     >
                       <Trash2 size={16} />
                     </button>
