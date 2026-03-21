@@ -28,10 +28,14 @@ function formatMin(min) {
 const NOMES_DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ORDEM_DIAS = [1, 2, 3, 4, 5, 6, 0]; // Seg → Dom
 
-function calcMinNoturnos(entradaMin, saidaMin) {
+function calcMinNoturnos(entradaMin, saidaMin, prorrogacao) {
   const saidaEfetiva = saidaMin < entradaMin ? saidaMin + 1440 : saidaMin;
+  // Com prorrogação (CLT art. 73 §5°): se a jornada começa no período noturno,
+  // o trecho após 5h também é noturno — estende o limite até o fim da jornada.
+  const entradaNoturna = entradaMin >= 1320 || entradaMin < 300; // >= 22h ou < 5h
+  const noturnoAte = (prorrogacao && entradaNoturna) ? Math.max(1740, saidaEfetiva) : 1740;
   const s1 = Math.min(saidaEfetiva, 1440) - Math.max(entradaMin, 1320); // 22h–meia-noite
-  const s2 = Math.min(saidaEfetiva, 1740) - Math.max(entradaMin, 1440); // 0h–5h (escala +1440)
+  const s2 = Math.min(saidaEfetiva, noturnoAte) - Math.max(entradaMin, 1440); // 0h–5h (ou mais)
   return (s1 > 0 ? s1 : 0) + (s2 > 0 ? s2 : 0);
 }
 
@@ -41,6 +45,7 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
     diasSemana = [1, 2, 3, 4, 5], divisorJornada = 220, padraoApuracao = 'diario',
     horasJornadaPadrao12x36 = 12,
     adicionalHoraExtra = 0.5, adicionalHoraNoturna = 0.2,
+    prorrogacaoNoturna = false,
   } = periodo;
 
   if (!horaEntrada || !horaSaida) return null;
@@ -55,8 +60,12 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
   const intervaloLegalMin = minBrutosDia > 360 ? 60 : minBrutosDia > 240 ? 15 : 0;
   const intervaloDeficitDia = Math.max(0, intervaloLegalMin - (intervaloMinutos || 0));
 
-  // Minutos noturnos por dia
-  const minNocturnos = calcMinNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440);
+  // Minutos noturnos reais por dia (com prorrogação se configurada)
+  const minNocturnos = calcMinNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, prorrogacaoNoturna);
+
+  // Redução da hora noturna (CLT art. 73 §1°): 52min30s = 1h contratual
+  const minNocturnosLiq = Math.min(minNocturnos, minLiquidosDia);
+  const minEfetivosDia = (minLiquidosDia - minNocturnosLiq) + minNocturnosLiq * (60 / 52.5);
 
   const horasSemanais = divisorJornada / 5;
   const minContratualSemana = horasSemanais * 60;
@@ -66,7 +75,8 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
 
   if (padraoApuracao === '12x36') {
     const minPadraoTurno = horasJornadaPadrao12x36 * 60;
-    const heMinTurno = Math.max(0, minLiquidosDia - minPadraoTurno);
+    // Usa minutos efetivos (com redução noturna) para apurar HE do turno
+    const heMinTurno = Math.max(0, minEfetivosDia - minPadraoTurno);
     const valorHEMensal = valorHora * (1 + adicionalHoraExtra) * (heMinTurno / 60) * 15;
     const valorANMensal = valorHora * adicionalHoraNoturna * (60 / 52.5) * (minNocturnos / 60) * 15;
     const intraAtivo = (verbasConfig?.intrajornadaModo || 'automatico') !== 'desabilitado';
@@ -108,9 +118,10 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
     const trabalha = diasSemana.includes(dia);
     let heMin = 0;
     if (trabalha) {
-      somaDiasMin += minLiquidosDia;
+      // Soma minutos efetivos (com redução noturna) para comparar com limite semanal/diário
+      somaDiasMin += minEfetivosDia;
       if (padraoApuracao === 'diario' || padraoApuracao === 'misto') {
-        heMin = Math.max(0, minLiquidosDia - minContratualDia);
+        heMin = Math.max(0, minEfetivosDia - minContratualDia);
         somaHEDiariasMin += heMin;
       }
     }
@@ -160,7 +171,7 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
                 <td className="px-2 py-1 font-medium">{NOMES_DIAS[dia]}</td>
                 <td className="px-2 py-1 text-center font-mono">{trabalha ? horaEntrada : '—'}</td>
                 <td className="px-2 py-1 text-center font-mono">{trabalha ? horaSaida : '—'}</td>
-                <td className="px-2 py-1 text-center">{trabalha ? formatMin(minLiquidosDia) : 'Folga'}</td>
+                <td className="px-2 py-1 text-center">{trabalha ? formatMin(Math.round(minEfetivosDia)) : 'Folga'}</td>
                 {mostraColHE && (
                   <td className={`px-2 py-1 text-center ${heMin > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                     {trabalha ? (heMin > 0 ? formatMin(heMin) : '—') : '—'}
@@ -182,7 +193,7 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
           <tfoot>
             <tr className="bg-gray-100 border-t-2 border-gray-300 font-medium">
               <td colSpan={3} className="px-2 py-1.5 text-gray-700">Total semana</td>
-              <td className="px-2 py-1.5 text-center">{formatMin(somaDiasMin)}</td>
+              <td className="px-2 py-1.5 text-center" title="Horas efetivas com redução noturna (52min30s=1h)">{formatMin(Math.round(somaDiasMin))}</td>
               {mostraColHE && <td className={`px-2 py-1.5 text-center ${somaHEDiariasMin > 0 ? 'text-orange-600' : ''}`}>{somaHEDiariasMin > 0 ? formatMin(somaHEDiariasMin) : '—'}</td>}
               {mostraColAN && <td className="px-2 py-1.5 text-center text-indigo-600">{formatMin(minNocturnos * diasSemana.length)}</td>}
               {mostraColIntra && <td className="px-2 py-1.5 text-center text-red-600">{formatMin(intervaloDeficitDia * diasSemana.length)}</td>}
@@ -205,6 +216,13 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
       </div>
       {padraoApuracao === 'semanal' && (
         <p className="text-xs text-gray-400 mt-1">HE apuradas somente quando o total semanal excede o limite contratual ({formatMin(Math.round(minContratualSemana))}).</p>
+      )}
+      {minNocturnosLiq > 0 && (
+        <p className="text-xs text-indigo-500 mt-1">
+          Redução da hora noturna aplicada (CLT art. 73 §1°): cada 52min30s noturnos equivalem a 1h contratual.
+          {prorrogacaoNoturna && ' Prorrogação após 5h incluída (art. 73 §5°).'}
+          {' '}Horas exibidas são efetivas ({(minNocturnosLiq/60).toFixed(1)}h noturnas reais → {(minNocturnosLiq*(60/52.5)/60).toFixed(1)}h efetivas/dia).
+        </p>
       )}
       {sal > 0 && (totalHEMin > 0 || minNocturnos > 0 || (mostraColIntra)) && (
         <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-0.5">

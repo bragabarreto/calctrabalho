@@ -52,12 +52,15 @@ function minIntervaloLegal(minBrutos) {
 }
 
 /**
- * Calcula minutos dentro do período noturno (22h–05h + prorrogação).
- * Hora noturna = 52min30s = minutos reais × (60/52.5)
- * @param {number} entradaMin - minutos de entrada desde meia-noite
- * @param {number} saidaMin   - minutos de saída desde meia-noite (pode ultrapassar 1440)
- * @param {boolean} prorrogacao - se true, prossegue o noturno além das 5h (art. 73 §5 CLT)
- * @returns {number} minutos noturnos normalizados (equivalentes em horas reais)
+ * Calcula minutos reais dentro do período noturno (22h–05h + prorrogação art. 73 §5 CLT).
+ * Retorna os minutos REAIS trabalhados no período noturno (não convertidos).
+ * A conversão 52min30s → 1h é aplicada separadamente para obter os minutos EFETIVOS.
+ *
+ * @param {number} entradaMin  - minutos de entrada desde meia-noite
+ * @param {number} saidaMin    - minutos de saída desde meia-noite (pode ultrapassar 1440)
+ * @param {boolean} prorrogacao - se true, todo o trecho após 5h de uma jornada iniciada no
+ *                               período noturno também é tratado como hora noturna (art. 73 §5 CLT)
+ * @returns {number} minutos reais noturnos (brutos — aplique × 60/52.5 para obter efetivos)
  */
 function calcularMinutosNoturnos(entradaMin, saidaMin, prorrogacao) {
   const NOTURNO_INICIO = 22 * 60; // 1320
@@ -155,10 +158,16 @@ function gerarDiasPeriodo(periodo, dataAdm, dataDisp, feriadosAdicionais = []) {
   const intervaloMinLegal = minIntervaloLegal(minBrutosDia);
   const intervaloDeficit = Math.max(0, intervaloMinLegal - (intervaloMinutos || 0));
 
-  // Minutos noturnos por dia
+  // Minutos noturnos reais por dia
   const minNocturnos = (horaEntrada && horaSaida)
     ? calcularMinutosNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, prorrogacaoNoturna)
     : 0;
+
+  // Redução da hora noturna (CLT art. 73 §1°): 52min30s = 1h contratual
+  // minutos noturnos líquidos (cap no total líquido — o intervalo não é reduzido)
+  const minNocturnosLiq = Math.min(minNocturnos, minLiquidosDia);
+  // Minutos efetivos: trecho diurno permanece 1:1; trecho noturno é multiplicado por 60/52.5
+  const minEfetivosDia = (minLiquidosDia - minNocturnosLiq) + minNocturnosLiq * (60 / 52.5);
 
   const dias = [];
   let current = new Date(inicio);
@@ -187,8 +196,10 @@ function gerarDiasPeriodo(periodo, dataAdm, dataDisp, feriadosAdicionais = []) {
       minSaida: saidaMin,
       minBrutosDia: ehDiaTrabalhado ? minBrutosDia : 0,
       minLiquidosDia: ehDiaTrabalhado ? minLiquidosDia : 0,
+      minEfetivosDia: ehDiaTrabalhado ? minEfetivosDia : 0,
       minContratualDia: Math.round(minContratualDia),
-      minExtras: ehDiaTrabalhado ? Math.max(0, minLiquidosDia - minContratualDia) : 0,
+      // minExtras usa minutos EFETIVOS (com redução noturna de 52min30s → CLT art. 73 §1°)
+      minExtras: ehDiaTrabalhado ? Math.max(0, minEfetivosDia - minContratualDia) : 0,
       intervaloMinutos: ehDiaTrabalhado ? (intervaloMinutos || 0) : 0,
       minIntervaloMinimo: ehDiaTrabalhado ? intervaloMinLegal : 0,
       minIntervaloDeficit: ehDiaTrabalhado ? intervaloDeficit : 0,
@@ -296,6 +307,13 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp, feriadosAdicionais =
   const minLiquidosDia = Math.max(0, minBrutos - (intervaloMinutos || 0));
   const minContratualDia = horasContratualDiaria * 60;
 
+  // Minutos efetivos por dia considerando a redução da hora noturna (CLT art. 73 §1°)
+  const minNoctPeriodo = (horaEntrada && horaSaida)
+    ? calcularMinutosNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, periodo.prorrogacaoNoturna || false)
+    : 0;
+  const minNoctLiqPeriodo = Math.min(minNoctPeriodo, minLiquidosDia);
+  const minEfetivosPerDia = (minLiquidosDia - minNoctLiqPeriodo) + minNoctLiqPeriodo * (60 / 52.5);
+
   let totalMinHE = 0;
   let totalMinHN = 0;
   const distribuicaoMensal = {};
@@ -345,7 +363,8 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp, feriadosAdicionais =
 
       if (diasSemana.includes(diaSemana) && !afastado) {
         if (!semanas[iso]) semanas[iso] = { minTotal: 0, mes };
-        semanas[iso].minTotal += minLiquidosDia;
+        // Usa minutos efetivos (com redução noturna) para comparar com limite semanal
+        semanas[iso].minTotal += minEfetivosPerDia;
       }
       curr2 = addDays(curr2, 1);
     }
