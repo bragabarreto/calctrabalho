@@ -28,28 +28,49 @@ function formatMin(min) {
 const NOMES_DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const ORDEM_DIAS = [1, 2, 3, 4, 5, 6, 0]; // Seg → Dom
 
-function SemanaPadrao({ periodo }) {
+function calcMinNoturnos(entradaMin, saidaMin) {
+  const saidaEfetiva = saidaMin < entradaMin ? saidaMin + 1440 : saidaMin;
+  const s1 = Math.min(saidaEfetiva, 1440) - Math.max(entradaMin, 1320); // 22h–meia-noite
+  const s2 = Math.min(saidaEfetiva, 1740) - Math.max(entradaMin, 1440); // 0h–5h (escala +1440)
+  return (s1 > 0 ? s1 : 0) + (s2 > 0 ? s2 : 0);
+}
+
+function SemanaPadrao({ periodo, salario, verbasConfig }) {
   const {
     horaEntrada, horaSaida, intervaloMinutos = 60,
     diasSemana = [1, 2, 3, 4, 5], divisorJornada = 220, padraoApuracao = 'diario',
     horasJornadaPadrao12x36 = 12,
+    adicionalHoraExtra = 0.5, adicionalHoraNoturna = 0.2,
   } = periodo;
 
   if (!horaEntrada || !horaSaida) return null;
 
+  const sal = salario || 0;
   const entradaMin = toMinutos(horaEntrada);
   const saidaMin = toMinutos(horaSaida);
-  const minLiquidosDia = Math.max(0, (saidaMin - entradaMin) - (intervaloMinutos || 0));
+  const minBrutosDia = saidaMin >= entradaMin ? saidaMin - entradaMin : (1440 - entradaMin) + saidaMin;
+  const minLiquidosDia = Math.max(0, minBrutosDia - (intervaloMinutos || 0));
 
-  // Relação: divisor = horasSemanais × 5 (Súmula TST 431)
+  // Intervalo legal e déficit
+  const intervaloLegalMin = minBrutosDia > 360 ? 60 : minBrutosDia > 240 ? 15 : 0;
+  const intervaloDeficitDia = Math.max(0, intervaloLegalMin - (intervaloMinutos || 0));
+
+  // Minutos noturnos por dia
+  const minNocturnos = calcMinNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440);
+
   const horasSemanais = divisorJornada / 5;
   const minContratualSemana = horasSemanais * 60;
   const minContratualDia = diasSemana.length > 0 ? minContratualSemana / diasSemana.length : 0;
+  const diasUteisMedia = diasSemana.length * 4.33;
+  const valorHora = sal > 0 ? sal / divisorJornada : 0;
 
   if (padraoApuracao === '12x36') {
-    const minEfetivoDia = minLiquidosDia;
     const minPadraoTurno = horasJornadaPadrao12x36 * 60;
-    const heMinTurno = Math.max(0, minEfetivoDia - minPadraoTurno);
+    const heMinTurno = Math.max(0, minLiquidosDia - minPadraoTurno);
+    const valorHEMensal = valorHora * (1 + adicionalHoraExtra) * (heMinTurno / 60) * 15;
+    const valorANMensal = valorHora * adicionalHoraNoturna * (60 / 52.5) * (minNocturnos / 60) * 15;
+    const intraAtivo = (verbasConfig?.intrajornadaModo || 'automatico') !== 'desabilitado';
+    const valorIntraMensal = intraAtivo ? valorHora * (1 + adicionalHoraExtra) * (intervaloDeficitDia / 60) * 15 : 0;
     return (
       <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-xs font-medium text-blue-800 mb-2">Regime 12×36 — Ciclo padrão</p>
@@ -57,7 +78,7 @@ function SemanaPadrao({ periodo }) {
           <div className="flex-1 p-2 bg-blue-100 rounded text-center">
             <p className="text-sm font-bold text-blue-900">{horasJornadaPadrao12x36}h padrão</p>
             <p className="text-xs text-blue-700">Turno contratual</p>
-            <p className="text-xs text-blue-600 font-mono">{horaEntrada} → {horaSaida} ({formatMin(minEfetivoDia)} efetivo)</p>
+            <p className="text-xs text-blue-600 font-mono">{horaEntrada} → {horaSaida} ({formatMin(minLiquidosDia)} efetivo)</p>
           </div>
           <div className="flex-1 p-2 bg-gray-100 rounded text-center">
             <p className="text-sm font-bold text-gray-600">36h</p>
@@ -65,10 +86,16 @@ function SemanaPadrao({ periodo }) {
             <p className="text-xs text-gray-400">~15 turnos/mês</p>
           </div>
         </div>
-        {heMinTurno > 0 && (
-          <p className="text-xs text-amber-700 mt-2 font-medium">
-            HE/turno: {formatMin(heMinTurno)} × ~15 turnos ≈ {formatMin(heMinTurno * 15)}/mês
-          </p>
+        {heMinTurno > 0 && <p className="text-xs text-amber-700 mt-2 font-medium">HE/turno: {formatMin(heMinTurno)} × ~15 ≈ {formatMin(heMinTurno * 15)}/mês</p>}
+        {minNocturnos > 0 && <p className="text-xs text-indigo-700 mt-1">AN/turno: {formatMin(minNocturnos)} noturno × ~15</p>}
+        {intervaloDeficitDia > 0 && intraAtivo && <p className="text-xs text-orange-700 mt-1">Intrajornada: {formatMin(intervaloDeficitDia)} déficit/turno × ~15</p>}
+        {sal > 0 && (heMinTurno > 0 || minNocturnos > 0 || (intervaloDeficitDia > 0 && intraAtivo)) && (
+          <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-0.5">
+            <p className="font-semibold text-amber-800">Estimativa /mês:</p>
+            {heMinTurno > 0 && <p>HE: <strong>{fmt2(valorHEMensal)}</strong></p>}
+            {minNocturnos > 0 && <p>AN: <strong>{fmt2(valorANMensal)}</strong></p>}
+            {intervaloDeficitDia > 0 && intraAtivo && <p>Intrajornada: <strong>{fmt2(valorIntraMensal)}</strong></p>}
+          </div>
         )}
       </div>
     );
@@ -99,6 +126,17 @@ function SemanaPadrao({ periodo }) {
   const totalHEMin = somaHEDiariasMin + heSemanalAdicionalMin;
 
   const mostraColHE = padraoApuracao === 'diario' || padraoApuracao === 'misto';
+  const mostraColAN = minNocturnos > 0;
+  const intraAtivo = (verbasConfig?.intrajornadaModo || 'automatico') !== 'desabilitado';
+  const mostraColIntra = intervaloDeficitDia > 0 && intraAtivo;
+  const numCols = 4 + (mostraColHE ? 1 : 0) + (mostraColAN ? 1 : 0) + (mostraColIntra ? 1 : 0);
+
+  // Estimativas monetárias mensais
+  const valorHEMensal = padraoApuracao === 'semanal'
+    ? valorHora * (1 + adicionalHoraExtra) * (totalHEMin / 60) * 4.33
+    : valorHora * (1 + adicionalHoraExtra) * (totalHEMin / 60) * 4.33;
+  const valorANMensal = valorHora * adicionalHoraNoturna * (60 / 52.5) * (minNocturnos / 60) * diasUteisMedia;
+  const valorIntraMensal = valorHora * (1 + adicionalHoraExtra) * (intervaloDeficitDia / 60) * diasUteisMedia;
 
   return (
     <div className="mt-3">
@@ -111,7 +149,9 @@ function SemanaPadrao({ periodo }) {
               <th className="px-2 py-1.5 text-center text-gray-600">Entrada</th>
               <th className="px-2 py-1.5 text-center text-gray-600">Saída</th>
               <th className="px-2 py-1.5 text-center text-gray-600">Horas</th>
-              {mostraColHE && <th className="px-2 py-1.5 text-center text-gray-600">HE diária</th>}
+              {mostraColHE && <th className="px-2 py-1.5 text-center text-orange-600">HE</th>}
+              {mostraColAN && <th className="px-2 py-1.5 text-center text-indigo-600">AN</th>}
+              {mostraColIntra && <th className="px-2 py-1.5 text-center text-red-600">Intra</th>}
             </tr>
           </thead>
           <tbody>
@@ -126,6 +166,16 @@ function SemanaPadrao({ periodo }) {
                     {trabalha ? (heMin > 0 ? formatMin(heMin) : '—') : '—'}
                   </td>
                 )}
+                {mostraColAN && (
+                  <td className="px-2 py-1 text-center text-indigo-600">
+                    {trabalha ? formatMin(minNocturnos) : '—'}
+                  </td>
+                )}
+                {mostraColIntra && (
+                  <td className="px-2 py-1 text-center text-red-600 font-medium">
+                    {trabalha ? formatMin(intervaloDeficitDia) : '—'}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -133,34 +183,36 @@ function SemanaPadrao({ periodo }) {
             <tr className="bg-gray-100 border-t-2 border-gray-300 font-medium">
               <td colSpan={3} className="px-2 py-1.5 text-gray-700">Total semana</td>
               <td className="px-2 py-1.5 text-center">{formatMin(somaDiasMin)}</td>
-              {mostraColHE && (
-                <td className={`px-2 py-1.5 text-center ${somaHEDiariasMin > 0 ? 'text-orange-600' : ''}`}>
-                  {somaHEDiariasMin > 0 ? formatMin(somaHEDiariasMin) : '—'}
-                </td>
-              )}
+              {mostraColHE && <td className={`px-2 py-1.5 text-center ${somaHEDiariasMin > 0 ? 'text-orange-600' : ''}`}>{somaHEDiariasMin > 0 ? formatMin(somaHEDiariasMin) : '—'}</td>}
+              {mostraColAN && <td className="px-2 py-1.5 text-center text-indigo-600">{formatMin(minNocturnos * diasSemana.length)}</td>}
+              {mostraColIntra && <td className="px-2 py-1.5 text-center text-red-600">{formatMin(intervaloDeficitDia * diasSemana.length)}</td>}
             </tr>
             {heSemanalAdicionalMin > 0 && (
               <tr className="bg-orange-50">
-                <td colSpan={mostraColHE ? 5 : 4} className="px-2 py-1 text-xs text-orange-700">
+                <td colSpan={numCols} className="px-2 py-1 text-xs text-orange-700">
                   + {formatMin(heSemanalAdicionalMin)} HE semanal (excesso sobre {formatMin(Math.round(minContratualSemana))} contratual)
                 </td>
               </tr>
             )}
             {totalHEMin > 0 && (
               <tr className="bg-orange-100">
-                <td colSpan={mostraColHE ? 4 : 3} className="px-2 py-1 text-xs font-bold text-orange-800">HE total/semana</td>
-                <td className="px-2 py-1 text-center text-xs font-bold text-orange-800">
-                  {formatMin(totalHEMin)} ≈ {(totalHEMin / 60).toFixed(2)}h
-                </td>
+                <td colSpan={numCols - 1} className="px-2 py-1 text-xs font-bold text-orange-800">HE total/semana</td>
+                <td className="px-2 py-1 text-center text-xs font-bold text-orange-800">{formatMin(totalHEMin)} ≈ {(totalHEMin / 60).toFixed(2)}h</td>
               </tr>
             )}
           </tfoot>
         </table>
       </div>
       {padraoApuracao === 'semanal' && (
-        <p className="text-xs text-gray-400 mt-1">
-          HE apuradas somente quando o total semanal excede o limite contratual ({formatMin(Math.round(minContratualSemana))}).
-        </p>
+        <p className="text-xs text-gray-400 mt-1">HE apuradas somente quando o total semanal excede o limite contratual ({formatMin(Math.round(minContratualSemana))}).</p>
+      )}
+      {sal > 0 && (totalHEMin > 0 || minNocturnos > 0 || (mostraColIntra)) && (
+        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-0.5">
+          <p className="font-semibold text-amber-800">Estimativa /mês (semana padrão × 4,33):</p>
+          {totalHEMin > 0 && <p>HE: <strong>{fmt2(valorHEMensal)}</strong> ({(totalHEMin/60).toFixed(2)}h/sem × {Math.round((1+adicionalHoraExtra)*100)}% × 4,33)</p>}
+          {minNocturnos > 0 && <p>AN: <strong>{fmt2(valorANMensal)}</strong> ({(minNocturnos/60).toFixed(2)}h noturno/dia × {diasSemana.length} dias × {Math.round(adicionalHoraNoturna*100)}%)</p>}
+          {mostraColIntra && <p>Intrajornada: <strong>{fmt2(valorIntraMensal)}</strong> ({(intervaloDeficitDia/60).toFixed(2)}h déficit/dia × {diasSemana.length} dias)</p>}
+        </div>
       )}
     </div>
   );
@@ -203,6 +255,8 @@ function novoPeriodo(dataAdmissao, dataDispensa) {
     // Resultado cartão
     totalHorasExtras: null,
     totalHorasNoturnas: null,
+    horasIntraTotal: null,
+    horasInterTotal: null,
     distribuicaoMensal: null,
   };
 }
@@ -298,7 +352,7 @@ function normalizarHorasMedio(periodo) {
 
 function fmt2(v) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
-function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa, podRemover, salario }) {
+function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa, podRemover, salario, verbasConfig }) {
   const [aberto, setAberto] = useState(true);
   const [demoMedio, setDemoMedio] = useState(null);
   const { mutateAsync: calcPonto, isPending: calculando } = useMutation({ mutationFn: calcularCartaoPonto });
@@ -309,16 +363,77 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
     const adicHE = periodo.adicionalHoraExtra ?? 0.5;
     const adicAN = periodo.adicionalHoraNoturna ?? 0.2;
     const sal = salario || 0;
-    const diasUteis = 21.75;
+    const diasUteis = (periodo.diasSemana?.length || 5) * 4.33;
+    const valorHora = sal / div;
+    const vc = verbasConfig || {};
+
     let heMensal = 0;
     if (periodo.padraoApuracao === 'diario' || periodo.padraoApuracao === 'misto') heMensal += heDia * diasUteis;
     if (periodo.padraoApuracao === 'semanal' || periodo.padraoApuracao === 'misto') heMensal += heSemana * 4.33;
     if (periodo.padraoApuracao === '12x36') heMensal += (periodo.mediaHorasExtrasPorTurno || 0) * 15;
     const anMensal = anDia * diasUteis;
-    const valorHora = sal / div;
-    const valorHEMensal = valorHora * (1 + adicHE) * heMensal;
-    const valorANMensal = valorHora * adicAN * (60 / 52.5) * anMensal;
-    setDemoMedio({ heMensal: +heMensal.toFixed(2), anMensal: +anMensal.toFixed(2), valorHEMensal, valorANMensal, sal, div });
+
+    const linhas = [];
+    if (heMensal > 0) linhas.push({ verba: 'Horas Extras', mensal: +heMensal.toFixed(2), valor: valorHora * (1 + adicHE) * heMensal, natureza: 'salarial' });
+    if (anMensal > 0) linhas.push({ verba: 'Adicional Noturno', mensal: +anMensal.toFixed(2), valor: valorHora * adicAN * (60 / 52.5) * anMensal, natureza: 'salarial' });
+
+    // Intrajornada
+    if (vc.intrajornadaModo !== 'desabilitado') {
+      let intraHorasMensal = 0;
+      if (vc.intrajornadaModo === 'manual' && vc.intervaloIntrajornadaMensalHoras > 0) {
+        intraHorasMensal = vc.intervaloIntrajornadaMensalHoras;
+      } else {
+        // automatico: estima pelo horário configurado no período
+        const entMin = toMinutos(periodo.horaEntrada);
+        const saiMin = toMinutos(periodo.horaSaida);
+        const minBrutos = saiMin >= entMin ? saiMin - entMin : (1440 - entMin) + saiMin;
+        const legalMin = minBrutos > 360 ? 60 : minBrutos > 240 ? 15 : 0;
+        const deficit = Math.max(0, legalMin - (periodo.intervaloMinutos || 0));
+        intraHorasMensal = (deficit / 60) * diasUteis;
+      }
+      if (intraHorasMensal > 0) linhas.push({ verba: 'Intervalo Intrajornada', mensal: +intraHorasMensal.toFixed(2), valor: valorHora * (1 + adicHE) * intraHorasMensal, natureza: 'indenizatoria' });
+    }
+
+    // Interjornada
+    if (vc.intervaloInterjornada && vc.mediaInterjornadaMins > 0) {
+      const minsMensal = vc.mediaInterjornadaPeriodo === 'diario' ? vc.mediaInterjornadaMins * diasUteis : vc.mediaInterjornadaMins;
+      if (minsMensal > 0) linhas.push({ verba: 'Intervalo Interjornada', mensal: +(minsMensal / 60).toFixed(2), valor: valorHora * (1 + adicHE) * (minsMensal / 60), natureza: 'indenizatoria' });
+    }
+
+    // RSR
+    if (vc.rsrNaoConcedido && vc.mediaRsrDias > 0) {
+      const diasMensais = vc.mediaRsrPeriodo === 'semanal' ? vc.mediaRsrDias * 4.33 : vc.mediaRsrDias;
+      if (diasMensais > 0) linhas.push({ verba: 'RSR Não Concedido', mensal: +diasMensais.toFixed(2), valor: (sal / 30) * diasMensais, natureza: 'salarial', unidade: 'dias' });
+    }
+
+    // Feriados
+    if (vc.feriadosLaborados && vc.mediaFeriadosDias > 0) {
+      linhas.push({ verba: 'Feriados Laborados', mensal: +vc.mediaFeriadosDias.toFixed(2), valor: (sal / 30) * vc.mediaFeriadosDias, natureza: 'salarial', unidade: 'dias' });
+    }
+
+    // Intervalo Térmico
+    if (vc.intervaloTermico) {
+      const entMin = toMinutos(periodo.horaEntrada);
+      const saiMin = toMinutos(periodo.horaSaida);
+      const minBrutos = saiMin >= entMin ? saiMin - entMin : (1440 - entMin) + saiMin;
+      const exigidoMin = (minBrutos / 60) * 0.2 * 60;
+      const deficit = Math.max(0, exigidoMin - (vc.minIntervaloTermicoConcedido || 0));
+      const horasMensal = (deficit / 60) * diasUteis;
+      if (horasMensal > 0) linhas.push({ verba: 'Intervalo Térmico', mensal: +horasMensal.toFixed(2), valor: valorHora * horasMensal, natureza: 'salarial' });
+    }
+
+    // Intervalo Digitação
+    if (vc.intervaloDigitacao) {
+      const cicloMin = vc.regimeDigitacao === '50min' ? 50 : 90;
+      const entMin = toMinutos(periodo.horaEntrada);
+      const saiMin = toMinutos(periodo.horaSaida);
+      const minBrutos = saiMin >= entMin ? saiMin - entMin : (1440 - entMin) + saiMin;
+      const ciclosPorDia = Math.floor(minBrutos / cicloMin);
+      const horasMensal = Math.max(0, ciclosPorDia * (10 / 60) * diasUteis - (vc.horasIntervaloDigitacaoConcedido || 0));
+      if (horasMensal > 0) linhas.push({ verba: 'Intervalo Digitação', mensal: +horasMensal.toFixed(2), valor: valorHora * horasMensal, natureza: 'salarial' });
+    }
+
+    setDemoMedio({ linhas, sal, div });
   }
 
   function set(campo, valor) {
@@ -350,15 +465,47 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
           horaSaida: periodo.horaSaida,
           intervaloMinutos: periodo.intervaloMinutos,
           diasSemana: periodo.diasSemana,
+          padraoApuracao: periodo.padraoApuracao,
+          horasJornadaPadrao12x36: periodo.horasJornadaPadrao12x36,
+          prorrogacaoNoturna: periodo.prorrogacaoNoturna,
         },
         dataInicio: periodo.dataInicio || dataAdmissao,
         dataFim: periodo.dataFim || dataDispensa,
         afastamentos: (periodo.afastamentos || []).filter(a => a.inicio && a.fim),
         divisorJornada: periodo.divisorJornada || 220,
       });
+
+      // Intrajornada: deficit/dia × total de dias trabalhados
+      const entMin = toMinutos(periodo.horaEntrada);
+      const saiMin = toMinutos(periodo.horaSaida);
+      const minBrutos = saiMin >= entMin ? saiMin - entMin : (1440 - entMin) + saiMin;
+      const intervaloLegal = minBrutos > 360 ? 60 : minBrutos > 240 ? 15 : 0;
+      const intervaloDeficit = Math.max(0, intervaloLegal - (periodo.intervaloMinutos || 0));
+      const totalDias = (res.distribuicaoMensal || []).reduce((s, m) => s + (m.diasTrabalhados || 0), 0);
+      const horasIntraTotal = +(( intervaloDeficit / 60) * totalDias).toFixed(2);
+
+      // Interjornada: apura a partir dos dias do cartão
+      let horasInterTotal = 0;
+      if (verbasConfig?.intervaloInterjornada && (res.dias || []).length > 0) {
+        const MIN_REPOUSO = 660; // 11h em minutos
+        const diasTrab = res.dias.filter(d => d.trabalhado).sort((a, b) => a.data.localeCompare(b.data));
+        for (let i = 1; i < diasTrab.length; i++) {
+          const ant = diasTrab[i - 1], atu = diasTrab[i];
+          const diff = Math.round((new Date(atu.data) - new Date(ant.data)) / 86400000);
+          if (diff === 1) {
+            const repouso = (1440 - ant.minSaida) + atu.minEntrada;
+            if (repouso < MIN_REPOUSO) horasInterTotal += (MIN_REPOUSO - repouso) / 60;
+          }
+        }
+        horasInterTotal = +horasInterTotal.toFixed(2);
+      }
+
       onChange({
         ...periodo,
         totalHorasExtras: res.totalHorasExtras,
+        totalHorasNoturnas: res.totalHorasNoturnas,
+        horasIntraTotal,
+        horasInterTotal,
         distribuicaoMensal: res.distribuicaoMensal,
       });
     } catch (e) {
@@ -560,20 +707,41 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                 className="btn-secundario w-full flex items-center justify-center gap-2 text-sm">
                 <Calendar size={15} /> Apurar Jornada
               </button>
-              {demoMedio && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm space-y-1">
-                  <p className="font-semibold text-blue-800 mb-1">Apuração estimada (por mês):</p>
-                  {demoMedio.heMensal > 0 && (
-                    <div className="flex justify-between text-xs text-blue-700">
-                      <span>Horas Extras — {demoMedio.heMensal}h/mês × {fmt2(demoMedio.sal / demoMedio.div)}/h × {Math.round((periodo.adicionalHoraExtra ?? 0.5) * 100 + 100)}%</span>
-                      <span className="font-medium">{fmt2(demoMedio.valorHEMensal)}</span>
-                    </div>
-                  )}
-                  {demoMedio.anMensal > 0 && (
-                    <div className="flex justify-between text-xs text-blue-700">
-                      <span>Adicional Noturno — {demoMedio.anMensal}h/mês × {Math.round((periodo.adicionalHoraNoturna ?? 0.2) * 100)}%</span>
-                      <span className="font-medium">{fmt2(demoMedio.valorANMensal)}</span>
-                    </div>
+              {demoMedio?.linhas && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                  <p className="font-semibold text-blue-800 mb-2">Apuração estimada — por mês</p>
+                  {demoMedio.linhas.length === 0 ? (
+                    <p className="text-xs text-blue-500 italic">Nenhuma verba com valores a apurar.</p>
+                  ) : (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-gray-500">
+                          <th className="text-left py-0.5">Verba</th>
+                          <th className="text-center py-0.5">Qtde/mês</th>
+                          <th className="text-right py-0.5">Estimativa</th>
+                          <th className="text-right py-0.5">Nat.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {demoMedio.linhas.map((l, i) => (
+                          <tr key={i} className="border-t border-blue-100">
+                            <td className="py-0.5 text-blue-900 font-medium">{l.verba}</td>
+                            <td className="py-0.5 text-center">{l.mensal}{l.unidade === 'dias' ? 'd' : 'h'}</td>
+                            <td className="py-0.5 text-right font-medium">{demoMedio.sal > 0 ? fmt2(l.valor) : '—'}</td>
+                            <td className={`py-0.5 text-right text-xs ${l.natureza === 'salarial' ? 'text-green-600' : 'text-orange-600'}`}>
+                              {l.natureza === 'salarial' ? 'sal.' : 'ind.'}
+                            </td>
+                          </tr>
+                        ))}
+                        {demoMedio.sal > 0 && (
+                          <tr className="border-t-2 border-blue-300 font-bold">
+                            <td colSpan={2} className="py-1 text-blue-900">Total estimado/mês</td>
+                            <td className="py-1 text-right text-blue-900">{fmt2(demoMedio.linhas.reduce((s, l) => s + l.valor, 0))}</td>
+                            <td />
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   )}
                   <p className="text-xs text-blue-500 italic mt-1">Estimativa mensal. Multiplique pelo número de meses do período.</p>
                 </div>
@@ -638,7 +806,7 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                 desc="Horas após 5h, em continuação ao turno noturno, mantêm caráter noturno (ficção legal)"
               />
 
-              <SemanaPadrao periodo={periodo} />
+              <SemanaPadrao periodo={periodo} salario={salario} verbasConfig={verbasConfig} />
 
               {/* Afastamentos */}
               <div>
@@ -678,43 +846,70 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                 {calculando ? 'Calculando...' : 'Apurar Jornada'}
               </button>
 
-              {periodo.totalHorasExtras !== null && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-                  <p className="font-semibold text-green-800 mb-1">
-                    Total apurado: <span className="font-mono">{periodo.totalHorasExtras}h extras</span>
-                  </p>
-                  {salario > 0 && (() => {
-                    const div = periodo.divisorJornada || 220;
-                    const valorHE = (salario / div) * (1 + (periodo.adicionalHoraExtra ?? 0.5)) * periodo.totalHorasExtras;
-                    const numMeses = (periodo.distribuicaoMensal || []).length || 1;
-                    return (
-                      <p className="text-xs text-green-700 mb-1">
-                        Estimativa HE: <strong>{fmt2(valorHE)}</strong>
-                        {' '}({fmt2(valorHE / numMeses)}/mês)
-                      </p>
-                    );
-                  })()}
-                  <div className="space-y-0.5 text-xs text-green-700">
-                    {(periodo.distribuicaoMensal || []).slice(0, 6).map(m => (
-                      <div key={m.mes} className="flex justify-between">
-                        <span>{m.mes}</span>
-                        <span>{m.diasTrabalhados} dias · {m.horasExtras}h HE{m.horasNoturnas > 0 ? ` · ${m.horasNoturnas}h AN` : ''}</span>
+              {periodo.totalHorasExtras !== null && (() => {
+                const div = periodo.divisorJornada || 220;
+                const adicHE = periodo.adicionalHoraExtra ?? 0.5;
+                const adicAN = periodo.adicionalHoraNoturna ?? 0.2;
+                const sal = salario || 0;
+                const valorHora = sal / div;
+                const numMeses = (periodo.distribuicaoMensal || []).length || 1;
+                const vc = verbasConfig || {};
+                const linhas = [];
+                if (periodo.totalHorasExtras > 0) linhas.push({ verba: 'Horas Extras', total: periodo.totalHorasExtras, valor: sal > 0 ? valorHora * (1 + adicHE) * periodo.totalHorasExtras : null, natureza: 'salarial' });
+                if ((periodo.totalHorasNoturnas || 0) > 0) linhas.push({ verba: 'Adicional Noturno', total: periodo.totalHorasNoturnas, valor: sal > 0 ? valorHora * adicAN * (60 / 52.5) * periodo.totalHorasNoturnas : null, natureza: 'salarial' });
+                if ((periodo.horasIntraTotal || 0) > 0 && vc.intrajornadaModo !== 'desabilitado') {
+                  linhas.push({ verba: 'Intervalo Intrajornada', total: periodo.horasIntraTotal, valor: sal > 0 ? valorHora * (1 + adicHE) * periodo.horasIntraTotal : null, natureza: 'indenizatoria' });
+                }
+                if ((periodo.horasInterTotal || 0) > 0) {
+                  linhas.push({ verba: 'Intervalo Interjornada', total: periodo.horasInterTotal, valor: sal > 0 ? valorHora * (1 + adicHE) * periodo.horasInterTotal : null, natureza: 'indenizatoria' });
+                }
+                const totalValor = linhas.filter(l => l.valor !== null).reduce((s, l) => s + l.valor, 0);
+                return (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                    <p className="font-semibold text-green-800 mb-2">Jornada apurada — {numMeses} {numMeses === 1 ? 'mês' : 'meses'}</p>
+                    <table className="w-full text-xs mb-2">
+                      <thead>
+                        <tr className="text-gray-500">
+                          <th className="text-left py-0.5">Verba</th>
+                          <th className="text-center py-0.5">Total</th>
+                          {sal > 0 && <th className="text-right py-0.5">Estimativa</th>}
+                          <th className="text-right py-0.5">Nat.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {linhas.map((l, i) => (
+                          <tr key={i} className="border-t border-green-100">
+                            <td className="py-0.5 text-green-900 font-medium">{l.verba}</td>
+                            <td className="py-0.5 text-center">{l.total.toFixed(2)}h</td>
+                            {sal > 0 && <td className="py-0.5 text-right font-medium">{l.valor !== null ? fmt2(l.valor) : '—'}</td>}
+                            <td className={`py-0.5 text-right text-xs ${l.natureza === 'salarial' ? 'text-green-600' : 'text-orange-600'}`}>
+                              {l.natureza === 'salarial' ? 'sal.' : 'ind.'}
+                            </td>
+                          </tr>
+                        ))}
+                        {sal > 0 && linhas.some(l => l.valor !== null) && (
+                          <tr className="border-t-2 border-green-300 font-bold">
+                            <td colSpan={2} className="py-1 text-green-900">Total estimado</td>
+                            <td className="py-1 text-right text-green-900">{fmt2(totalValor)}</td>
+                            <td />
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <details className="text-xs text-green-700">
+                      <summary className="cursor-pointer text-green-600 hover:text-green-800 mb-1">Ver distribuição mensal</summary>
+                      <div className="space-y-0.5 mt-1">
+                        {(periodo.distribuicaoMensal || []).map(m => (
+                          <div key={m.mes} className="flex justify-between">
+                            <span>{m.mes}</span>
+                            <span>{m.diasTrabalhados} dias · {m.horasExtras}h HE{m.horasNoturnas > 0 ? ` · ${m.horasNoturnas}h AN` : ''}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                    {(periodo.distribuicaoMensal || []).length > 6 && (
-                      <p className="text-green-600 italic">
-                        ... e mais {periodo.distribuicaoMensal.length - 6} meses
-                      </p>
-                    )}
+                    </details>
                   </div>
-                  <p className="text-xs text-green-600 mt-1">
-                    Média mensal:{' '}
-                    <strong>
-                      {((periodo.totalHorasExtras) / ((periodo.distribuicaoMensal || []).length || 1)).toFixed(2)}h/mês
-                    </strong>
-                  </p>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
         </div>
@@ -844,6 +1039,25 @@ export default function HorarioTrabalho() {
 
   const temCartaoPonto = periodos.some(p => p.modoEntrada === 'cartao_ponto');
 
+  const verbasConfig = {
+    intrajornadaModo,
+    intervaloIntrajornadaMensalHoras,
+    intervaloInterjornada,
+    mediaInterjornadaMins,
+    mediaInterjornadaPeriodo,
+    rsrNaoConcedido,
+    mediaRsrDias,
+    mediaRsrPeriodo,
+    feriadosLaborados,
+    mediaFeriadosDias,
+    intervaloTermico,
+    tipoAmbienteTermico,
+    minIntervaloTermicoConcedido,
+    intervaloDigitacao,
+    regimeDigitacao,
+    horasIntervaloDigitacaoConcedido,
+  };
+
   return (
     <div className="max-w-3xl">
       <div className="aviso-judicial mb-4">
@@ -865,6 +1079,7 @@ export default function HorarioTrabalho() {
             dataAdmissao={dados.dataAdmissao}
             dataDispensa={dados.dataDispensa}
             salario={dados.mediaSalarial || dados.ultimoSalario || 0}
+            verbasConfig={verbasConfig}
           />
         ))}
       </div>
