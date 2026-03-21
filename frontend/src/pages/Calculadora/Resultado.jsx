@@ -147,6 +147,13 @@ export default function Resultado() {
 
   const t = resultado.temporal;
 
+  // Prescrição quinquenal: aplica quando o marco (ajuizamento − 5 anos) é posterior à admissão
+  const marcoPrescricional = t?.marcoPrescricional ? new Date(t.marcoPrescricional + 'T12:00:00') : null;
+  const dataAdmissaoDate = dados.dataAdmissao ? new Date(dados.dataAdmissao + 'T12:00:00') : null;
+  const temPrescricao = marcoPrescricional && dataAdmissaoDate && marcoPrescricional > dataAdmissaoDate;
+  const dataInicioCalculo = temPrescricao ? marcoPrescricional : dataAdmissaoDate;
+  const fmtDate = (d) => d ? d.toLocaleDateString('pt-BR') : '—';
+
   return (
     <div className="max-w-5xl space-y-4">
 
@@ -162,11 +169,36 @@ export default function Resultado() {
             )}
             <p className="text-xs text-gray-400 mt-1">
               {MODALIDADE_LABELS[dados.modalidade] || dados.modalidade} —{' '}
-              calculado em {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              calculado em {new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Início do cálculo:{' '}
+              <span className="font-mono font-semibold">{fmtDate(dataInicioCalculo)}</span>
+              {temPrescricao && (
+                <span className="ml-2 text-amber-700">(marco prescricional)</span>
+              )}
             </p>
           </div>
           <ExportBar salvoId={salvoId} onSalvar={handleSalvar} />
         </div>
+
+        {/* Aviso de prescrição quinquenal */}
+        {temPrescricao && (
+          <div className="mt-4 flex items-start gap-2 bg-amber-50 border border-amber-300 rounded-lg px-4 py-3">
+            <span className="text-amber-500 text-base mt-0.5">⚠</span>
+            <div className="text-xs text-amber-800 leading-relaxed">
+              <span className="font-semibold">Prescrição quinquenal aplicada</span> — o contrato de trabalho teve início em{' '}
+              <span className="font-mono font-semibold">{fmtDate(dataAdmissaoDate)}</span>, mas somente os últimos 5 anos
+              anteriores ao ajuizamento (
+              <span className="font-mono font-semibold">
+                {dados.dataAjuizamento ? new Date(dados.dataAjuizamento + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+              </span>
+              ) são exigíveis. O cálculo apura verbas a partir de{' '}
+              <span className="font-mono font-semibold">{fmtDate(marcoPrescricional)}</span>{' '}
+              (art. 7º, XXIX CF — EC 45/2004 — Súmula 308 TST).
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── 2. DADOS DO CONTRATO + PRAZOS (colapsável) ── */}
@@ -183,16 +215,21 @@ export default function Resultado() {
           <div className="px-6 pb-5 border-t border-gray-100">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mt-4">
               <div><p className="campo-label">Admissão</p>
-                <p className="font-mono">{dados.dataAdmissao ? new Date(dados.dataAdmissao + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p></div>
+                <p className="font-mono">{fmtDate(dataAdmissaoDate)}</p></div>
               <div><p className="campo-label">Dispensa</p>
                 <p className="font-mono">{dados.dataDispensa ? new Date(dados.dataDispensa + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p></div>
-              <div><p className="campo-label">Aviso Prévio</p>
-                <p className="font-mono">{dados.avisoPrevioTrabalhado ? 'Trabalhado' : 'Indenizado'} — {t?.diasAvisoPrevio ?? '—'} dias</p></div>
+              <div><p className="campo-label">Ajuizamento</p>
+                <p className="font-mono">{dados.dataAjuizamento ? new Date(dados.dataAjuizamento + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</p></div>
               <div><p className="campo-label">Último Salário</p>
                 <p className="font-mono font-semibold">{formatBRL(dados.ultimoSalario)}</p></div>
+              <div className={temPrescricao ? 'col-span-2 bg-amber-50 rounded p-2 border border-amber-200' : ''}>
+                <p className="campo-label">Início do cálculo</p>
+                <p className="font-mono font-semibold">{fmtDate(dataInicioCalculo)}</p>
+                {temPrescricao && <p className="text-xs text-amber-700 mt-0.5">Marco prescricional (5 anos antes do ajuizamento)</p>}
+              </div>
               {t && <>
-                <div><p className="campo-label">Marco Prescricional</p>
-                  <p className="font-mono">{t.marcoPrescricional ? new Date(t.marcoPrescricional).toLocaleDateString('pt-BR') : '—'}</p></div>
+                <div><p className="campo-label">Aviso Prévio</p>
+                  <p className="font-mono">{dados.avisoPrevioTrabalhado ? 'Trabalhado' : 'Indenizado'} — {t?.diasAvisoPrevio ?? '—'} dias</p></div>
                 <div><p className="campo-label">Lapso c/ aviso</p>
                   <p className="font-mono">{t.lapsoComAviso?.meses} meses</p></div>
                 <div><p className="campo-label">Lapso s/ aviso</p>
