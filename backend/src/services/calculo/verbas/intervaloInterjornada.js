@@ -21,7 +21,30 @@ function calcularIntervaloInterjornada(dados, temporal, diasCartao) {
     return { valor: 0, excluida: false, memoria: { motivo: 'Intervalo interjornada não habilitado' } };
   }
   if (!diasCartao || diasCartao.length === 0) {
-    return { valor: 0, excluida: false, memoria: { motivo: 'Requer cartão de ponto (modoEntrada = cartao_ponto)' } };
+    // Modo médio: usa mediaInterjornadaMinsMensais (normalizado no frontend)
+    const minsMensais = dados.mediaInterjornadaMinsMensais || 0;
+    if (!minsMensais) {
+      return { valor: 0, excluida: false, memoria: { motivo: 'Requer cartão de ponto ou informe a média de minutos de interjornada por mês' } };
+    }
+    const meses = temporal.lapsoSemAviso.meses || 1;
+    const M0 = dados.mediaSalarial || dados.ultimoSalario || 0;
+    const D0 = dados.divisorJornada || 220;
+    const adic = dados.adicionalHoraExtra ?? 0.5;
+    const valorHora = round2((M0 / D0) * (1 + adic));
+    const horas = +(minsMensais / 60).toFixed(4);
+    const valor = round2(valorHora * horas * meses);
+    return {
+      valor,
+      excluida: false,
+      natureza: 'indenizatoria',
+      memoria: {
+        formula: `R$ ${valorHora.toFixed(2)}/h × ${horas}h/mês × ${meses} meses = R$ ${valor.toFixed(2)} (modo médio)`,
+        minsMensais,
+        horas,
+        meses,
+        aviso: 'Natureza indenizatória — sem reflexos (OJ 355 SDI-1 TST + CLT art. 66)',
+      },
+    };
   }
 
   const M = dados.mediaSalarial || dados.ultimoSalario || 0;

@@ -188,6 +188,10 @@ function novoPeriodo(dataAdmissao, dataDispensa) {
     mediaHorasExtrasSemanais: 0,
     mediaHorasExtrasPorTurno: 0,
     mediaHorasNoturnasDiarias: 0,
+    mediaHEUnidade: 'h',
+    mediaHEPeriodo: 'diario',
+    mediaANUnidade: 'h',
+    mediaANPeriodo: 'diario',
     // Cartão ponto
     horaEntrada: '08:00',
     horaSaida: '17:00',
@@ -265,9 +269,57 @@ function SecaoJornada({ titulo, badge, ativo, onToggleAtivo, children }) {
   );
 }
 
-function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa, podRemover }) {
+function normalizarHorasMedio(periodo) {
+  const toH = (v, u) => (u === 'min' ? v / 60 : v);
+  const hEPeriodo = periodo.mediaHEPeriodo || 'diario';
+  const hEUnidade = periodo.mediaHEUnidade || 'h';
+  const hEDia = (() => {
+    const raw = toH(periodo.mediaHorasExtrasDiarias || 0, hEUnidade);
+    if (hEPeriodo === 'semanal') return raw / 5;
+    if (hEPeriodo === 'mensal') return raw / 21.75;
+    return raw;
+  })();
+  const hESem = (() => {
+    const raw = toH(periodo.mediaHorasExtrasSemanais || 0, hEUnidade);
+    if (hEPeriodo === 'diario') return raw * 5;
+    if (hEPeriodo === 'mensal') return raw / 4.33;
+    return raw;
+  })();
+  const anUnidade = periodo.mediaANUnidade || 'h';
+  const anPeriodo = periodo.mediaANPeriodo || 'diario';
+  const anDia = (() => {
+    const raw = toH(periodo.mediaHorasNoturnasDiarias || 0, anUnidade);
+    if (anPeriodo === 'semanal') return raw / 5;
+    if (anPeriodo === 'mensal') return raw / 21.75;
+    return raw;
+  })();
+  return { heDia: hEDia, heSemana: hESem, anDia };
+}
+
+function fmt2(v) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa, podRemover, salario }) {
   const [aberto, setAberto] = useState(true);
+  const [demoMedio, setDemoMedio] = useState(null);
   const { mutateAsync: calcPonto, isPending: calculando } = useMutation({ mutationFn: calcularCartaoPonto });
+
+  function apurarMedio() {
+    const { heDia, heSemana, anDia } = normalizarHorasMedio(periodo);
+    const div = periodo.divisorJornada || 220;
+    const adicHE = periodo.adicionalHoraExtra ?? 0.5;
+    const adicAN = periodo.adicionalHoraNoturna ?? 0.2;
+    const sal = salario || 0;
+    const diasUteis = 21.75;
+    let heMensal = 0;
+    if (periodo.padraoApuracao === 'diario' || periodo.padraoApuracao === 'misto') heMensal += heDia * diasUteis;
+    if (periodo.padraoApuracao === 'semanal' || periodo.padraoApuracao === 'misto') heMensal += heSemana * 4.33;
+    if (periodo.padraoApuracao === '12x36') heMensal += (periodo.mediaHorasExtrasPorTurno || 0) * 15;
+    const anMensal = anDia * diasUteis;
+    const valorHora = sal / div;
+    const valorHEMensal = valorHora * (1 + adicHE) * heMensal;
+    const valorANMensal = valorHora * adicAN * (60 / 52.5) * anMensal;
+    setDemoMedio({ heMensal: +heMensal.toFixed(2), anMensal: +anMensal.toFixed(2), valorHEMensal, valorANMensal, sal, div });
+  }
 
   function set(campo, valor) {
     onChange({ ...periodo, [campo]: valor });
@@ -438,23 +490,42 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
           {periodo.modoEntrada === 'medio' && (
             <div className="bg-gray-50 rounded-lg p-3 space-y-3">
               <p className="text-xs text-gray-500 flex items-center gap-1">
-                <Info size={12} /> Informe as médias habituais de horas extras e noturnas.
+                <Info size={12} /> Informe as médias habituais. Selecione a unidade e o período de referência.
               </p>
+              {/* Seletores globais de unidade e período para HE */}
+              {periodo.padraoApuracao !== '12x36' && (
+                <div className="flex flex-wrap gap-3 items-center text-xs text-gray-600">
+                  <span className="font-medium">Unidade HE:</span>
+                  {['h', 'min'].map(u => (
+                    <button key={u} type="button" onClick={() => set('mediaHEUnidade', u)}
+                      className={`px-2 py-0.5 rounded border transition-colors ${(periodo.mediaHEUnidade || 'h') === u ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-500'}`}>{u}</button>
+                  ))}
+                  <span className="font-medium ml-2">Período HE:</span>
+                  {[['diario','dia'],['semanal','semana'],['mensal','mês']].map(([v, l]) => (
+                    <button key={v} type="button" onClick={() => set('mediaHEPeriodo', v)}
+                      className={`px-2 py-0.5 rounded border transition-colors ${(periodo.mediaHEPeriodo || 'diario') === v ? 'border-indigo-400 bg-indigo-50 text-indigo-700 font-medium' : 'border-gray-200 text-gray-500'}`}>{l}</button>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {(periodo.padraoApuracao === 'diario' || periodo.padraoApuracao === 'misto') && (
                   <div>
-                    <label className="campo-label">Média de HE por dia (h)</label>
+                    <label className="campo-label">
+                      HE por {['semanal','mensal'].includes(periodo.mediaHEPeriodo) ? periodo.mediaHEPeriodo === 'semanal' ? 'semana' : 'mês' : 'dia'} ({periodo.mediaHEUnidade || 'h'})
+                    </label>
                     <input type="number" value={periodo.mediaHorasExtrasDiarias}
                       onChange={e => set('mediaHorasExtrasDiarias', Number(e.target.value))}
-                      className="campo-input" step="0.25" min="0" />
+                      className="campo-input" step={periodo.mediaHEUnidade === 'min' ? 5 : 0.25} min="0" />
                   </div>
                 )}
                 {(periodo.padraoApuracao === 'semanal' || periodo.padraoApuracao === 'misto') && (
                   <div>
-                    <label className="campo-label">Média de HE por semana (h)</label>
+                    <label className="campo-label">
+                      HE por {['diario','mensal'].includes(periodo.mediaHEPeriodo) ? periodo.mediaHEPeriodo === 'diario' ? 'dia' : 'mês' : 'semana'} ({periodo.mediaHEUnidade || 'h'})
+                    </label>
                     <input type="number" value={periodo.mediaHorasExtrasSemanais}
                       onChange={e => set('mediaHorasExtrasSemanais', Number(e.target.value))}
-                      className="campo-input" step="0.25" min="0" />
+                      className="campo-input" step={periodo.mediaHEUnidade === 'min' ? 5 : 0.25} min="0" />
                   </div>
                 )}
                 {periodo.padraoApuracao === '12x36' && (
@@ -467,12 +538,46 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                   </div>
                 )}
                 <div>
-                  <label className="campo-label">Média de horas noturnas por dia (h)</label>
+                  <div className="flex flex-wrap gap-2 items-center mb-1">
+                    <label className="campo-label mb-0">AN por {(periodo.mediaANPeriodo || 'diario') === 'diario' ? 'dia' : (periodo.mediaANPeriodo === 'semanal' ? 'semana' : 'mês')} ({periodo.mediaANUnidade || 'h'})</label>
+                    <div className="flex gap-1 ml-auto">
+                      {['h','min'].map(u => (
+                        <button key={u} type="button" onClick={() => set('mediaANUnidade', u)}
+                          className={`px-1.5 py-0 text-xs rounded border transition-colors ${(periodo.mediaANUnidade || 'h') === u ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>{u}</button>
+                      ))}
+                      {[['diario','d'],['semanal','s'],['mensal','m']].map(([v,l]) => (
+                        <button key={v} type="button" onClick={() => set('mediaANPeriodo', v)}
+                          className={`px-1.5 py-0 text-xs rounded border transition-colors ${(periodo.mediaANPeriodo || 'diario') === v ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 text-gray-500'}`}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
                   <input type="number" value={periodo.mediaHorasNoturnasDiarias}
                     onChange={e => set('mediaHorasNoturnasDiarias', Number(e.target.value))}
-                    className="campo-input" step="0.25" min="0" />
+                    className="campo-input" step={periodo.mediaANUnidade === 'min' ? 5 : 0.25} min="0" />
                 </div>
               </div>
+              <button type="button" onClick={apurarMedio}
+                className="btn-secundario w-full flex items-center justify-center gap-2 text-sm">
+                <Calendar size={15} /> Apurar Jornada
+              </button>
+              {demoMedio && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm space-y-1">
+                  <p className="font-semibold text-blue-800 mb-1">Apuração estimada (por mês):</p>
+                  {demoMedio.heMensal > 0 && (
+                    <div className="flex justify-between text-xs text-blue-700">
+                      <span>Horas Extras — {demoMedio.heMensal}h/mês × {fmt2(demoMedio.sal / demoMedio.div)}/h × {Math.round((periodo.adicionalHoraExtra ?? 0.5) * 100 + 100)}%</span>
+                      <span className="font-medium">{fmt2(demoMedio.valorHEMensal)}</span>
+                    </div>
+                  )}
+                  {demoMedio.anMensal > 0 && (
+                    <div className="flex justify-between text-xs text-blue-700">
+                      <span>Adicional Noturno — {demoMedio.anMensal}h/mês × {Math.round((periodo.adicionalHoraNoturna ?? 0.2) * 100)}%</span>
+                      <span className="font-medium">{fmt2(demoMedio.valorANMensal)}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-blue-500 italic mt-1">Estimativa mensal. Multiplique pelo número de meses do período.</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -570,7 +675,7 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
               <button type="button" onClick={calcular} disabled={calculando}
                 className="btn-secundario w-full flex items-center justify-center gap-2 disabled:opacity-50">
                 <Calendar size={15} />
-                {calculando ? 'Calculando...' : 'Calcular Horas Extras pela Jornada'}
+                {calculando ? 'Calculando...' : 'Apurar Jornada'}
               </button>
 
               {periodo.totalHorasExtras !== null && (
@@ -578,11 +683,22 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                   <p className="font-semibold text-green-800 mb-1">
                     Total apurado: <span className="font-mono">{periodo.totalHorasExtras}h extras</span>
                   </p>
+                  {salario > 0 && (() => {
+                    const div = periodo.divisorJornada || 220;
+                    const valorHE = (salario / div) * (1 + (periodo.adicionalHoraExtra ?? 0.5)) * periodo.totalHorasExtras;
+                    const numMeses = (periodo.distribuicaoMensal || []).length || 1;
+                    return (
+                      <p className="text-xs text-green-700 mb-1">
+                        Estimativa HE: <strong>{fmt2(valorHE)}</strong>
+                        {' '}({fmt2(valorHE / numMeses)}/mês)
+                      </p>
+                    );
+                  })()}
                   <div className="space-y-0.5 text-xs text-green-700">
                     {(periodo.distribuicaoMensal || []).slice(0, 6).map(m => (
                       <div key={m.mes} className="flex justify-between">
                         <span>{m.mes}</span>
-                        <span>{m.diasTrabalhados} dias · {m.horasExtras}h HE</span>
+                        <span>{m.diasTrabalhados} dias · {m.horasExtras}h HE{m.horasNoturnas > 0 ? ` · ${m.horasNoturnas}h AN` : ''}</span>
                       </div>
                     ))}
                     {(periodo.distribuicaoMensal || []).length > 6 && (
@@ -623,10 +739,15 @@ export default function HorarioTrabalho() {
   const [intervaloIntrajornadaMensalHoras, setIntervaloIntrajornadaMensalHoras] = useState(dados.intervaloIntrajornadaMensalHoras || 0);
 
   const [intervaloInterjornada, setIntervaloInterjornada] = useState(dados.intervaloInterjornada || false);
+  const [mediaInterjornadaMins, setMediaInterjornadaMins] = useState(dados.mediaInterjornadaMins || 0);
+  const [mediaInterjornadaPeriodo, setMediaInterjornadaPeriodo] = useState(dados.mediaInterjornadaPeriodo || 'diario');
 
   const [rsrNaoConcedido, setRsrNaoConcedido] = useState(dados.rsrNaoConcedido || false);
+  const [mediaRsrDias, setMediaRsrDias] = useState(dados.mediaRsrDias || 0);
+  const [mediaRsrPeriodo, setMediaRsrPeriodo] = useState(dados.mediaRsrPeriodo || 'semanal');
 
   const [feriadosLaborados, setFeriadosLaborados] = useState(dados.feriadosLaborados || false);
+  const [mediaFeriadosDias, setMediaFeriadosDias] = useState(dados.mediaFeriadosDias || 0);
   const [feriadosAdicionais, setFeriadosAdicionais] = useState(dados.feriadosAdicionais || []);
 
   const [intervaloTermico, setIntervaloTermico] = useState(dados.intervaloTermico || false);
@@ -660,14 +781,56 @@ export default function HorarioTrabalho() {
   }
 
   function salvarEIr(step) {
+    // Normaliza os períodos médio: converte unidade/período para os valores esperados pelo backend
+    const periodosNormalizados = periodos.map(p => {
+      if (p.modoEntrada !== 'medio') return p;
+      const toH = (v, u) => u === 'min' ? v / 60 : v;
+      const heDia = (() => {
+        const raw = toH(p.mediaHorasExtrasDiarias || 0, p.mediaHEUnidade);
+        if ((p.mediaHEPeriodo || 'diario') === 'semanal') return raw / 5;
+        if ((p.mediaHEPeriodo || 'diario') === 'mensal') return raw / 21.75;
+        return raw;
+      })();
+      const heSem = (() => {
+        const raw = toH(p.mediaHorasExtrasSemanais || 0, p.mediaHEUnidade);
+        if ((p.mediaHEPeriodo || 'diario') === 'diario') return raw * 5;
+        if ((p.mediaHEPeriodo || 'diario') === 'mensal') return raw / 4.33;
+        return raw;
+      })();
+      const anDia = (() => {
+        const raw = toH(p.mediaHorasNoturnasDiarias || 0, p.mediaANUnidade);
+        if ((p.mediaANPeriodo || 'diario') === 'semanal') return raw / 5;
+        if ((p.mediaANPeriodo || 'diario') === 'mensal') return raw / 21.75;
+        return raw;
+      })();
+      return { ...p, mediaHorasExtrasDiarias: +heDia.toFixed(4), mediaHorasExtrasSemanais: +heSem.toFixed(4), mediaHorasNoturnasDiarias: +anDia.toFixed(4) };
+    });
+
+    // Normaliza RSR médio para dias/mês
+    const mediaRsrDiasMensais = mediaRsrPeriodo === 'semanal' ? mediaRsrDias * 4.33 : mediaRsrDias;
+    // Normaliza feriados médio para dias/mês
+    const mediaFeriadosDiasMensais = mediaFeriadosDias;
+    // Normaliza interjornada médio para minutos/mês
+    const mediaInterjornadaMinsMensais = mediaInterjornadaPeriodo === 'diario'
+      ? mediaInterjornadaMins * 21.75
+      : mediaInterjornadaMins;
+
     setDados({
-      jornadaPeriodos: periodos,
+      jornadaPeriodos: periodosNormalizados,
       adicionalNoturnoOJ97,
       intrajornadaModo,
       intervaloIntrajornadaMensalHoras,
       intervaloInterjornada,
+      mediaInterjornadaMins,
+      mediaInterjornadaPeriodo,
+      mediaInterjornadaMinsMensais,
       rsrNaoConcedido,
+      mediaRsrDias,
+      mediaRsrPeriodo,
+      mediaRsrDiasMensais,
       feriadosLaborados,
+      mediaFeriadosDias,
+      mediaFeriadosDiasMensais,
       feriadosAdicionais: feriadosAdicionais.filter(Boolean),
       intervaloTermico,
       tipoAmbienteTermico,
@@ -701,6 +864,7 @@ export default function HorarioTrabalho() {
             podRemover={periodos.length > 1}
             dataAdmissao={dados.dataAdmissao}
             dataDispensa={dados.dataDispensa}
+            salario={dados.mediaSalarial || dados.ultimoSalario || 0}
           />
         ))}
       </div>
@@ -789,9 +953,20 @@ export default function HorarioTrabalho() {
             Violação apurada via cartão de ponto. Natureza indenizatória — sem reflexos (OJ 355 SDI-1 TST).
           </p>
           {!temCartaoPonto && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
-              * Requer cartão de ponto virtual. Configure ao menos um período no modo cartão.
-            </p>
+            <div className="space-y-2 border border-amber-200 bg-amber-50 rounded p-2">
+              <p className="text-xs text-amber-700 font-medium">Sem cartão de ponto — informe a média de minutos de interjornada suprimidos.</p>
+              <div className="flex gap-2 items-center flex-wrap">
+                <input type="number" value={mediaInterjornadaMins}
+                  onChange={e => setMediaInterjornadaMins(Number(e.target.value))}
+                  className="campo-input w-24" min="0" step="5" />
+                <span className="text-xs text-gray-500">min por</span>
+                <select value={mediaInterjornadaPeriodo} onChange={e => setMediaInterjornadaPeriodo(e.target.value)}
+                  className="campo-input text-sm w-auto">
+                  <option value="diario">dia trabalhado</option>
+                  <option value="mensal">mês</option>
+                </select>
+              </div>
+            </div>
           )}
         </SecaoJornada>
 
@@ -807,9 +982,20 @@ export default function HorarioTrabalho() {
             RSR trabalhados apurados via cartão de ponto. Natureza salarial — com reflexos.
           </p>
           {!temCartaoPonto && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
-              * Requer cartão de ponto virtual. Configure ao menos um período no modo cartão.
-            </p>
+            <div className="space-y-2 border border-amber-200 bg-amber-50 rounded p-2">
+              <p className="text-xs text-amber-700 font-medium">Sem cartão de ponto — informe a média de RSR trabalhados.</p>
+              <div className="flex gap-2 items-center flex-wrap">
+                <input type="number" value={mediaRsrDias}
+                  onChange={e => setMediaRsrDias(Number(e.target.value))}
+                  className="campo-input w-20" min="0" step="0.5" />
+                <span className="text-xs text-gray-500">dias por</span>
+                <select value={mediaRsrPeriodo} onChange={e => setMediaRsrPeriodo(e.target.value)}
+                  className="campo-input text-sm w-auto">
+                  <option value="semanal">semana</option>
+                  <option value="mensal">mês</option>
+                </select>
+              </div>
+            </div>
           )}
         </SecaoJornada>
 
@@ -850,9 +1036,15 @@ export default function HorarioTrabalho() {
             )}
           </div>
           {!temCartaoPonto && (
-            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 p-2 rounded">
-              * Requer cartão de ponto virtual. Configure ao menos um período no modo cartão.
-            </p>
+            <div className="space-y-2 border border-amber-200 bg-amber-50 rounded p-2">
+              <p className="text-xs text-amber-700 font-medium">Sem cartão de ponto — informe a média de feriados laborados por mês.</p>
+              <div className="flex gap-2 items-center flex-wrap">
+                <input type="number" value={mediaFeriadosDias}
+                  onChange={e => setMediaFeriadosDias(Number(e.target.value))}
+                  className="campo-input w-20" min="0" step="0.5" />
+                <span className="text-xs text-gray-500">dias por mês</span>
+              </div>
+            </div>
           )}
         </SecaoJornada>
 

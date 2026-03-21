@@ -32,7 +32,26 @@ function calcularRSRNaoConcedido(dados, temporal, diasCartao) {
     return { valor: 0, excluida: false, memoria: { motivo: 'RSR não concedido não habilitado' } };
   }
   if (!diasCartao || diasCartao.length === 0) {
-    return { valor: 0, excluida: false, memoria: { motivo: 'Requer cartão de ponto (modoEntrada = cartao_ponto)' } };
+    // Modo médio: usa mediaRsrDiasMensais (normalizado no frontend para dias/mês)
+    const diasMensais = dados.mediaRsrDiasMensais || 0;
+    if (!diasMensais) {
+      return { valor: 0, excluida: false, memoria: { motivo: 'Requer cartão de ponto ou informe a média de RSR trabalhados' } };
+    }
+    const meses = temporal.lapsoSemAviso.meses || 1;
+    const M0 = dados.mediaSalarial || dados.ultimoSalario || 0;
+    const vDia = round2(M0 / 30);
+    const valor = round2(vDia * diasMensais * meses);
+    return {
+      valor,
+      excluida: false,
+      natureza: 'salarial',
+      memoria: {
+        formula: `R$ ${vDia.toFixed(2)}/dia × ${diasMensais} dias/mês × ${meses} meses = R$ ${valor.toFixed(2)} (modo médio — Súm. 146 TST)`,
+        diasMensais,
+        meses,
+        aviso: 'Natureza salarial — com reflexos em férias, 13º, FGTS e aviso prévio (Súmula 146 TST)',
+      },
+    };
   }
 
   const M = dados.mediaSalarial || dados.ultimoSalario || 0;
@@ -80,7 +99,26 @@ function calcularFeriadosLaborados(dados, temporal, diasCartao) {
     return { valor: 0, excluida: false, memoria: { motivo: 'Feriados laborados não habilitado' } };
   }
   if (!diasCartao || diasCartao.length === 0) {
-    return { valor: 0, excluida: false, memoria: { motivo: 'Requer cartão de ponto (modoEntrada = cartao_ponto)' } };
+    // Modo médio: usa mediaFeriadosDiasMensais (normalizado no frontend)
+    const diasMensais = dados.mediaFeriadosDiasMensais || 0;
+    if (!diasMensais) {
+      return { valor: 0, excluida: false, memoria: { motivo: 'Requer cartão de ponto ou informe a média de feriados laborados' } };
+    }
+    const meses = temporal.lapsoSemAviso.meses || 1;
+    const M0 = dados.mediaSalarial || dados.ultimoSalario || 0;
+    const vDia = round2(M0 / 30);
+    const valor = round2(vDia * diasMensais * meses);
+    return {
+      valor,
+      excluida: false,
+      natureza: 'salarial',
+      memoria: {
+        formula: `R$ ${vDia.toFixed(2)}/dia × ${diasMensais} dias/mês × ${meses} meses = R$ ${valor.toFixed(2)} (modo médio — Súm. 146 TST)`,
+        diasMensais,
+        meses,
+        aviso: 'Natureza salarial — com reflexos (Súmula 146 TST)',
+      },
+    };
   }
 
   const M = dados.mediaSalarial || dados.ultimoSalario || 0;

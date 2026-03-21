@@ -418,4 +418,26 @@ function gerarDiasCartao(dados) {
   });
 }
 
-module.exports = { gerarDiasPeriodo, calcularPeriodoJornada, gerarDiasCartao };
+/**
+ * Wrapper compatível com a rota POST /api/calculos/cartao-ponto.
+ * Constrói um objeto de período a partir dos parâmetros da rota e chama calcularPeriodoJornada.
+ */
+function gerarCartaoPontoVirtual(jornadaDefinida, dataInicio, dataFim, afastamentos, divisorJornada) {
+  const periodo = {
+    modoEntrada: 'cartao_ponto',
+    dataInicio: dataInicio || '',
+    dataFim: dataFim || '',
+    horaEntrada: jornadaDefinida.horaEntrada,
+    horaSaida: jornadaDefinida.horaSaida,
+    intervaloMinutos: jornadaDefinida.intervaloMinutos ?? 60,
+    diasSemana: jornadaDefinida.diasSemana || [1, 2, 3, 4, 5],
+    padraoApuracao: jornadaDefinida.padraoApuracao || 'diario',
+    horasJornadaPadrao12x36: jornadaDefinida.horasJornadaPadrao12x36 || 12,
+    prorrogacaoNoturna: jornadaDefinida.prorrogacaoNoturna || false,
+    divisorJornada: divisorJornada || 220,
+    afastamentos: afastamentos || [],
+  };
+  return calcularPeriodoJornada(periodo, dataInicio, dataFim, []);
+}
+
+module.exports = { gerarDiasPeriodo, calcularPeriodoJornada, gerarDiasCartao, gerarCartaoPontoVirtual };
