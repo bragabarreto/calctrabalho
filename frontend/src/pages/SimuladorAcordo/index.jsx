@@ -94,6 +94,20 @@ export default function SimuladorAcordoPage() {
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState('');
+  const [inssEmpregadoEmpresa, setInssEmpregadoEmpresa] = useState(false);
+  const [irEmpresa, setIrEmpresa] = useState(false);
+
+  // Valores derivados das condições especiais (baseados no resultado do backend)
+  const inssEmpregadoVal = resultado?.inssEmpregado || 0;
+  const irVal = resultado?.ir?.valor || 0;
+  const deducaoDoEmpregado =
+    (inssEmpregadoEmpresa ? 0 : inssEmpregadoVal) + (irEmpresa ? 0 : irVal);
+  const liquidoAjustado = Math.max(0, (resultado?.valorAcordo || 0) - deducaoDoEmpregado);
+  const custoAdicionalEmpresa =
+    (resultado?.inssEmpregador || 0) +
+    (inssEmpregadoEmpresa ? inssEmpregadoVal : 0) +
+    (irEmpresa ? irVal : 0);
+  const custoTotalAcordo = Math.round(((resultado?.valorAcordo || 0) + custoAdicionalEmpresa) * 100) / 100;
 
   function addParcela() {
     setParcelas(prev => [...prev, { seletor: '', nomeCustom: '', valorRaw: '' }]);
@@ -322,6 +336,39 @@ export default function SimuladorAcordoPage() {
             )}
           </div>
 
+          {/* Condições especiais */}
+          <div className="card p-5">
+            <h3 className="font-titulo text-base mb-3 text-primaria">Condições Especiais do Acordo</h3>
+            <div className="space-y-3">
+              {[
+                {
+                  id: 'inss', label: 'INSS do empregado a cargo da empresa',
+                  sub: resultado ? `Cota do empregado (${fmt(inssEmpregadoVal)}) assumida pelo reclamado` : 'Calcule primeiro para ver o valor',
+                  value: inssEmpregadoEmpresa, set: setInssEmpregadoEmpresa,
+                },
+                {
+                  id: 'ir', label: 'IR do empregado a cargo da empresa',
+                  sub: resultado ? `IR estimado (${fmt(irVal)}) assumido pelo reclamado` : 'Calcule primeiro para ver o valor',
+                  value: irEmpresa, set: setIrEmpresa,
+                },
+              ].map(({ id, label, sub, value, set }) => (
+                <label key={id} className="flex items-start gap-3 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => set(v => !v)}
+                    className={`mt-0.5 relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${value ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${value ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">{label}</p>
+                    <p className="text-xs text-gray-400">{sub}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
           {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{erro}</p>}
 
           <button
@@ -414,21 +461,35 @@ export default function SimuladorAcordoPage() {
                     <span>Valor do acordo</span>
                     <span className="font-mono font-semibold">{fmt(resultado.valorAcordo)}</span>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-gray-100">
-                    <span className="text-orange-700">(-) INSS + IR (retidos na fonte)</span>
-                    <span className="font-mono text-orange-700">({fmt(resultado.totalEncargosEmpregado)})</span>
-                  </div>
+                  {deducaoDoEmpregado > 0 ? (
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-orange-700">(-) Retido na fonte do empregado</span>
+                      <span className="font-mono text-orange-700">({fmt(deducaoDoEmpregado)})</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between py-1 border-b border-gray-100 text-green-700 text-xs italic">
+                      <span>Sem retenções na fonte (encargos a cargo da empresa)</span>
+                      <span>—</span>
+                    </div>
+                  )}
                   <div className="flex justify-between py-2 bg-green-50 rounded px-3 font-bold text-green-800 mt-1">
                     <span>Valor líquido ao Reclamante</span>
-                    <span className="font-mono text-lg">{fmt(resultado.liquidoEmpregado)}</span>
+                    <span className="font-mono text-lg">{fmt(liquidoAjustado)}</span>
                   </div>
                   <div className="flex justify-between py-2 bg-red-50 rounded px-3 text-red-800 mt-1">
-                    <span>+ INSS Patronal (custo do Reclamado)</span>
-                    <span className="font-mono font-semibold">{fmt(resultado.inssEmpregador)}</span>
+                    <span>+ Encargos a cargo do Reclamado</span>
+                    <span className="font-mono font-semibold">{fmt(custoAdicionalEmpresa)}</span>
                   </div>
+                  {(inssEmpregadoEmpresa || irEmpresa) && (
+                    <div className="text-xs text-gray-500 px-3 space-y-0.5">
+                      <p>INSS patronal: {fmt(resultado.inssEmpregador)}</p>
+                      {inssEmpregadoEmpresa && <p>+ INSS empregado assumido: {fmt(inssEmpregadoVal)}</p>}
+                      {irEmpresa && <p>+ IR assumido: {fmt(irVal)}</p>}
+                    </div>
+                  )}
                   <div className="flex justify-between py-2 bg-gray-800 text-white rounded px-3 font-bold mt-1">
                     <span>Custo total do acordo para o Reclamado</span>
-                    <span className="font-mono">{fmt(resultado.valorAcordo + resultado.inssEmpregador)}</span>
+                    <span className="font-mono">{fmt(custoTotalAcordo)}</span>
                   </div>
                 </div>
 

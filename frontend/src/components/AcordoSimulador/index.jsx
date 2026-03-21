@@ -132,6 +132,8 @@ function calcIR_RRA(baseTributavel, meses) {
 export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses }) {
   const [valorAcordo, setValorAcordo] = useState('');
   const [modoDiscriminacao, setModoDiscriminacao] = useState(false);
+  const [inssEmpregadoEmpresa, setInssEmpregadoEmpresa] = useState(false);
+  const [irEmpresa, setIrEmpresa] = useState(false);
 
   // Parcelas indenizatórias discriminadas no acordo
   const [parcelas, setParcelas] = useState(() =>
@@ -178,7 +180,15 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
   const baseTributavel = Math.max(0, baseSalarialAcordo - inssEmpregado);
   const irEstimado = calcIR_RRA(baseTributavel, lapsoMeses);
 
-  const valorLiquido = Math.max(0, valorAcordoNum - inssEmpregado - irEstimado);
+  // Condições especiais: encargos que ficam a cargo da empresa
+  const deducaoDoEmpregado =
+    (inssEmpregadoEmpresa ? 0 : inssEmpregado) + (irEmpresa ? 0 : irEstimado);
+  const valorLiquido = Math.max(0, valorAcordoNum - deducaoDoEmpregado);
+  const custoAdicionalEmpresa =
+    inssEmpregador +
+    (inssEmpregadoEmpresa ? inssEmpregado : 0) +
+    (irEmpresa ? irEstimado : 0);
+  const custoTotal = Math.round((valorAcordoNum + custoAdicionalEmpresa) * 100) / 100;
 
   // ── Gerenciamento das parcelas ──────────────────────────────────────────────
   function addParcela() {
@@ -389,6 +399,37 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
             </div>
           </div>
 
+          {/* Condições especiais do acordo */}
+          <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
+            <p className="text-xs font-semibold text-gray-600 mb-1">Condições especiais do acordo</p>
+            {[
+              {
+                id: 'inss-emp', label: 'INSS do empregado a cargo da empresa',
+                sub: `Cota do empregado (${fmt(inssEmpregado)}) assumida pelo reclamado`,
+                value: inssEmpregadoEmpresa, set: setInssEmpregadoEmpresa,
+              },
+              {
+                id: 'ir-emp', label: 'IR do empregado a cargo da empresa',
+                sub: `IR estimado (${fmt(irEstimado)}) assumido pelo reclamado`,
+                value: irEmpresa, set: setIrEmpresa,
+              },
+            ].map(({ id, label, sub, value, set }) => (
+              <label key={id} className="flex items-start gap-2 cursor-pointer select-none">
+                <button
+                  type="button"
+                  onClick={() => set(v => !v)}
+                  className={`mt-0.5 relative inline-flex h-4 w-7 flex-shrink-0 rounded-full border-2 border-transparent transition-colors ${value ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                >
+                  <span className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${value ? 'translate-x-3' : 'translate-x-0'}`} />
+                </button>
+                <div>
+                  <p className="text-xs font-medium text-gray-700">{label}</p>
+                  <p className="text-xs text-gray-400">{sub}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+
           {/* Total líquido estimado */}
           <div className="grid grid-cols-3 gap-3 text-sm bg-indigo-900 text-white rounded-lg px-4 py-3">
             <div>
@@ -396,13 +437,20 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
               <p className="font-mono font-bold text-lg">{fmt(valorAcordoNum)}</p>
             </div>
             <div>
-              <p className="text-xs opacity-70">(-) INSS Empregado + IR</p>
-              <p className="font-mono font-bold text-lg text-red-300">({fmt(inssEmpregado + irEstimado)})</p>
+              <p className="text-xs opacity-70">
+                {deducaoDoEmpregado > 0 ? '(-) Retido na fonte' : 'Sem retenções (exequente)'}
+              </p>
+              <p className="font-mono font-bold text-lg text-red-300">
+                {deducaoDoEmpregado > 0 ? `(${fmt(deducaoDoEmpregado)})` : '—'}
+              </p>
             </div>
             <div>
               <p className="text-xs opacity-70">Valor Líquido Estimado (Exequente)</p>
               <p className="font-mono font-bold text-xl text-green-300">{fmt(valorLiquido)}</p>
             </div>
+          </div>
+          <div className="mt-2 text-right text-xs text-indigo-200 bg-indigo-800 rounded px-3 py-1.5">
+            Custo total para o Reclamado (acordo + encargos patronais): <span className="font-mono font-semibold">{fmt(custoTotal)}</span>
           </div>
 
           <p className="text-xs text-gray-400 mt-3">
