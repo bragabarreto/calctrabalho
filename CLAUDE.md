@@ -121,3 +121,11 @@ calctrabalho/
 - INSS teto 2025: R$ 908,86
 - FGTS: 8% sobre remuneração
 - Multa rescisória FGTS: 40% (sem justa causa / rescisão indireta), 20% (culpa recíproca)
+
+---
+
+## Skills e Comandos Customizados (Claude Code)
+
+Este repositório possui skills nativas para o Claude Code, localizadas em `.claude/skills/`.
+
+- **`/calctrabalho-correcoes`**: Skill especializada na revisão, correção e verificação de cálculos trabalhistas e seus parâmetros no aplicativo. Inclui manuais detalhados sobre parcelas, reflexos e regras de negócio baseadas na legislação e jurisprudência do TST.
