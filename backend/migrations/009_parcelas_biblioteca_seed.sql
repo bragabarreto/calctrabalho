@@ -149,3 +149,80 @@ INSERT INTO parcelas_personalizadas (
  true, true, true, true)
 
 ON CONFLICT DO NOTHING;
+
+-- ── Novas parcelas da biblioteca ────────────────────────────────────────────
+
+-- Desvio/Acúmulo de Função
+INSERT INTO parcelas_personalizadas (id, nome, descricao, natureza, frequencia, tipo_valor, percentual_base, gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, ativo, eh_biblioteca, template_id)
+VALUES (gen_random_uuid(), 'Desvio/Acúmulo de Função', 'Art. 461 CLT + Súmula 159 TST. Diferença salarial devida pelo exercício de função superior sem promoção formal.', 'salarial', 'mensal', 'percentual_salario', 0, true, ARRAY['rsr','ferias','decimo_terceiro','fgts','aviso_previo'], true, true, true, true, true, 'tpl_desvio_funcao')
+ON CONFLICT DO NOTHING;
+
+-- Equiparação Salarial
+INSERT INTO parcelas_personalizadas (id, nome, descricao, natureza, frequencia, tipo_valor, percentual_base, gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, ativo, eh_biblioteca, template_id)
+VALUES (gen_random_uuid(), 'Equiparação Salarial', 'Art. 461 CLT. Diferença salarial entre reclamante e paradigma que exerce função idêntica.', 'salarial', 'mensal', 'fixo', 0, true, ARRAY['rsr','ferias','decimo_terceiro','fgts','aviso_previo'], true, true, true, true, true, 'tpl_equiparacao')
+ON CONFLICT DO NOTHING;
+
+-- Comissões Retidas
+INSERT INTO parcelas_personalizadas (id, nome, descricao, natureza, frequencia, tipo_valor, percentual_base, gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, ativo, eh_biblioteca, template_id)
+VALUES (gen_random_uuid(), 'Comissões Retidas', 'Art. 457 §1º CLT. Comissões devidas e não pagas no curso do contrato.', 'salarial', 'mensal', 'fixo', 0, true, ARRAY['rsr','ferias','decimo_terceiro','fgts','aviso_previo'], true, true, true, true, true, 'tpl_comissoes_retidas')
+ON CONFLICT DO NOTHING;
+
+-- Gorjetas Retidas
+INSERT INTO parcelas_personalizadas (id, nome, descricao, natureza, frequencia, tipo_valor, percentual_base, gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, ativo, eh_biblioteca, template_id)
+VALUES (gen_random_uuid(), 'Gorjetas Retidas', 'Art. 457 CLT + Súmula 354 TST. Gorjetas integram a remuneração mas não servem de base para aviso prévio, AN, HE e RSR.', 'salarial', 'mensal', 'fixo', 0, true, ARRAY['ferias','decimo_terceiro','fgts'], true, true, true, true, true, 'tpl_gorjetas_retidas')
+ON CONFLICT DO NOTHING;
+
+-- Adicional por Tempo de Serviço
+INSERT INTO parcelas_personalizadas (id, nome, descricao, natureza, frequencia, tipo_valor, percentual_base, gera_reflexos, reflexos_em, incide_inss, incide_ir, incide_fgts, ativo, eh_biblioteca, template_id)
+VALUES (gen_random_uuid(), 'Adicional por Tempo de Serviço (Anuênio/Quinquênio)', 'Adicional previsto em norma coletiva ou regulamento interno. Base: percentual sobre salário por ano de serviço.', 'salarial', 'mensal', 'percentual_salario', 1, true, ARRAY['rsr','ferias','decimo_terceiro','fgts','aviso_previo'], true, true, true, true, true, 'tpl_anuenio')
+ON CONFLICT DO NOTHING;
+
+-- ── Atualizar descrições de parcelas existentes que possam estar sem descrição ──
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 192 CLT + Súmula 228 TST/STF. Base: salário mínimo vigente. Grau mínimo (10%), médio (20%) ou máximo (40%).'
+WHERE template_id LIKE 'tpl_insalubridade%' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 193 CLT. Base: salário contratual x 30%. Atividade ou operação perigosa (inflamáveis, explosivos, eletricidade, etc.).'
+WHERE template_id = 'tpl_periculosidade' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 59 CLT. Horas excedentes à jornada contratual. Adicional mínimo de 50% sobre hora normal.'
+WHERE template_id = 'tpl_horas_extras' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'CF art. 7º, XVI. Adicional de 100% para trabalho em domingos e feriados.'
+WHERE template_id = 'tpl_horas_extras_100' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 73 CLT. Trabalho noturno (22h-5h). Hora noturna reduzida (52min30s). Adicional de 20%.'
+WHERE template_id = 'tpl_noturno' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 244 §2º CLT / Súmula 428 TST. Empregado permanece em casa aguardando convocação. Remunerado em 1/3 do valor-hora.'
+WHERE template_id = 'tpl_sobreaviso' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 244 §3º CLT. Empregado permanece nas dependências do empregador aguardando ordens. Remunerado em 2/3 do valor-hora.'
+WHERE template_id = 'tpl_prontidao' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 71 CLT / Súmula 437 TST. Supressão do intervalo intrajornada. Natureza salarial com reflexos.'
+WHERE template_id = 'tpl_intervalo' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 469 §3º CLT. Adicional de 25% do salário durante transferência provisória.'
+WHERE template_id = 'tpl_transferencia' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Adicional pelo exercício de cargo de confiança ou função gratificada (art. 62, II, CLT). Reflexos integrais.'
+WHERE template_id = 'tpl_gratificacao_funcao' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'OJ 133 SDI-1 TST / PAT. Parcela indenizatória — não integra salário, sem incidência de INSS/FGTS/IR.'
+WHERE template_id = 'tpl_ticket_alimentacao' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Lei 7.418/85. Parcela indenizatória. Diferença entre o valor devido e o efetivamente pago.'
+WHERE template_id = 'tpl_vale_transporte' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Art. 457 §2º CLT. Parcela indenizatória para ressarcimento de despesas. Não integra salário.'
+WHERE template_id = 'tpl_ajuda_custo' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Súmula 247 TST. Indenização para cobertura de diferenças de caixa. Natureza indenizatória.'
+WHERE template_id = 'tpl_quebra_caixa' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Lei 10.101/2000. Não integra salário. Não incide INSS/FGTS. Incide IR por tabela específica.'
+WHERE template_id = 'tpl_plr' AND (descricao IS NULL OR descricao = '');
+
+UPDATE parcelas_personalizadas SET descricao = 'Súmula 172 TST. Repouso semanal remunerado sobre parcelas variáveis. Padrão: 1/6 = 16,67%.'
+WHERE template_id = 'tpl_rsr_dsr' AND (descricao IS NULL OR descricao = '');

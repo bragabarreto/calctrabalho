@@ -1,16 +1,67 @@
 'use strict';
 
 const { round2 } = require('../../../utils/formatacao');
-const { INSS_TABELA_2025, INSS_TETO_2025 } = require('../../../config/constants');
+const {
+  INSS_TABELA_2025,
+  INSS_TETO_2025,
+  INSS_CONTRIBUICAO_MAXIMA_2025,
+  INSS_TETO_CONTRIBUICAO_2025,
+} = require('../../../config/constants');
+const db = require('../../../config/database');
 
 /**
- * Cálculo do INSS pela tabela progressiva 2025
+ * Busca a tabela INSS vigente na data de referência no banco de dados.
+ * Retorna { faixas, contribuicaoMaxima } ou null se não houver dados.
  */
-function calcularINSS(salarioBruto) {
+async function buscarTabelaINSS(dataReferencia) {
+  try {
+    const { rows } = await db.query(
+      `SELECT faixa_ordem, limite_superior AS ate, aliquota, contribuicao_maxima, teto_contribuicao
+       FROM inss_parametros
+       WHERE vigencia_inicio <= $1
+         AND (vigencia_fim IS NULL OR vigencia_fim >= $1)
+       ORDER BY faixa_ordem`,
+      [dataReferencia]
+    );
+    if (!rows || rows.length === 0) return null;
+
+    const faixas = rows.map(r => ({
+      ate: parseFloat(r.ate),
+      aliquota: parseFloat(r.aliquota),
+    }));
+    const contribuicaoMaxima = parseFloat(rows[0].contribuicao_maxima || rows[0].teto_contribuicao) || INSS_CONTRIBUICAO_MAXIMA_2025;
+    return { faixas, contribuicaoMaxima };
+  } catch {
+    // Tabela inss_parametros pode não existir ainda — fallback silencioso
+    return null;
+  }
+}
+
+/**
+ * Cálculo do INSS pela tabela progressiva.
+ * Quando `dataReferencia` é informada, busca a tabela vigente no banco;
+ * caso contrário (ou se não encontrar), usa a tabela 2025 hardcoded.
+ *
+ * @param {number} salarioBruto
+ * @param {Date|string} [dataReferencia] - Data para busca da tabela vigente (opcional)
+ * @returns {Promise<number>} Valor do INSS empregado
+ */
+async function calcularINSS(salarioBruto, dataReferencia) {
+  let tabela = INSS_TABELA_2025;
+  let tetoContribuicao = INSS_CONTRIBUICAO_MAXIMA_2025;
+
+  if (dataReferencia) {
+    const tabelaDB = await buscarTabelaINSS(dataReferencia);
+    if (tabelaDB) {
+      tabela = tabelaDB.faixas;
+      tetoContribuicao = tabelaDB.contribuicaoMaxima;
+    }
+  }
+
   let inss = 0;
   let baseAnterior = 0;
 
-  for (const faixa of INSS_TABELA_2025) {
+  for (const faixa of tabela) {
     if (salarioBruto <= baseAnterior) break;
     const baseNaFaixa = Math.min(salarioBruto, faixa.ate) - baseAnterior;
     if (baseNaFaixa > 0) {
@@ -20,7 +71,7 @@ function calcularINSS(salarioBruto) {
     if (salarioBruto <= faixa.ate) break;
   }
 
-  return round2(Math.min(inss, INSS_TETO_2025));
+  return round2(Math.min(inss, tetoContribuicao));
 }
 
 /**
@@ -120,9 +171,10 @@ function calcularINSSEmpregador(baseInss) {
  * @param {Array} listaVerbas - Lista de verbas calculadas
  * @param {number} lapsoMeses - Meses de contrato (para RRA)
  * @param {number} percentualSalarial - Fração salarial sobre o subtotal (0–1)
- * @returns {Object} encargos completos empregado + empregador
+ * @param {Date|string} [dataReferencia] - Data para busca da tabela INSS vigente (opcional)
+ * @returns {Promise<Object>} encargos completos empregado + empregador
  */
-function calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial) {
+async function calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial, dataReferencia) {
   // Base INSS: soma das verbas que incideInss === true e não excluídas
   const baseInss = round2(
     listaVerbas
@@ -140,7 +192,7 @@ function calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial) 
   const pctSalarial = subtotal > 0 ? round2(baseSalarial / subtotal) : (percentualSalarial || 0);
   const pctIndenizatorio = round2(1 - pctSalarial);
 
-  const inssEmpregado = calcularINSS(baseInss);
+  const inssEmpregado = await calcularINSS(baseInss, dataReferencia);
   const inssEmpregador = calcularINSSEmpregador(baseInss);
 
   // Base IR = base INSS - INSS empregado (rendimentos tributáveis depois do INSS)
@@ -159,7 +211,7 @@ function calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial) 
     irRetido,
     memoria: {
       baseInss: `R$ ${baseInss.toFixed(2)} (verbas com incidência INSS, não excluídas)`,
-      inssEmpregado: `R$ ${inssEmpregado.toFixed(2)} (tabela progressiva 2025)`,
+      inssEmpregado: `R$ ${inssEmpregado.toFixed(2)} (tabela progressiva)`,
       inssEmpregador: `R$ ${inssEmpregador.toFixed(2)} (20% patronal — art. 22 Lei 8.212/91)`,
       baseTributavel: `R$ ${baseTributavel.toFixed(2)} (base INSS − INSS empregado)`,
       aviso: 'Valores informativos — o IR em reclamações trabalhistas segue o método RRA (art. 12-A da Lei 7.713/88). Confirme com o perito contábil.',

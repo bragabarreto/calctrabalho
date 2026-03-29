@@ -72,6 +72,24 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
   const [parcelaSel, setParcelaSel] = useState(initParcelaId);
 
   function set(campo, valor) {
+    // Quando mudar natureza de salarial para indenizatória, pedir confirmação
+    if (campo === 'natureza' && valor === 'indenizatoria' && form.natureza === 'salarial') {
+      const confirmar = window.confirm(
+        'Alterar a natureza jurídica de salarial para indenizatória removerá todos os reflexos ' +
+        '(férias, 13º, FGTS, aviso prévio) e incidências (INSS, IR). Deseja continuar?'
+      );
+      if (!confirmar) return; // reverte — não altera nada
+      setForm((prev) => ({
+        ...prev,
+        natureza: 'indenizatoria',
+        geraReflexos: false,
+        reflexosEm: [],
+        incideInss: false,
+        incideIr: false,
+        incideFgts: false,
+      }));
+      return;
+    }
     setForm((prev) => ({ ...prev, [campo]: valor }));
   }
 

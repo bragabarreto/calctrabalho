@@ -1,17 +1,20 @@
 'use strict';
 
 const { round2, nonNegative } = require('../../../utils/formatacao');
+const { calcularBaseRescisoria } = require('../../../utils/baseRescisoria');
 const { FGTS_ALIQUOTA, MULTA_FGTS_SJC, MULTA_FGTS_RECIPROCA } = require('../../../config/constants');
 
 /**
  * FGTS — período imprescrito (com aviso projetado)
+ * Base: salário + comissões + gorjetas (Súmula 354 TST, Lei 8.036/1990 art. 15)
  */
 function calcularFGTS(dados, temporal) {
   if (dados.verbasExcluidas?.includes('fgts_imprescrito')) {
     return { valor: 0, excluida: true, fgtsBruto: 0, memoria: { motivo: 'Excluída do cálculo' } };
   }
 
-  const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  const dadosBase = dados.mediaSalarial ? { ...dados, ultimoSalario: dados.mediaSalarial } : dados;
+  const { valor: base } = calcularBaseRescisoria(dadosBase, { incluirGorjetas: true });
   const meses = temporal.lapsoComAviso.meses;
   const fgtsBruto = round2(base * FGTS_ALIQUOTA * meses);
   const depositado = dados.fgtsIntegralizado ? fgtsBruto : (dados.fgtsDepositado || 0);

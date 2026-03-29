@@ -146,6 +146,31 @@
     </table>
   </div>
 
+  <div class="section" style="page-break-before: auto;">
+    <div class="section-title">Conformidade Legal</div>
+    <p style="font-size: 11px; color: #555; margin-bottom: 8px;">Parâmetros legais aplicados neste cálculo:</p>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30%">Parâmetro</th>
+          <th style="width:25%">Valor Aplicado</th>
+          <th style="width:30%">Fonte Legal</th>
+          <th style="width:15%">Vigência</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#conformidade}}
+        <tr>
+          <td>{{nome}}</td>
+          <td class="valor">{{valor}}</td>
+          <td style="font-size: 10px;">{{fonte}}</td>
+          <td style="font-size: 10px;">{{vigencia}}</td>
+        </tr>
+        {{/conformidade}}
+      </tbody>
+    </table>
+  </div>
+
   <div class="aviso">
     <strong>Aviso Legal:</strong> Este documento é uma simulação gerada por ferramenta auxiliar de cálculo. Os valores calculados não substituem a liquidação judicial oficial. Verifique sempre a legislação e jurisprudência atualizadas.
   </div>

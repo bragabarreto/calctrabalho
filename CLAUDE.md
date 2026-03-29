@@ -43,10 +43,18 @@ calctrabalho/
 │   ├── services/
 │   │   ├── calculo/
 │   │   │   ├── engine.js            # Motor central de cálculo
+│   │   │   ├── reflexosCascata.js   # OJ 394 SDI-1 TST — reflexos em cascata (RSR → férias/13º/FGTS)
 │   │   │   └── verbas/              # Um arquivo por verba trabalhista
 │   │   └── pdf/                     # Geração de relatório PDF (Puppeteer)
 │   ├── middlewares/                 # Validação Joi, errorHandler
-│   └── utils/                       # Datas, formatação, auditoria
+│   └── utils/
+│       ├── datas.js                 # Funções de data (date-fns wrappers)
+│       ├── formatacao.js            # round2, formatBRL, formatPercentual
+│       ├── baseRescisoria.js        # Base rescisória padronizada (OJ 181 SDI-1 TST)
+│       ├── naturezaJuridica.js      # Guard salarial/indenizatória para reflexos
+│       ├── auditLog.js              # Trilha de auditoria para alterações de índices
+│       └── auditoria.js             # Registro de auditoria das simulações
+├── backend/__tests__/               # Suite de testes Jest
 ├── backend/migrations/              # SQL de criação das tabelas (14+)
 ├── backend/seeds/                   # Dados históricos (SM, Selic, feriados)
 └── frontend/src/
@@ -129,3 +137,31 @@ calctrabalho/
 Este repositório possui skills nativas para o Claude Code, localizadas em `.claude/skills/`.
 
 - **`/calctrabalho-correcoes`**: Skill especializada na revisão, correção e verificação de cálculos trabalhistas e seus parâmetros no aplicativo. Inclui manuais detalhados sobre parcelas, reflexos e regras de negócio baseadas na legislação e jurisprudência do TST.
+
+---
+
+## Testes Automatizados
+
+```bash
+cd backend && npm test
+```
+
+Suite Jest em `backend/__tests__/` com os seguintes módulos testados:
+
+| Arquivo de teste | Módulo testado | O que valida |
+|---|---|---|
+| `baseRescisoria.test.js` | `src/utils/baseRescisoria.js` | Base rescisória (OJ 181), remuneração mensal (art. 457 §1o CLT), inclusão/exclusão de gorjetas |
+| `naturezaJuridica.test.js` | `src/utils/naturezaJuridica.js` | Guard salarial/indenizatória, validação de coerência parcela vs. reflexos |
+| `periculosidade.test.js` | `src/services/calculo/verbas/periculosidade.js` | Cálculo proporcional de 30%, reflexos com OJ 82 SDI-1 (13o usa lapsoComAviso) |
+| `multasArt467e477.test.js` | `src/services/calculo/verbas/multasArt467e477.js` | Base com gorjetas (art. 457), prazo de 10 dias, exclusão de verbas |
+| `inss.test.js` | `src/services/calculo/verbas/inss.js` | Tabela progressiva 2025 (4 faixas), teto R$ 908,86, INSS patronal 20%, IR RRA |
+| `reflexosCascata.test.js` | `src/services/calculo/reflexosCascata.js` | OJ 394 SDI-1 TST — cascata RSR em férias, 13o, FGTS e multa FGTS |
+
+---
+
+## Módulos Utilitários Importantes
+
+- **`backend/src/utils/baseRescisoria.js`** — Cálculo padronizado da base rescisória (OJ 181 SDI-1 TST) e remuneração mensal completa (art. 457 §1o CLT). Usado como base para multas arts. 467/477 e demais verbas que exigem remuneração total.
+- **`backend/src/services/calculo/reflexosCascata.js`** — Implementação da OJ 394 SDI-1 TST: RSR majorado por horas extras habituais repercute em férias, 13o, aviso prévio e FGTS. Aplicável a fatos geradores a partir de 20/03/2023.
+- **`backend/src/utils/naturezaJuridica.js`** — Guard para natureza jurídica de parcelas (salarial vs. indenizatória). Impede que parcelas indenizatórias gerem reflexos indevidos.
+- **`backend/src/utils/auditLog.js`** — Trilha de auditoria para alterações em índices de correção e tabelas legais. Registra quem alterou, quando e quais valores foram modificados.

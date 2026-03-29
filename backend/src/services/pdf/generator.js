@@ -38,8 +38,22 @@ function renderTemplate(template, dados) {
       row = row.replace(/\{\{natureza\}\}/g, v.natureza || '');
       row = row.replace(/\{\{incideFgts\}\}/g, v.incideFgts ? '✓' : '—');
       row = row.replace(/\{\{incideInss\}\}/g, v.incideInss ? '✓' : '—');
-      row = row.replace(/\{\{formula\}\}/g, v.memoria?.formula || '');
+      const formulaOJ394 = v.memoria?.formulaOJ394 ? ` [OJ 394: ${v.memoria.formulaOJ394}]` : '';
+      const criterio = v.memoria?.criterio ? ` (${v.memoria.criterio})` : '';
+      row = row.replace(/\{\{formula\}\}/g, (v.memoria?.formula || '') + criterio + formulaOJ394);
       row = row.replace(/\{\{valorFormatado\}\}/g, formatBRL(v.valor));
+      return row;
+    }).join('');
+  });
+
+  // Arrays: {{#conformidade}}...{{/conformidade}}
+  html = html.replace(/\{\{#conformidade\}\}([\s\S]*?)\{\{\/conformidade\}\}/g, (_, bloco) => {
+    return (dados.conformidade || []).map((item) => {
+      let row = bloco;
+      row = row.replace(/\{\{nome\}\}/g, item.nome || '');
+      row = row.replace(/\{\{valor\}\}/g, item.valor || '');
+      row = row.replace(/\{\{fonte\}\}/g, item.fonte || '');
+      row = row.replace(/\{\{vigencia\}\}/g, item.vigencia || '');
       return row;
     }).join('');
   });
@@ -95,6 +109,27 @@ async function gerarPDF(simulacao, verbas) {
   const totalDevidoReclamado = parseFloat(simulacao.total_devido_reclamado)
                                || totalComHonorarios + juros;
 
+  // Conformidade Legal — parâmetros legais aplicados
+  const conformidade = [
+    { nome: 'INSS — Tabela Progressiva', valor: '7,5% a 14%', fonte: 'EC 103/2019 + Portaria Interministerial MPS/MF n\u00BA 6/2025', vigencia: '01/01/2025' },
+    { nome: 'INSS — Teto Contribui\u00E7\u00E3o (SC)', valor: 'R$ 8.157,41', fonte: 'Portaria MPS/MF 6/2025', vigencia: '01/01/2025' },
+    { nome: 'INSS — Contribui\u00E7\u00E3o M\u00E1xima', valor: 'R$ 908,86', fonte: 'C\u00E1lculo progressivo sobre teto', vigencia: '01/01/2025' },
+    { nome: 'Sal\u00E1rio M\u00EDnimo', valor: formatBRL(1518.00), fonte: 'Decreto Federal', vigencia: '01/01/2025' },
+    { nome: 'FGTS — Al\u00EDquota', valor: '8%', fonte: 'Lei 8.036/1990 art. 15', vigencia: 'Permanente' },
+    { nome: 'Multa Rescis\u00F3ria FGTS', valor: '40% / 20%', fonte: 'Art. 18 \u00A71\u00BA Lei 8.036/1990', vigencia: 'Permanente' },
+    { nome: 'Prescri\u00E7\u00E3o Quinquenal', valor: '5 anos', fonte: 'CF art. 7\u00BA XXIX + S\u00FAmula 308 TST', vigencia: 'Permanente' },
+    { nome: 'Honor\u00E1rios Advocat\u00EDcios', valor: `${((pctHonorarios || 0.15) * 100).toFixed(0)}%`, fonte: 'Art. 791-A CLT', vigencia: 'Permanente' },
+  ];
+
+  // OJ 394 SDI-1 TST — reflexos em cascata
+  const dataDispensa = simulacao.data_dispensa ? new Date(simulacao.data_dispensa) : null;
+  const DATA_OJ394 = new Date('2023-03-20');
+  if (dataDispensa && dataDispensa >= DATA_OJ394) {
+    conformidade.push({ nome: 'OJ 394 SDI-1 TST', valor: 'Aplicada — reflexos em cascata', fonte: 'IRR-10169-57.2013.5.05.0024', vigencia: '20/03/2023' });
+  } else {
+    conformidade.push({ nome: 'OJ 394 SDI-1 TST', valor: 'N\u00E3o aplic\u00E1vel (fato gerador anterior)', fonte: 'IRR-10169-57.2013.5.05.0024', vigencia: '20/03/2023' });
+  }
+
   const dados = {
     nome: simulacao.nome,
     processo: simulacao.numero_processo || '—',
@@ -111,6 +146,7 @@ async function gerarPDF(simulacao, verbas) {
     diasUteis6d: '—',
     diasUteis5d: '—',
     verbas: verbasFormatadas,
+    conformidade,
     subtotal: formatBRL(subtotal),
     fgtsDepositado: fgtsDepositado > 0,
     fgtsDepositadoFmt: formatBRL(fgtsDepositado),

@@ -2,11 +2,13 @@
 
 const { round2 } = require('../../../utils/formatacao');
 const { differenceInYears } = require('../../../utils/datas');
+const { calcularBaseRescisoria } = require('../../../utils/baseRescisoria');
 
 /**
  * Aviso Prévio (indenizado)
  * Fórmula: (salário + comissões) / 30 × (30 + anos × 3), máximo 90 dias
  * Culpa recíproca = metade
+ * Base: art. 487 CLT + Lei 12.506/2011
  */
 function calcularAvisoPrevio(dados, temporal, modalidade) {
   if (dados.avisoPrevioTrabalhado) {
@@ -19,7 +21,7 @@ function calcularAvisoPrevio(dados, temporal, modalidade) {
     return { valor: 0, excluida: false, memoria: { motivo: `Modalidade ${modalidade} — aviso prévio não devido` } };
   }
 
-  const base = (dados.ultimoSalario || 0) + (dados.comissoes || 0);
+  const { valor: base } = calcularBaseRescisoria(dados, { incluirGorjetas: false });
   // dias vem de temporal.diasAvisoPrevio (já dividido por 2 e arredondado pra cima em culpa recíproca)
   const dias = temporal.diasAvisoPrevio;
   const valor = round2((base / 30) * dias);

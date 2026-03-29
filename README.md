@@ -168,3 +168,57 @@ calctrabalho/
 - **Selic:** Histórico de 1994 a 2026 (seed incluído)
 - **Feriados nacionais:** 2000 a 2030 (seed incluído)
 - **Salário mínimo histórico:** 1994 a 2026 (seed incluído)
+
+---
+
+## Conformidade Legal e Parâmetros
+
+### INSS — Tabela Progressiva 2025
+
+(Portaria Interministerial MPS/MF n. 6/2025)
+
+| Faixa | Salário de contribuição | Alíquota |
+|---|---|---|
+| 1 | Até R$ 1.518,00 | 7,5% |
+| 2 | R$ 1.518,01 a R$ 2.793,88 | 9% |
+| 3 | R$ 2.793,89 a R$ 4.190,83 | 12% |
+| 4 | R$ 4.190,84 a R$ 8.157,41 | 14% |
+
+- **Teto da base de contribuição (salário-de-contribuição máximo):** R$ 8.157,41
+- **Contribuição máxima do empregado (resultado progressivo):** R$ 908,86
+
+> Atenção: o teto de contribuição (R$ 8.157,41) é a base máxima sobre a qual incide o INSS. A contribuição máxima efetiva (R$ 908,86) resulta da aplicação progressiva das alíquotas sobre cada faixa.
+
+### Regras Legais Aplicadas
+
+| Referência | Descrição |
+|---|---|
+| OJ 394 SDI-1 TST | RSR majorado por HE repercute em férias, 13o, aviso prévio e FGTS (fatos geradores a partir de 20/03/2023) |
+| OJ 82 SDI-1 TST | Aviso prévio indenizado projeta para cálculo de 13o proporcional |
+| Súmula 172 TST | Reflexo de horas extras habituais nas férias (+ 1/3) |
+| Súmula 354 TST | Gorjetas não integram base para aviso prévio, horas extras, etc., mas integram remuneração para multas 467/477 |
+| Súmula 228 TST/STF | Base de cálculo da insalubridade: salário mínimo |
+| Súmula 308 TST | Prescrição quinquenal — marco de 5 anos da data de ajuizamento |
+| Súmula 431 TST | Divisor de jornada 180h para bancários (jornada de 6h) |
+| OJ 181 SDI-1 TST | Composição da base rescisória (parcelas variáveis) |
+| ADC 58 STF | Correção monetária: IPCA-E até jun/2009, depois TR/SELIC conforme fase |
+| Art. 457 §1o CLT | Remuneração inclui salário, gorjetas e habituais |
+| Art. 467 CLT | Multa de 100% sobre verbas incontroversas não pagas na primeira audiência |
+| Art. 477 §8o CLT | Multa de 1 remuneração por atraso nas verbas rescisórias (prazo: 10 dias) |
+| Art. 12-A Lei 7.713/88 | IR sobre rendimentos acumulados pelo método RRA |
+
+### Atualização de Índices
+
+Os índices de correção monetária (Selic, IPCA-E) e tabelas legais podem ser atualizados de duas formas:
+
+1. **Interface:** Acesse **Configurações > Índices de Correção** e utilize o botão de sincronização com BACEN (Selic e IPCA-E são buscados automaticamente via API do Banco Central).
+2. **Seeds manuais:** Edite os arquivos em `backend/seeds/` (ex.: `selic_historico.sql`, `salario_minimo_historico.sql`) e execute `npm run seed`.
+
+### Testes Automatizados
+
+```bash
+cd backend
+npm test
+```
+
+Suite de testes Jest cobrindo: base rescisória, natureza jurídica de parcelas, periculosidade (OJ 82), multas arts. 467/477, INSS progressivo e reflexos em cascata (OJ 394).

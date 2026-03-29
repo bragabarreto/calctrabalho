@@ -1,10 +1,12 @@
 'use strict';
 
 const { round2, nonNegative } = require('../../../utils/formatacao');
+const { calcularBaseRescisoria } = require('../../../utils/baseRescisoria');
 
 /**
  * Férias Vencidas Dobradas (+ 1/3 constitucional)
  * Fórmula: base × 2 × (4/3) × qtde_períodos
+ * Base: salário + comissões + gorjetas (Súmula 354 TST)
  */
 function calcularFeriasDobradas(dados, temporal) {
   if (dados.verbasExcluidas?.includes('ferias_dobradas')) {
@@ -13,7 +15,7 @@ function calcularFeriasDobradas(dados, temporal) {
   const qtde = dados.qtdeFeriasVencidasDobradas || 0;
   if (qtde === 0) return { valor: 0, excluida: false, memoria: { motivo: 'Nenhum período de férias dobradas informado' } };
 
-  const base = (dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  const { valor: base } = calcularBaseRescisoria(dados, { incluirGorjetas: true });
   const valor = round2(base * 2 * (4 / 3) * qtde);
 
   return {
@@ -39,7 +41,7 @@ function calcularFeriasIntegrais(dados, temporal) {
   const qtde = dados.qtdeFeriasVencidasSimples || 0;
   if (qtde === 0) return { valor: 0, excluida: false, memoria: { motivo: 'Nenhum período de férias integrais informado' } };
 
-  const base = (dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  const { valor: base } = calcularBaseRescisoria(dados, { incluirGorjetas: true });
   const valor = round2(base * (4 / 3) * qtde);
 
   return {
@@ -67,7 +69,7 @@ function calcularFeriasProporcionais(dados, temporal) {
     return { valor: 0, excluida: false, memoria: { motivo: 'Férias proporcionais informadas como integralmente pagas' } };
   }
 
-  const base = (dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  const { valor: base } = calcularBaseRescisoria(dados, { incluirGorjetas: true });
   const meses = temporal.mesesUltimoAno;
   const diasRestantes = temporal.diasUltimoAno;
   const mesesEfetivos = diasRestantes >= 15 ? meses + 1 : meses;

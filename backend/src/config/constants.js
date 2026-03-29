@@ -36,14 +36,24 @@ module.exports = {
   INSS_ALIQUOTA_ACORDO_PF: 0.11,
   INSS_ALIQUOTA_ACORDO_PJ: 0.28,
 
-  // Tabela INSS 2025 (progressiva)
+  // Tabela INSS 2025 (progressiva — Portaria Interministerial MPS/MF nº 6/2025)
   INSS_TABELA_2025: [
     { ate: 1518.00, aliquota: 0.075 },
     { ate: 2793.88, aliquota: 0.09 },
     { ate: 4190.83, aliquota: 0.12 },
     { ate: 8157.41, aliquota: 0.14 },
   ],
+  // Contribuição máxima: resultado da aplicação da tabela progressiva ao teto
+  INSS_CONTRIBUICAO_MAXIMA_2025: 908.86,
+  // Teto da base de contribuição (salário-de-contribuição máximo)
+  INSS_TETO_CONTRIBUICAO_2025: 8157.41,
+  // Compat: alias para código legado
   INSS_TETO_2025: 908.86,
+
+  // OJ 394 SDI-1 TST (IRR-10169-57.2013.5.05.0024)
+  // Reflexos em cascata: RSR majorado por HE integra base de férias, 13º, AP e FGTS
+  // Aplicável a fatos geradores a partir de 20/03/2023
+  DATA_OJ394: new Date('2023-03-20'),
 
   // Tabela IR 2025 (mensal) — tabela progressiva
   IR_TABELA_2025: [

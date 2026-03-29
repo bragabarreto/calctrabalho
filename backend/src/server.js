@@ -12,6 +12,8 @@ const pdfRoutes = require('./routes/pdf.routes');
 const parcelasRoutes = require('./routes/parcelasPersonalizadas.routes');
 const salarioMinimoRoutes = require('./routes/salarioMinimo.routes');
 const ipcaERoutes = require('./routes/ipcaE.routes');
+const selicRoutes = require('./routes/selic.routes');
+const inssParametrosRoutes = require('./routes/inssParametros.routes');
 const { errorHandler, notFound } = require('./middlewares/errorHandler');
 
 const app = express();
@@ -41,6 +43,8 @@ app.use('/api/pdf', pdfRoutes);
 app.use('/api/parcelas-personalizadas', parcelasRoutes);
 app.use('/api/salario-minimo', salarioMinimoRoutes);
 app.use('/api/ipca-e', ipcaERoutes);
+app.use('/api/selic', selicRoutes);
+app.use('/api/inss-parametros', inssParametrosRoutes);
 
 // Health check — inclui diagnóstico de DB para facilitar debug no Railway
 app.get('/api/health', async (req, res) => {

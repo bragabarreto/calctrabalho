@@ -55,7 +55,8 @@ function calcularReflexosPericulosidade(perResult, dados, temporal, modalidade) 
 
   const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
   const ferias = round2(mediaPer * (mesesFerias / 12) * (4 / 3));
-  const meses13 = temporal.lapsoSemAviso.mesesRestantes + (temporal.lapsoSemAviso.diasRestantes >= 15 ? 1 : 0);
+  // Fix: OJ 82 SDI-1 TST — aviso prévio indenizado projeta para 13º proporcional (lapsoComAviso)
+  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
   const decimoTerceiro = round2((mediaPer / 12) * meses13);
   const fgts = round2((perResult.valor + ferias + decimoTerceiro) * 0.08);
   const pctMul = { sem_justa_causa: 0.40, rescisao_indireta: 0.40, culpa_reciproca: 0.20 }[modalidade] || 0;
@@ -88,6 +89,7 @@ function calcularReflexosPericulosidade(perResult, dados, temporal, modalidade) 
       valor: decimoTerceiro,
       memoria: {
         formula: `Média per. R$ ${mediaPerMensal.toFixed(2)}/mês ÷ 12 × ${meses13} meses = R$ ${decimoTerceiro.toFixed(2)}`,
+        criterio: 'OJ 82 SDI-1 TST — aviso prévio projeta para 13º proporcional',
         mediaPerMensal,
         meses13,
       },

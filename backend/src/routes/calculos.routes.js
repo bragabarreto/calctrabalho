@@ -177,7 +177,7 @@ router.post('/cartao-ponto', (req, res, next) => {
  * Calcula INSS, IR (RRA), INSS patronal e FGTS sobre um acordo trabalhista
  * a partir do valor total, parcelas indenizatórias e período do contrato.
  */
-router.post('/simular-acordo-externo', (req, res, next) => {
+router.post('/simular-acordo-externo', async (req, res, next) => {
   try {
     const { calcularINSS, calcularINSSEmpregador, calcularIR_RRA } = require('../services/calculo/verbas/inss');
     const { round2 } = require('../utils/formatacao');
@@ -211,7 +211,7 @@ router.post('/simular-acordo-externo', (req, res, next) => {
     }
 
     // INSS
-    const inssEmpregado = calcularINSS(baseSalarial);
+    const inssEmpregado = await calcularINSS(baseSalarial);
     const inssEmpregador = calcularINSSEmpregador(baseSalarial);
 
     // IR (RRA)

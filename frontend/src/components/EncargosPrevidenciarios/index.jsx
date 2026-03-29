@@ -85,6 +85,20 @@ export default function EncargosPrevidenciarios({ encargos, verbas }) {
         </div>
       </div>
 
+      {/* Referência: Teto de Contribuição e Contribuição Máxima INSS */}
+      <div className="flex gap-4 mb-3 flex-wrap">
+        <div className="bg-slate-50 border border-slate-200 rounded px-3 py-2 text-xs">
+          <span className="text-gray-500">Teto de contribuição (SC):</span>{' '}
+          <span className="font-mono font-semibold text-slate-700">R$ 8.157,41</span>
+          <span className="text-gray-400 ml-1">— Portaria MPS/MF 6/2025</span>
+        </div>
+        <div className="bg-slate-50 border border-slate-200 rounded px-3 py-2 text-xs">
+          <span className="text-gray-500">Contribuição máxima (progressiva):</span>{' '}
+          <span className="font-mono font-semibold text-slate-700">R$ 908,86</span>
+          <span className="text-gray-400 ml-1">— EC 103/2019</span>
+        </div>
+      </div>
+
       {/* Memórias de cálculo INSS/IR */}
       <div className="space-y-1 mb-4">
         {encargos.memoria?.inssEmpregado && (

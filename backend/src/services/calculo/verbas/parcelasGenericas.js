@@ -2,6 +2,7 @@
 
 const { differenceInMonths } = require('../../../utils/datas');
 const { round2 } = require('../../../utils/formatacao');
+const { deveGerarReflexos, validarNaturezaReflexos } = require('../../../utils/naturezaJuridica');
 
 /**
  * Calcula o valor base e total de uma parcela personalizada genérica.
@@ -108,6 +109,13 @@ function calcularParcelaGenerica(parcela, dados, temporal, smVigente = 0) {
 function calcularReflexosParcela(valorTotal, nMeses, parcela, dados, temporal, modalidade) {
   const r = {};
   if (!parcela.geraReflexos || valorTotal === 0) return r;
+
+  // Guard: natureza jurídica — parcelas indenizatórias não geram reflexos
+  if (!deveGerarReflexos(parcela.natureza)) {
+    const { aviso } = validarNaturezaReflexos(parcela);
+    if (aviso) console.warn(aviso);
+    return r;
+  }
 
   const reflexosEm = parcela.reflexosEm || [];
   const mediaValor = nMeses > 0 ? round2(valorTotal / nMeses) : 0;

@@ -365,7 +365,78 @@ const TEMPLATES_PADRAO = [
     incideInss: true,
     incideIr: true,
     incideFgts: true,
-    descricao: 'Súm. 159/448 TST. Normalmente 10%–40% do salário. Reflexos integrais',
+    descricao: 'Art. 461 CLT + Súmula 159 TST. Diferença salarial devida pelo exercício de função superior sem promoção formal.',
+  },
+  {
+    _templateId: 'tpl_equiparacao',
+    grupo: 'remuneracao',
+    nome: 'Equiparação Salarial',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'fixo',
+    valorBase: null,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 461 CLT. Diferença salarial entre reclamante e paradigma que exerce função idêntica.',
+  },
+  {
+    _templateId: 'tpl_comissoes_retidas',
+    grupo: 'remuneracao',
+    nome: 'Comissões Retidas',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'fixo',
+    valorBase: null,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 457 §1o CLT. Comissoes devidas e nao pagas no curso do contrato.',
+  },
+  {
+    _templateId: 'tpl_gorjetas_retidas',
+    grupo: 'remuneracao',
+    nome: 'Gorjetas Retidas',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'fixo',
+    valorBase: null,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['ferias', 'decimo_terceiro', 'fgts'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Art. 457 CLT + Sumula 354 TST. Gorjetas integram a remuneracao mas nao servem de base para aviso previo, AN, HE e RSR.',
+  },
+  {
+    _templateId: 'tpl_anuenio',
+    grupo: 'remuneracao',
+    nome: 'Adicional por Tempo de Servico (Anuenio/Quinquenio)',
+    natureza: 'salarial',
+    periodoTipo: 'contrato',
+    frequencia: 'mensal',
+    tipoValor: 'percentual_salario',
+    percentualBase: 1,
+    percentualAdicional: 0,
+    geraReflexos: true,
+    reflexosEm: ['rsr', 'ferias', 'decimo_terceiro', 'fgts', 'aviso_previo'],
+    incideInss: true,
+    incideIr: true,
+    incideFgts: true,
+    descricao: 'Adicional previsto em norma coletiva ou regulamento interno. Base: percentual sobre salario por ano de servico.',
+    opcoesPercentual: [1, 2, 3, 5],
+    campoPercentual: 'base',
+    rotulosPercentual: ['1% (anuenio)', '2%', '3%', '5% (quinquenio)'],
   },
   // ── Verbas Rescisórias ────────────────────────────────────────────────────────
   {
@@ -507,6 +578,21 @@ const TEMPLATES_PADRAO = [
     descricao: 'Gestante, CIPA, acidentado etc. Salários do período de estabilidade × meses restantes',
   },
 ];
+
+// Mapeamento template_id → grupo temático para parcelas vindas do banco de dados
+const CATEGORIAS_TEMATICAS = {
+  'Meio Ambiente do Trabalho': ['tpl_insalubridade_min', 'tpl_insalubridade_med', 'tpl_insalubridade_max', 'tpl_insalubridade', 'tpl_periculosidade'],
+  'Duração do Trabalho': ['tpl_horas_extras', 'tpl_horas_extras_100', 'tpl_noturno', 'tpl_sobreaviso', 'tpl_prontidao', 'tpl_intervalo', 'tpl_intervalo_inter', 'tpl_feriados'],
+  'Remuneração e Benefícios': ['tpl_gratificacao_funcao', 'tpl_equiparacao', 'tpl_desvio_funcao', 'tpl_anuenio', 'tpl_comissoes_retidas', 'tpl_gorjetas_retidas', 'tpl_adicional_transferencia', 'tpl_diferencas_salariais', 'tpl_comissoes', 'tpl_dsr_variaveis', 'tpl_vale_refeicao_sal'],
+  'Benefícios': ['tpl_ticket_alimentacao', 'tpl_vale_transporte', 'tpl_ajuda_custo', 'tpl_quebra_caixa', 'tpl_plr', 'tpl_vale_refeicao_pat'],
+  'Reflexos': ['tpl_rsr_dsr'],
+};
+
+// Índice inverso: template_id → grupo label (para parcelas da biblioteca DB)
+const TEMPLATE_ID_PARA_GRUPO = {};
+Object.entries(CATEGORIAS_TEMATICAS).forEach(([grupoLabel, templateIds]) => {
+  templateIds.forEach(tid => { TEMPLATE_ID_PARA_GRUPO[tid] = grupoLabel; });
+});
 
 // Helpers de localStorage
 function lerGruposCustom() {
@@ -861,10 +947,15 @@ export default function ParcelasPersonalizadas() {
             t => grupoDoTemplate(t) === grupo.id && !templateIdsSalvos.has(t._templateId)
           );
           // Parcelas salvas que pertencem a templates deste grupo
+          // 1) Tenta via TEMPLATES_PADRAO (grupo override do localStorage ou grupo padrão)
+          // 2) Fallback via TEMPLATE_ID_PARA_GRUPO (CATEGORIAS_TEMATICAS)
           const parcelasSalvasDoGrupo = parcelasSalvas.filter(p => {
             if (!p.template_id) return false;
             const tpl = TEMPLATES_PADRAO.find(t => t._templateId === p.template_id);
-            return tpl && grupoDoTemplate(tpl) === grupo.id;
+            if (tpl) return grupoDoTemplate(tpl) === grupo.id;
+            // Fallback: usar mapeamento CATEGORIAS_TEMATICAS → grupo.label
+            const grupoTematico = TEMPLATE_ID_PARA_GRUPO[p.template_id];
+            return grupoTematico === grupo.label;
           });
           const total = templatesDoGrupo.length + parcelasSalvasDoGrupo.length;
           if (total === 0) return null;
@@ -932,6 +1023,76 @@ export default function ParcelasPersonalizadas() {
             </div>
           );
         })}
+
+        {/* Grupo "Outras Parcelas" — parcelas salvas com template_id que não pertence a nenhum grupo */}
+        {(() => {
+          const allGroupedTemplateIds = new Set();
+          todosGrupos.forEach(grupo => {
+            TEMPLATES_PADRAO.forEach(t => {
+              if (grupoDoTemplate(t) === grupo.id) allGroupedTemplateIds.add(t._templateId);
+            });
+          });
+          // template_ids do CATEGORIAS_TEMATICAS
+          Object.values(CATEGORIAS_TEMATICAS).flat().forEach(tid => allGroupedTemplateIds.add(tid));
+
+          const outrasParcelas = parcelasSalvas.filter(p =>
+            p.template_id && !allGroupedTemplateIds.has(p.template_id)
+          );
+          if (outrasParcelas.length === 0) return null;
+          const aberto = Boolean(gruposAbertos['_outras']);
+          return (
+            <div className="border border-gray-200 rounded-lg mb-2">
+              <button
+                type="button"
+                onClick={() => toggleGrupo('_outras')}
+                className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 rounded-lg"
+              >
+                <span className="font-medium text-sm text-gray-700">
+                  Outras Parcelas
+                  <span className="ml-2 text-xs text-gray-400 font-normal">({outrasParcelas.length})</span>
+                </span>
+                {aberto ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+              </button>
+              {aberto && (
+                <div className="px-4 pb-4 space-y-2">
+                  {outrasParcelas.map((p) => (
+                    <div key={p.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+                      <div className="flex-1">
+                        <span className="font-medium text-sm">{p.nome}</span>
+                        {p.descricao && <p className="text-xs text-gray-400 mt-0.5 leading-snug">{p.descricao}</p>}
+                        <div className="flex gap-2 mt-0.5">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${p.natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+                            {p.natureza}
+                          </span>
+                          <span className="text-xs text-gray-400">{FREQUENCIA_LABELS[p.frequencia] || p.frequencia}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditorCtx({ mode: 'biblioteca', parcela: p })}
+                        className="text-gray-400 hover:text-primaria p-1"
+                        title="Editar"
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { if (window.confirm('Excluir esta parcela da biblioteca?')) excluirDaBiblioteca(p.id); }}
+                        className="text-red-400 hover:text-red-600 p-1"
+                        title="Excluir"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button type="button" onClick={() => usarDaBiblioteca(p)} className="btn-secundario text-xs py-1 px-3">
+                        Usar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Grupo "Minhas Parcelas" — parcelas salvas sem template_id */}
         {(() => {

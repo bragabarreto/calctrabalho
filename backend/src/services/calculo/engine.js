@@ -24,6 +24,8 @@ const { calcularINSS, calcularINSS_Acordo, calcularEncargosEmpregado } = require
 const { calcularJurosADC58 } = require('./verbas/jurosCorrecao');
 const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
 const { calcularParcelaGenerica, calcularReflexosParcela } = require('./verbas/parcelasGenericas');
+const { aplicarCascataOJ394 } = require('./reflexosCascata');
+const { DATA_OJ394 } = require('../../config/constants');
 const db = require('../../config/database');
 
 /**
@@ -290,6 +292,14 @@ async function calcular(dados, modalidade) {
   // ---- DANO MORAL (valor manual) ----
   verbas.danoMoral = { valor: dados.valorDanoMoral || 0, excluida: false };
 
+  // ---- OJ 394 SDI-1 TST: REFLEXOS EM CASCATA (pós 20/03/2023) ----
+  // Para fatos geradores a partir de 20/03/2023, RSR majorado por HE
+  // integra base de férias, 13º, aviso prévio e FGTS (IRR-10169-57.2013.5.05.0024)
+  const dataRef = temporal.dataDispensa || new Date(dados.dataDispensa);
+  if (dataRef >= DATA_OJ394) {
+    aplicarCascataOJ394(verbas, reflexos, temporal, dados, modalidade);
+  }
+
   // ---- HONORÁRIOS (valor manual ou % do total) ----
   // Calculado após subtotal abaixo
 
@@ -357,7 +367,7 @@ async function calcular(dados, modalidade) {
 
   // ---- ENCARGOS DO EMPREGADO + PATRONAL (INSS + IR — informativo) ----
   const lapsoMeses = temporal.lapsoComAviso?.meses || temporal.lapsoSemAviso?.meses || 1;
-  const encargosEmpregado = calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial);
+  const encargosEmpregado = await calcularEncargosEmpregado(listaVerbas, lapsoMeses, percentualSalarial);
 
   return {
     verbas: listaVerbas,

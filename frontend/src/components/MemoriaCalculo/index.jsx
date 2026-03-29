@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import LegalTooltip from '../LegalTooltip';
 
 function formatBRL(valor) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
@@ -95,13 +96,21 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
               onChange={e => editarVerba(verba.codigo, 'nome', e.target.value)}
             />
           ) : (
-            <button
-              className="flex items-center gap-1 text-left text-sm w-full"
-              onClick={() => setExpandida(!expandida)}
-            >
-              {expandida ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
-              <span className="font-medium">{verba.nome}</span>
-            </button>
+            <div>
+              <button
+                className="flex items-center gap-1 text-left text-sm w-full"
+                onClick={() => setExpandida(!expandida)}
+              >
+                {expandida ? <ChevronDown size={14} className="flex-shrink-0" /> : <ChevronRight size={14} className="flex-shrink-0" />}
+                <span className="font-medium">{verba.nome}</span>
+                <LegalTooltip codigo={verba.codigo} />
+              </button>
+              {verba.memoria?.criterio && (
+                <span className="inline-block text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-200 mt-1">
+                  {verba.memoria.criterio}
+                </span>
+              )}
+            </div>
           )}
         </td>
         <td className="text-center text-xs">

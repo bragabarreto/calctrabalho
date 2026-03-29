@@ -1,12 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Edit2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, BookOpen, Plus, RefreshCw, TrendingUp, TrendingDown, ChevronDown, ChevronUp, Edit2, Copy } from 'lucide-react';
 import { useParcelas, useCriarParcela, useAtualizarParcela, useExcluirParcela } from '../../hooks/useParcelas.js';
 import { useSalarioMinimo, useSalvarSalarioMinimo, useRemoverSalarioMinimo } from '../../hooks/useSalarioMinimo.js';
 import { useIpcaE, useSalvarIpcaE, useRemoverIpcaE, useBacenSyncIpcaE } from '../../hooks/useIpcaE.js';
+import { useSelic, useSalvarSelic, useRemoverSelic, useBacenSyncSelic } from '../../hooks/useSelic.js';
+import { useInssParametros, useSalvarInssVigencia, useRemoverInssVigencia } from '../../hooks/useInssParametros.js';
 import ParcelaEditor from '../../components/ParcelaEditor/index.jsx';
 
 const TABS = [
   { id: 'legais', label: 'Parâmetros Legais' },
+  { id: 'selic', label: 'Selic' },
+  { id: 'inss', label: 'INSS' },
   { id: 'verbas', label: 'Parâmetros das Verbas' },
   { id: 'biblioteca', label: 'Biblioteca de Parcelas' },
 ];
@@ -369,64 +373,550 @@ function IpcaEAdmin() {
   );
 }
 
-// ---- ABA PARÂMETROS LEGAIS ----
-function TabLegais() {
-  const [selic, setSelic] = useState(null);
-  const [carregando, setCarregando] = useState(false);
+function SelicAdmin() {
+  const { data: valores = [], isLoading } = useSelic();
+  const { mutateAsync: salvar } = useSalvarSelic();
+  const { mutateAsync: remover } = useRemoverSelic();
+  const { mutateAsync: bacenSync, isPending: sincronizando } = useBacenSyncSelic();
 
-  async function buscarSelic() {
-    setCarregando(true);
+  const anoAtual = String(new Date().getFullYear());
+  const [verTodos, setVerTodos] = useState(false);
+  const [formAberto, setFormAberto] = useState(false);
+  const [mesSel, setMesSel] = useState('01');
+  const [anoSel, setAnoSel] = useState(anoAtual);
+  const [taxaMensal, setTaxaMensal] = useState('');
+  const [taxaAnual, setTaxaAnual] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [removendo, setRemovendo] = useState(null);
+  const [erro, setErro] = useState('');
+  const [msgSync, setMsgSync] = useState('');
+
+  const exibidos = verTodos ? valores : valores.slice(0, 12);
+
+  async function handleSalvar(e) {
+    e.preventDefault();
+    const mesAno = `${anoSel}-${mesSel}`;
+    if (!taxaMensal && !taxaAnual) { setErro('Informe pelo menos uma taxa.'); return; }
+    const tm = taxaMensal ? Number(taxaMensal.replace(',', '.')) : null;
+    const ta = taxaAnual ? Number(taxaAnual.replace(',', '.')) : null;
+    if (taxaMensal && (isNaN(tm))) { setErro('Taxa mensal inválida.'); return; }
+    if (taxaAnual && (isNaN(ta))) { setErro('Taxa anual inválida.'); return; }
+    setSalvando(true); setErro('');
     try {
-      const resp = await fetch('https://brasilapi.com.br/api/taxas/v1');
-      const data = await resp.json();
-      const s = data.find((t) => t.nome === 'SELIC' || t.nome === 'Selic');
-      if (s) setSelic(s.valor);
-    } catch {
-      setSelic(null);
-    } finally {
-      setCarregando(false);
+      const dados = { mes_ano: mesAno };
+      if (tm !== null) dados.taxa_mensal = tm;
+      if (ta !== null) dados.taxa_anual = ta;
+      await salvar(dados);
+      setTaxaMensal(''); setTaxaAnual(''); setFormAberto(false);
+    } catch (ex) { setErro(ex.message); }
+    finally { setSalvando(false); }
+  }
+
+  async function handleRemover(ma) {
+    if (!window.confirm(`Remover Selic de ${nomeMes(ma)}?`)) return;
+    setRemovendo(ma);
+    try { await remover(ma); } catch (ex) { alert(ex.message); }
+    finally { setRemovendo(null); }
+  }
+
+  async function handleBacenSync() {
+    setMsgSync('');
+    try {
+      const r = await bacenSync();
+      setMsgSync(`Sincronizado: ${r.atualizados || r.inseridos || 0} registros atualizados.`);
+    } catch (ex) { setMsgSync('Erro: ' + ex.message); }
+  }
+
+  return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-titulo text-lg text-primaria">Taxa SELIC -- Historico Mensal</h3>
+        <div className="flex gap-2">
+          <button type="button" className="btn-secundario flex items-center gap-1 text-sm py-1 px-3"
+            onClick={handleBacenSync} disabled={sincronizando}>
+            <RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />
+            {sincronizando ? 'Sincronizando...' : 'Atualizar via BACEN'}
+          </button>
+          <button type="button" className="btn-primario flex items-center gap-1 text-sm py-1 px-3"
+            onClick={() => setFormAberto((v) => !v)}>
+            <Plus size={14} /> Adicionar
+          </button>
+        </div>
+      </div>
+
+      {msgSync && <p className="text-xs text-green-700 bg-green-50 p-2 rounded mb-3">{msgSync}</p>}
+
+      {formAberto && (
+        <form onSubmit={handleSalvar} className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm font-medium text-blue-800 mb-3">Novo registro (ou atualizar existente)</p>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div>
+              <label className="campo-label">Mes/Ano</label>
+              <div className="flex gap-1">
+                <select value={mesSel} onChange={(e) => setMesSel(e.target.value)} className="campo-input">
+                  {MESES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <select value={anoSel} onChange={(e) => setAnoSel(e.target.value)} className="campo-input">
+                  {ANOS.map((a) => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="campo-label">Taxa Mensal (%)</label>
+              <input type="text" value={taxaMensal} onChange={(e) => setTaxaMensal(e.target.value)}
+                placeholder="ex: 0,83" className="campo-input" />
+            </div>
+            <div>
+              <label className="campo-label">Taxa Anual (%)</label>
+              <input type="text" value={taxaAnual} onChange={(e) => setTaxaAnual(e.target.value)}
+                placeholder="ex: 13,25" className="campo-input" />
+            </div>
+          </div>
+          {erro && <p className="text-xs text-red-600 mb-2">{erro}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={salvando} className="btn-primario text-sm py-1 px-4">
+              {salvando ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button type="button" onClick={() => { setFormAberto(false); setErro(''); }} className="btn-secundario text-sm py-1 px-4">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">Carregando...</p>
+      ) : valores.length === 0 ? (
+        <p className="text-sm text-gray-400">Nenhum registro. Clique em "Atualizar via BACEN" para importar o historico.</p>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="tabela-memoria">
+              <thead>
+                <tr>
+                  <th>Vigencia</th>
+                  <th className="text-right">Taxa Mensal (%)</th>
+                  <th className="text-right">Taxa Anual (%)</th>
+                  <th style={{ width: 40 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {exibidos.map((s) => (
+                  <tr key={s.mes_ano}>
+                    <td>{nomeMes(s.mes_ano)}</td>
+                    <td className="text-right font-mono font-semibold">
+                      {s.taxa_mensal != null ? `${Number(s.taxa_mensal).toFixed(4)}%` : '--'}
+                    </td>
+                    <td className="text-right font-mono font-semibold">
+                      {s.taxa_anual != null ? `${Number(s.taxa_anual).toFixed(2)}%` : '--'}
+                    </td>
+                    <td>
+                      <button type="button" onClick={() => handleRemover(s.mes_ano)} disabled={removendo === s.mes_ano}
+                        className="text-red-400 hover:text-red-600 p-1" title="Remover">
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {valores.length > 12 && (
+            <button type="button" onClick={() => setVerTodos((v) => !v)}
+              className="mt-2 text-sm text-primaria flex items-center gap-1 hover:underline">
+              {verTodos ? <><ChevronUp size={14} /> Ver menos</> : <><ChevronDown size={14} /> Ver todos ({valores.length} registros)</>}
+            </button>
+          )}
+        </>
+      )}
+      <p className="text-xs text-gray-400 mt-2">
+        Fonte: BACEN -- Serie 4390 (mensal). Utilizada para calculo de juros de mora (ADC 58 STF, fase pos-judicial).
+        Clique em "Atualizar via BACEN" para importar automaticamente.
+      </p>
+    </div>
+  );
+}
+
+function InssParametrosAdmin() {
+  const { data: vigencias = [], isLoading } = useInssParametros();
+  const { mutateAsync: salvarVigencia } = useSalvarInssVigencia();
+  const { mutateAsync: removerVigencia } = useRemoverInssVigencia();
+
+  const [salvando, setSalvando] = useState(false);
+  const [removendo, setRemovendo] = useState(null);
+  const [formAberto, setFormAberto] = useState(false);
+  const [erro, setErro] = useState('');
+  const [vigenciaAberta, setVigenciaAberta] = useState(null);
+  const [editandoFaixa, setEditandoFaixa] = useState(null); // { vigIdx, faixaIdx }
+  const [faixaEdit, setFaixaEdit] = useState({ limite_superior: '', aliquota: '' });
+
+  // Formulario nova vigencia
+  const [novaData, setNovaData] = useState('');
+  const [novasFaixas, setNovasFaixas] = useState([
+    { faixa_ordem: 1, limite_superior: '', aliquota: '7.5' },
+    { faixa_ordem: 2, limite_superior: '', aliquota: '9' },
+    { faixa_ordem: 3, limite_superior: '', aliquota: '12' },
+    { faixa_ordem: 4, limite_superior: '', aliquota: '14' },
+  ]);
+
+  function copiarUltimaVigencia() {
+    if (vigencias.length === 0) return;
+    const ultima = vigencias[0]; // assumindo que vem ordenado desc
+    const faixas = ultima.faixas || [];
+    if (faixas.length > 0) {
+      setNovasFaixas(faixas.map((f) => ({
+        faixa_ordem: f.faixa_ordem,
+        limite_superior: String(f.limite_superior || ''),
+        aliquota: String(f.aliquota || ''),
+      })));
     }
   }
 
-  useEffect(() => { buscarSelic(); }, []);
+  function handleNovaFaixaChange(idx, campo, valor) {
+    setNovasFaixas((prev) => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f));
+  }
+
+  async function handleSalvarNovaVigencia(e) {
+    e.preventDefault();
+    if (!novaData) { setErro('Informe a data de inicio da vigencia.'); return; }
+    const faixasNum = novasFaixas.map((f) => ({
+      faixa_ordem: f.faixa_ordem,
+      limite_superior: Number(String(f.limite_superior).replace(',', '.')),
+      aliquota: Number(String(f.aliquota).replace(',', '.')),
+    }));
+    const invalida = faixasNum.find((f) => isNaN(f.limite_superior) || isNaN(f.aliquota) || f.limite_superior <= 0 || f.aliquota <= 0);
+    if (invalida) { setErro('Preencha todos os limites e aliquotas com valores validos.'); return; }
+    setSalvando(true); setErro('');
+    try {
+      await salvarVigencia({ vigencia_inicio: novaData, faixas: faixasNum });
+      setFormAberto(false);
+      setNovaData('');
+      setNovasFaixas([
+        { faixa_ordem: 1, limite_superior: '', aliquota: '7.5' },
+        { faixa_ordem: 2, limite_superior: '', aliquota: '9' },
+        { faixa_ordem: 3, limite_superior: '', aliquota: '12' },
+        { faixa_ordem: 4, limite_superior: '', aliquota: '14' },
+      ]);
+    } catch (ex) { setErro(ex.message); }
+    finally { setSalvando(false); }
+  }
+
+  async function handleRemoverVigencia(vigenciaInicio) {
+    const label = new Date(vigenciaInicio + 'T00:00:00').toLocaleDateString('pt-BR');
+    if (!window.confirm(`Remover vigencia de ${label} e todas as suas faixas?`)) return;
+    setRemovendo(vigenciaInicio);
+    try { await removerVigencia(vigenciaInicio); } catch (ex) { alert(ex.message); }
+    finally { setRemovendo(null); }
+  }
+
+  function iniciarEdicaoFaixa(vigIdx, faixaIdx, faixa) {
+    setEditandoFaixa({ vigIdx, faixaIdx });
+    setFaixaEdit({
+      limite_superior: String(faixa.limite_superior || ''),
+      aliquota: String(faixa.aliquota || ''),
+    });
+  }
+
+  async function salvarEdicaoFaixa(vigencia) {
+    if (!editandoFaixa) return;
+    const { faixaIdx } = editandoFaixa;
+    const faixas = [...(vigencia.faixas || [])];
+    faixas[faixaIdx] = {
+      ...faixas[faixaIdx],
+      limite_superior: Number(String(faixaEdit.limite_superior).replace(',', '.')),
+      aliquota: Number(String(faixaEdit.aliquota).replace(',', '.')),
+    };
+    setSalvando(true);
+    try {
+      await salvarVigencia({
+        vigencia_inicio: vigencia.vigencia_inicio,
+        faixas: faixas.map((f) => ({
+          faixa_ordem: f.faixa_ordem,
+          limite_superior: Number(f.limite_superior),
+          aliquota: Number(f.aliquota),
+        })),
+      });
+      setEditandoFaixa(null);
+    } catch (ex) { alert(ex.message); }
+    finally { setSalvando(false); }
+  }
+
+  function calcContribuicaoMaxima(faixas) {
+    if (!faixas || faixas.length === 0) return 0;
+    const sorted = [...faixas].sort((a, b) => a.faixa_ordem - b.faixa_ordem);
+    let total = 0;
+    let anterior = 0;
+    for (const f of sorted) {
+      const lim = Number(f.limite_superior) || 0;
+      const aliq = Number(f.aliquota) || 0;
+      total += (lim - anterior) * (aliq / 100);
+      anterior = lim;
+    }
+    return total;
+  }
+
+  function formatData(d) {
+    if (!d) return '';
+    const dt = new Date(d + 'T00:00:00');
+    return dt.toLocaleDateString('pt-BR');
+  }
 
   return (
+    <div className="card p-6">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-titulo text-lg text-primaria">INSS -- Tabela Progressiva por Vigencia</h3>
+        <button type="button" className="btn-primario flex items-center gap-1 text-sm py-1 px-3"
+          onClick={() => { setFormAberto((v) => !v); if (!formAberto) copiarUltimaVigencia(); }}>
+          <Plus size={14} /> Nova Vigencia
+        </button>
+      </div>
+
+      {formAberto && (
+        <form onSubmit={handleSalvarNovaVigencia} className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-medium text-blue-800">Nova vigencia INSS</p>
+            {vigencias.length > 0 && (
+              <button type="button" onClick={copiarUltimaVigencia}
+                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                <Copy size={12} /> Copiar ultima vigencia
+              </button>
+            )}
+          </div>
+          <div className="mb-3">
+            <label className="campo-label">Data de inicio da vigencia</label>
+            <input type="date" value={novaData} onChange={(e) => setNovaData(e.target.value)} className="campo-input w-48" />
+          </div>
+          <div className="overflow-x-auto mb-3">
+            <table className="tabela-memoria">
+              <thead>
+                <tr>
+                  <th>Faixa</th>
+                  <th className="text-right">Limite Superior (R$)</th>
+                  <th className="text-right">Aliquota (%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {novasFaixas.map((f, idx) => (
+                  <tr key={f.faixa_ordem}>
+                    <td className="font-medium">{f.faixa_ordem}a faixa{f.faixa_ordem === 4 ? ' (teto)' : ''}</td>
+                    <td>
+                      <input type="text" value={f.limite_superior}
+                        onChange={(e) => handleNovaFaixaChange(idx, 'limite_superior', e.target.value)}
+                        placeholder="ex: 1518,00" className="campo-input text-right font-mono" />
+                    </td>
+                    <td>
+                      <input type="text" value={f.aliquota}
+                        onChange={(e) => handleNovaFaixaChange(idx, 'aliquota', e.target.value)}
+                        placeholder="ex: 7,5" className="campo-input text-right font-mono" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {erro && <p className="text-xs text-red-600 mb-2">{erro}</p>}
+          <div className="flex gap-2">
+            <button type="submit" disabled={salvando} className="btn-primario text-sm py-1 px-4">
+              {salvando ? 'Salvando...' : 'Salvar Vigencia'}
+            </button>
+            <button type="button" onClick={() => { setFormAberto(false); setErro(''); }} className="btn-secundario text-sm py-1 px-4">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {isLoading ? (
+        <p className="text-sm text-gray-400">Carregando...</p>
+      ) : vigencias.length === 0 ? (
+        <p className="text-sm text-gray-400">Nenhuma vigencia cadastrada. Clique em "Nova Vigencia" para adicionar.</p>
+      ) : (
+        <div className="space-y-3">
+          {vigencias.map((vig, vigIdx) => {
+            const faixas = vig.faixas || [];
+            const contribMax = calcContribuicaoMaxima(faixas);
+            const teto = faixas.length > 0 ? Math.max(...faixas.map((f) => Number(f.limite_superior) || 0)) : 0;
+            const isAberta = vigenciaAberta === vigIdx;
+
+            return (
+              <div key={vig.vigencia_inicio} className="border border-gray-200 rounded-lg overflow-hidden">
+                <div
+                  className="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                  onClick={() => setVigenciaAberta(isAberta ? null : vigIdx)}
+                >
+                  <div className="flex items-center gap-3">
+                    {isAberta ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    <span className="font-medium text-sm">Vigencia: {formatData(vig.vigencia_inicio)}</span>
+                    <span className="text-xs text-gray-400">{faixas.length} faixas</span>
+                    <span className="text-xs text-gray-400">|</span>
+                    <span className="text-xs text-gray-500">Teto: {formatBRL(teto)}</span>
+                    <span className="text-xs text-gray-400">|</span>
+                    <span className="text-xs text-gray-500">Contrib. max: {formatBRL(contribMax)}</span>
+                  </div>
+                  <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoverVigencia(vig.vigencia_inicio); }}
+                    disabled={removendo === vig.vigencia_inicio}
+                    className="text-red-400 hover:text-red-600 p-1" title="Remover vigencia">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                {isAberta && (
+                  <div className="p-4">
+                    <div className="overflow-x-auto">
+                      <table className="tabela-memoria">
+                        <thead>
+                          <tr>
+                            <th>Faixa</th>
+                            <th className="text-right">Limite Superior (R$)</th>
+                            <th className="text-center">Aliquota (%)</th>
+                            <th style={{ width: 80 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {faixas.sort((a, b) => a.faixa_ordem - b.faixa_ordem).map((f, faixaIdx) => {
+                            const isEditando = editandoFaixa?.vigIdx === vigIdx && editandoFaixa?.faixaIdx === faixaIdx;
+                            return (
+                              <tr key={f.faixa_ordem}>
+                                <td className="font-medium">{f.faixa_ordem}a faixa{f.faixa_ordem === faixas.length ? ' (teto)' : ''}</td>
+                                <td className="text-right font-mono">
+                                  {isEditando ? (
+                                    <input type="text" value={faixaEdit.limite_superior}
+                                      onChange={(e) => setFaixaEdit((p) => ({ ...p, limite_superior: e.target.value }))}
+                                      className="campo-input text-right font-mono w-32" />
+                                  ) : formatBRL(Number(f.limite_superior))}
+                                </td>
+                                <td className="text-center font-mono">
+                                  {isEditando ? (
+                                    <input type="text" value={faixaEdit.aliquota}
+                                      onChange={(e) => setFaixaEdit((p) => ({ ...p, aliquota: e.target.value }))}
+                                      className="campo-input text-center font-mono w-20" />
+                                  ) : `${Number(f.aliquota).toFixed(1)}%`}
+                                </td>
+                                <td className="text-right">
+                                  {isEditando ? (
+                                    <div className="flex gap-1 justify-end">
+                                      <button type="button" onClick={() => salvarEdicaoFaixa(vig)}
+                                        disabled={salvando} className="text-xs text-green-600 hover:text-green-800 font-medium">
+                                        OK
+                                      </button>
+                                      <button type="button" onClick={() => setEditandoFaixa(null)}
+                                        className="text-xs text-gray-400 hover:text-gray-600">
+                                        X
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button type="button" onClick={() => iniciarEdicaoFaixa(vigIdx, faixaIdx, f)}
+                                      className="text-gray-400 hover:text-primaria p-1" title="Editar faixa">
+                                      <Edit2 size={13} />
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td colSpan={2} className="text-sm text-gray-500">Contribuicao maxima mensal</td>
+                            <td className="text-center font-mono font-semibold">{formatBRL(contribMax)}</td>
+                            <td></td>
+                          </tr>
+                          <tr>
+                            <td colSpan={2} className="text-sm text-gray-500">Teto de contribuicao (limite 4a faixa)</td>
+                            <td className="text-center font-mono font-semibold">{formatBRL(teto)}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-xs text-gray-400 mt-2">
+        Fonte: Portarias do Ministerio da Previdencia Social. Tabela progressiva -- aliquota incide sobre cada faixa separadamente.
+      </p>
+    </div>
+  );
+}
+
+// ---- ABA SELIC ----
+function TabSelic() {
+  return (
     <div className="space-y-5">
+      <SelicAdmin />
+      <div className="aviso-judicial">
+        A taxa Selic e utilizada para calculo de juros de mora na fase pos-judicial e, desde a ADC 58 do STF, como indice de atualizacao monetaria dos debitos trabalhistas a partir de sua vigencia. Mantenha os dados atualizados via sincronizacao com o BACEN.
+      </div>
+    </div>
+  );
+}
+
+// ---- ABA INSS ----
+function TabInss() {
+  return (
+    <div className="space-y-5">
+      <InssParametrosAdmin />
+      <div className="aviso-judicial">
+        A tabela progressiva do INSS e atualizada anualmente por portaria do Ministerio da Previdencia Social. A aliquota incide sobre cada faixa de salario separadamente (calculo progressivo). Sempre verifique a portaria vigente.
+      </div>
+    </div>
+  );
+}
+
+// ---- ABA PARAMETROS LEGAIS ----
+function SincronizarTodosButton() {
+  const { mutateAsync: syncIpca, isPending: sincIpca } = useBacenSyncIpcaE();
+  const { mutateAsync: syncSelic, isPending: sincSelic } = useBacenSyncSelic();
+  const [msg, setMsg] = useState('');
+  const sincronizando = sincIpca || sincSelic;
+
+  async function handleSyncTodos() {
+    setMsg('');
+    try {
+      const [rIpca, rSelic] = await Promise.all([syncIpca(), syncSelic()]);
+      const ipcaCount = rIpca.atualizados || 0;
+      const selicCount = rSelic.atualizados || rSelic.inseridos || 0;
+      setMsg(`Sincronizacao concluida: IPCA-E (${ipcaCount} registros), Selic (${selicCount} registros).`);
+    } catch (ex) {
+      setMsg('Erro na sincronizacao: ' + ex.message);
+    }
+  }
+
+  return (
+    <div className="card p-4 bg-blue-50 border-blue-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <h4 className="font-medium text-sm text-blue-800">Sincronizacao com o Banco Central</h4>
+          <p className="text-xs text-blue-600 mt-0.5">Atualiza IPCA-E e Selic de uma so vez via API do BACEN.</p>
+        </div>
+        <button type="button" onClick={handleSyncTodos} disabled={sincronizando}
+          className="btn-primario flex items-center gap-2 text-sm py-2 px-4">
+          <RefreshCw size={14} className={sincronizando ? 'animate-spin' : ''} />
+          {sincronizando ? 'Sincronizando...' : 'Sincronizar Todos'}
+        </button>
+      </div>
+      {msg && <p className="text-xs text-green-700 bg-green-50 p-2 rounded mt-2">{msg}</p>}
+    </div>
+  );
+}
+
+function TabLegais() {
+  return (
+    <div className="space-y-5">
+      <SincronizarTodosButton />
+
       <SalarioMinimoAdmin />
 
       <IpcaEAdmin />
 
-      {/* SELIC */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-titulo text-lg text-primaria">Taxa SELIC (Banco Central)</h3>
-          <button
-            onClick={buscarSelic}
-            disabled={carregando}
-            className="btn-secundario flex items-center gap-1 text-sm py-1 px-3"
-          >
-            <RefreshCw size={14} className={carregando ? 'animate-spin' : ''} />
-            Atualizar
-          </button>
-        </div>
-        {selic != null ? (
-          <div className="flex items-center gap-3">
-            <div className="text-4xl font-mono font-bold text-primaria">{selic.toFixed(2)}%</div>
-            <div className="text-sm text-gray-500">
-              <p>a.a. — taxa vigente</p>
-              <p className="text-xs">Definida pelo COPOM / BACEN</p>
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400">{carregando ? 'Buscando...' : 'Não foi possível obter a taxa atual.'}</p>
-        )}
-        <p className="text-xs text-gray-400 mt-2">Fonte: BrasilAPI / Banco Central do Brasil. Utilizada para cálculo de juros de mora.</p>
-      </div>
-
       {/* IPCA Mensal */}
       <div className="card p-6">
-        <h3 className="font-titulo text-lg mb-1 text-primaria">IPCA — Variação Mensal (2024–2025)</h3>
-        <p className="text-xs text-gray-400 mb-3">Fonte: IBGE — Índice Nacional de Preços ao Consumidor Amplo</p>
+        <h3 className="font-titulo text-lg mb-1 text-primaria">IPCA -- Variacao Mensal (2024-2025)</h3>
+        <p className="text-xs text-gray-400 mb-3">Fonte: IBGE -- Indice Nacional de Precos ao Consumidor Amplo</p>
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
           {IPCA_MENSAL.map((m) => (
             <div key={m.mes} className={`text-center p-2 rounded border ${m.valor < 0 ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}`}>
@@ -441,9 +931,9 @@ function TabLegais() {
 
       {/* IPCA Anual */}
       <div className="card p-6">
-        <h3 className="font-titulo text-lg mb-3 text-primaria">IPCA — Variação Anual (últimos 5 anos)</h3>
+        <h3 className="font-titulo text-lg mb-3 text-primaria">IPCA -- Variacao Anual (ultimos 5 anos)</h3>
         <table className="tabela-memoria">
-          <thead><tr><th>Ano</th><th className="text-right">Acumulado</th><th className="text-center">Tendência</th></tr></thead>
+          <thead><tr><th>Ano</th><th className="text-right">Acumulado</th><th className="text-center">Tendencia</th></tr></thead>
           <tbody>
             {[...IPCA_ANUAL].reverse().map((a, i, arr) => {
               const anterior = arr[i + 1];
@@ -462,42 +952,24 @@ function TabLegais() {
             })}
           </tbody>
         </table>
-        <p className="text-xs text-gray-400 mt-2">Fonte: IBGE. * 2025 estimado com base em dados disponíveis.</p>
+        <p className="text-xs text-gray-400 mt-2">Fonte: IBGE. * 2025 estimado com base em dados disponiveis.</p>
       </div>
 
-      {/* INSS 2025 */}
+      {/* Outros Parametros */}
       <div className="card p-6">
-        <h3 className="font-titulo text-lg mb-3 text-primaria">Tabela INSS 2026 (Progressiva)</h3>
-        <table className="tabela-memoria">
-          <thead><tr><th>Faixa</th><th className="text-right">Até (R$)</th><th className="text-center">Alíquota</th></tr></thead>
-          <tbody>
-            <tr><td>1ª faixa</td><td className="text-right font-mono">1.621,00</td><td className="text-center">7,5%</td></tr>
-            <tr><td>2ª faixa</td><td className="text-right font-mono">2.902,84</td><td className="text-center">9,0%</td></tr>
-            <tr><td>3ª faixa</td><td className="text-right font-mono">4.354,27</td><td className="text-center">12,0%</td></tr>
-            <tr><td>4ª faixa (teto)</td><td className="text-right font-mono">8.475,55</td><td className="text-center">14,0%</td></tr>
-          </tbody>
-          <tfoot>
-            <tr><td colSpan={2} className="text-sm text-gray-500">Contribuição máxima mensal</td><td className="text-center font-mono font-semibold">R$ 951,62</td></tr>
-          </tfoot>
-        </table>
-        <p className="text-xs text-gray-400 mt-2">Fonte: Decreto nº 12.797/2025. Tabela progressiva — alíquota incide sobre cada faixa separadamente.</p>
-      </div>
-
-      {/* Outros Parâmetros */}
-      <div className="card p-6">
-        <h3 className="font-titulo text-lg mb-3 text-primaria">Demais Parâmetros Legais</h3>
+        <h3 className="font-titulo text-lg mb-3 text-primaria">Demais Parametros Legais</h3>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div><span className="campo-label">Multa FGTS (Disp. s/ Justa Causa)</span><p className="font-mono">40%</p></div>
-          <div><span className="campo-label">Multa FGTS (Culpa Recíproca)</span><p className="font-mono">20%</p></div>
-          <div><span className="campo-label">Prescrição Trabalhista</span><p className="font-mono">5 anos (EC 45/2004)</p></div>
-          <div><span className="campo-label">Aviso Prévio Base</span><p className="font-mono">30 dias + 3/ano (máx 90)</p></div>
-          <div><span className="campo-label">Custas Processuais</span><p className="font-mono">2% do valor da condenação</p></div>
-          <div><span className="campo-label">Honorários Advocatícios</span><p className="font-mono">5% a 15% (art. 791-A CLT)</p></div>
+          <div><span className="campo-label">Multa FGTS (Culpa Reciproca)</span><p className="font-mono">20%</p></div>
+          <div><span className="campo-label">Prescricao Trabalhista</span><p className="font-mono">5 anos (EC 45/2004)</p></div>
+          <div><span className="campo-label">Aviso Previo Base</span><p className="font-mono">30 dias + 3/ano (max 90)</p></div>
+          <div><span className="campo-label">Custas Processuais</span><p className="font-mono">2% do valor da condenacao</p></div>
+          <div><span className="campo-label">Honorarios Advocaticios</span><p className="font-mono">5% a 15% (art. 791-A CLT)</p></div>
         </div>
       </div>
 
       <div className="aviso-judicial">
-        Parâmetros legais são atualizados periodicamente. A taxa SELIC é buscada ao vivo. IPCA e salário mínimo seguem as últimas publicações oficiais disponíveis. Sempre verifique a legislação vigente antes de usar em atos processuais.
+        Parametros legais sao atualizados periodicamente. IPCA-E e Selic podem ser sincronizados com o BACEN. Salario minimo segue as ultimas publicacoes oficiais. Para gerenciar Selic e INSS em detalhes, use as abas dedicadas. Sempre verifique a legislacao vigente antes de usar em atos processuais.
       </div>
     </div>
   );
@@ -742,6 +1214,8 @@ export default function ConfiguracoesPage() {
 
       <div className="max-w-4xl">
         {abaAtiva === 'legais' && <TabLegais />}
+        {abaAtiva === 'selic' && <TabSelic />}
+        {abaAtiva === 'inss' && <TabInss />}
         {abaAtiva === 'verbas' && <TabVerbas />}
         {abaAtiva === 'biblioteca' && <TabBiblioteca />}
       </div>

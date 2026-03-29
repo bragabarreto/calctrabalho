@@ -1,9 +1,11 @@
 'use strict';
 
 const { round2, nonNegative } = require('../../../utils/formatacao');
+const { calcularBaseRescisoria } = require('../../../utils/baseRescisoria');
 
 /**
  * 13º Salário Integral (vencidos não pagos)
+ * Base: salário + comissões + gorjetas (Súmula 354 TST)
  */
 function calcularDecimoTerceiroIntegral(dados, temporal) {
   if (dados.verbasExcluidas?.includes('decimo_terceiro_integral')) {
@@ -12,7 +14,9 @@ function calcularDecimoTerceiroIntegral(dados, temporal) {
   const qtde = dados.qtdeDecimoTerceiroVencidos || 0;
   if (qtde === 0) return { valor: 0, excluida: false, memoria: { motivo: 'Nenhum 13º integral informado' } };
 
-  const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0);
+  // Gorjetas integram base do 13º integral (Súmula 354 TST) — padronizado com proporcional
+  const dadosBase = dados.mediaSalarial ? { ...dados, ultimoSalario: dados.mediaSalarial } : dados;
+  const { valor: base } = calcularBaseRescisoria(dadosBase, { incluirGorjetas: true });
   const bruto = round2(base * qtde);
   const desconto = dados.valorPagoParcialDecimo || 0;
   const valor = nonNegative(round2(bruto - desconto));
@@ -46,8 +50,9 @@ function calcularDecimoTerceiroProporcional(dados, temporal) {
     return { valor: 0, excluida: false, memoria: { motivo: '13º proporcional informado como integralmente pago' } };
   }
 
-  // Gorjetas integram base do 13º (Súmula 354 TST)
-  const base = (dados.mediaSalarial || dados.ultimoSalario || 0) + (dados.comissoes || 0) + (dados.gorjetas || 0);
+  // Gorjetas integram base do 13º (Súmula 354 TST) — padronizado via baseRescisoria
+  const dadosBase13 = dados.mediaSalarial ? { ...dados, ultimoSalario: dados.mediaSalarial } : dados;
+  const { valor: base } = calcularBaseRescisoria(dadosBase13, { incluirGorjetas: true });
   // OJ 82 SDI1 TST: aviso prévio indenizado projeta para o 13º proporcional
   const meses = temporal.lapsoComAviso.mesesRestantes;
   const dias = temporal.lapsoComAviso.diasRestantes;
