@@ -67,6 +67,7 @@ async function calcularInsalubridade(dados, temporal) {
     memoriaInputs: { percentual, inicio, fim },
     memoria: {
       formula: `Σ (salário mínimo × ${(percentual * 100).toFixed(0)}% × dias/mês) para cada mês`,
+      fundamentoLegal: 'Art. 192 CLT c/c Súmula 228 TST — adicional de insalubridade sobre o salário mínimo.',
       percentual,
       periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0] },
       detalhes,

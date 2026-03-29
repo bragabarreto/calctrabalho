@@ -2,10 +2,13 @@
 
 const { round2 } = require('../../../utils/formatacao');
 const { differenceInMonths, isSameMonth, getDaysInMonth, getDate } = require('../../../utils/datas');
+const { calcularComHistoricoMensal } = require('../../../utils/resolverSalarioBase');
 
 /**
  * Adicional de Periculosidade (30% sobre o salário)
- * Calcula proporcional ao período
+ * Calcula proporcional ao período.
+ * Quando histórico salarial disponível: 30% de cada mês usando salário histórico.
+ * Fallback: último salário × percentual × meses.
  */
 function calcularPericulosidade(dados, temporal) {
   if (dados.verbasExcluidas?.includes('periculosidade')) {
@@ -15,7 +18,6 @@ function calcularPericulosidade(dados, temporal) {
   const percentual = dados.adicionalPericulosidadePercentual || 0;
   if (!percentual) return { valor: 0, excluida: false, memoria: { motivo: 'Periculosidade não informada' } };
 
-  const salario = dados.ultimoSalario || 0;
   const inicio = dados.dataInicioPericulosidade
     ? new Date(dados.dataInicioPericulosidade)
     : temporal.marcoPrescricional;
@@ -23,6 +25,30 @@ function calcularPericulosidade(dados, temporal) {
     ? new Date(dados.dataFimPericulosidade)
     : temporal.dataDispensa;
 
+  // Tenta cálculo mês a mês via histórico salarial
+  const resultado = calcularComHistoricoMensal(dados, inicio, fim, percentual);
+
+  if (resultado.usouHistorico) {
+    const valor = round2(resultado.total);
+    return {
+      valor,
+      excluida: false,
+      memoriaInputs: { percentual, inicio, fim, meses: resultado.meses },
+      memoria: {
+        formula: `Σ salário(mês) × ${(percentual * 100).toFixed(0)}% ao longo de ${resultado.meses} meses = R$ ${valor.toFixed(2)}`,
+        fundamentoLegal: 'Art. 193 CLT — adicional de periculosidade de 30% sobre o salário-base.',
+        componentes: { percentualPericulosidade: `${(percentual * 100).toFixed(0)}%` },
+        periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0], meses: resultado.meses },
+        percentual,
+        mesesCompletos: resultado.meses,
+        usouHistorico: true,
+        distribuicaoMensal: resultado.distribuicaoMensal,
+      },
+    };
+  }
+
+  // Fallback: último salário × percentual × meses
+  const salario = dados.ultimoSalario || 0;
   const mesesCompletos = differenceInMonths(fim, inicio);
   const valor = round2(salario * percentual * mesesCompletos);
 
@@ -32,8 +58,10 @@ function calcularPericulosidade(dados, temporal) {
     memoriaInputs: { salario, percentual, inicio, fim, mesesCompletos },
     memoria: {
       formula: `R$ ${salario.toFixed(2)} × ${(percentual * 100).toFixed(0)}% × ${mesesCompletos} meses = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 193 CLT — adicional de periculosidade de 30% sobre o salário-base.',
+      componentes: { salarioBase: round2(salario), percentualPericulosidade: `${(percentual * 100).toFixed(0)}%` },
+      periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0], meses: mesesCompletos },
       percentual,
-      periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0] },
       mesesCompletos,
     },
   };

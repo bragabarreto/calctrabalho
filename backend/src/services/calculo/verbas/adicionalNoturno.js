@@ -75,6 +75,7 @@ function calcularAdicionalNoturno(dados, temporal) {
     memoriaInputs: { M, D, AHN, HN, mesesEfetivos },
     memoria: {
       formula: `R$ ${M.toFixed(2)} / ${D} × ${(AHN * 100).toFixed(0)}% × ${HN}h × ${mesesEfetivos} meses = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 73 CLT — adicional noturno de no mínimo 20% sobre a hora diurna.',
       valorHora: valorHoraBase.toFixed(6),
       adicionalHora: adicionalHora.toFixed(6),
       mesesEfetivos,

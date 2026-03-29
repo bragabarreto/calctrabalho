@@ -31,6 +31,7 @@ function calcularAvisoPrevio(dados, temporal, modalidade) {
     excluida: false,
     memoria: {
       formula: `(R$ ${base.toFixed(2)} / 30) × ${dias} dias${modalidade === 'culpa_reciproca' ? ' (metade — culpa recíproca)' : ''} = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 487 CLT c/c Lei 12.506/2011 — aviso prévio proporcional ao tempo de serviço.',
       base,
       dias,
       modalidade,

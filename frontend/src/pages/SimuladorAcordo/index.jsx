@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
+import evalExpr from '../../utils/evalExpr';
 
 function fmt(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
@@ -22,66 +23,6 @@ const PARCELAS_PREDEFINIDAS = [
   'Honorários advocatícios',
   'Personalizada...',
 ];
-
-/**
- * Parser de descida recursiva para expressões matemáticas simples (+, -, *, /, parênteses).
- * Não usa eval nem Function — compatível com CSP restrito.
- */
-function evalExpr(raw) {
-  if (!raw || !String(raw).trim()) return 0;
-  const str = String(raw).replace(',', '.').trim();
-
-  const tokens = [];
-  let i = 0;
-  while (i < str.length) {
-    if (/\s/.test(str[i])) { i++; continue; }
-    if (/[\d.]/.test(str[i])) {
-      let num = '';
-      while (i < str.length && /[\d.]/.test(str[i])) num += str[i++];
-      tokens.push({ t: 'n', v: parseFloat(num) });
-    } else if (/[+\-*/()]/.test(str[i])) {
-      tokens.push({ t: 'o', v: str[i++] });
-    } else {
-      return parseFloat(str) || 0;
-    }
-  }
-
-  let pos = 0;
-  const peek = () => (pos < tokens.length ? tokens[pos] : null);
-  const consume = () => tokens[pos++];
-
-  function expr() {
-    let left = term();
-    while (peek() && (peek().v === '+' || peek().v === '-')) {
-      const op = consume().v;
-      left = op === '+' ? left + term() : left - term();
-    }
-    return left;
-  }
-  function term() {
-    let left = factor();
-    while (peek() && (peek().v === '*' || peek().v === '/')) {
-      const op = consume().v;
-      const r = factor();
-      left = op === '*' ? left * r : (r !== 0 ? left / r : 0);
-    }
-    return left;
-  }
-  function factor() {
-    const t = peek();
-    if (!t) return 0;
-    if (t.v === '(') { consume(); const v = expr(); if (peek()?.v === ')') consume(); return v; }
-    if (t.t === 'n') { consume(); return t.v; }
-    if (t.v === '-') { consume(); return -factor(); }
-    return 0;
-  }
-
-  try {
-    const result = expr();
-    if (isFinite(result)) return Math.round(result * 100) / 100;
-  } catch (_) {}
-  return parseFloat(str) || 0;
-}
 
 export default function SimuladorAcordoPage() {
   const [valorAcordo, setValorAcordo] = useState('');

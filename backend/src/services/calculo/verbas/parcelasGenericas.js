@@ -3,6 +3,7 @@
 const { differenceInMonths } = require('../../../utils/datas');
 const { round2 } = require('../../../utils/formatacao');
 const { deveGerarReflexos, validarNaturezaReflexos } = require('../../../utils/naturezaJuridica');
+const { calcularComHistoricoMensal } = require('../../../utils/resolverSalarioBase');
 
 /**
  * Calcula o valor base e total de uma parcela personalizada genérica.
@@ -11,26 +12,10 @@ const { deveGerarReflexos, validarNaturezaReflexos } = require('../../../utils/n
  * @param {Object} dados      — dados do contrato
  * @param {Object} temporal   — resultado de calcularTemporais(dados)
  * @param {number} smVigente  — salário mínimo vigente na data de dispensa (0 se não disponível)
- * @returns {{ valorMensal, total, nMeses, formulaFreq }}
+ * @returns {{ valorMensal, total, nMeses, formulaFreq, distribuicaoMensal? }}
  */
 function calcularParcelaGenerica(parcela, dados, temporal, smVigente = 0) {
-  // ---- Valor mensal base ----
-  let valorMensal = 0;
-  switch (parcela.tipoValor) {
-    case 'fixo':
-      valorMensal = parcela.valorBase || 0;
-      break;
-    case 'percentual_salario':
-      valorMensal = (dados.ultimoSalario || 0) * ((parcela.percentualBase || 0) / 100);
-      break;
-    case 'percentual_sm':
-      valorMensal = smVigente * ((parcela.percentualBase || 0) / 100);
-      break;
-    default:
-      valorMensal = parcela.valorBase || 0;
-  }
-
-  // ---- Período (nMeses) ----
+  // ---- Período ----
   const inicioData =
     parcela.periodoTipo === 'especifico' && parcela.periodoInicio
       ? new Date(parcela.periodoInicio)
@@ -40,6 +25,40 @@ function calcularParcelaGenerica(parcela, dados, temporal, smVigente = 0) {
       ? new Date(parcela.periodoFim)
       : temporal.dataDispensa || new Date(dados.dataDispensa);
   const nMeses = Math.max(1, differenceInMonths(fimData, inicioData) + 1);
+
+  // ---- Valor mensal base ----
+  let valorMensal = 0;
+  let distribuicaoMensal = null;
+
+  switch (parcela.tipoValor) {
+    case 'fixo':
+      valorMensal = parcela.valorBase || 0;
+      break;
+    case 'percentual_salario': {
+      const pctFator = (parcela.percentualBase || 0) / 100;
+      // Tenta cálculo mês a mês via histórico salarial
+      if (parcela.frequencia === 'mensal' || parcela.frequencia === 'horaria' || parcela.frequencia === 'calculada') {
+        const resultado = calcularComHistoricoMensal(dados, inicioData, fimData, pctFator);
+        if (resultado.usouHistorico) {
+          return {
+            valorMensal: resultado.meses > 0 ? round2(resultado.total / resultado.meses) : 0,
+            total: round2(resultado.total),
+            nMeses: resultado.meses,
+            formulaFreq: `Σ salário(mês) × ${(pctFator * 100).toFixed(1)}% ao longo de ${resultado.meses} meses`,
+            distribuicaoMensal: resultado.distribuicaoMensal,
+          };
+        }
+      }
+      // Fallback: último salário
+      valorMensal = (dados.ultimoSalario || 0) * pctFator;
+      break;
+    }
+    case 'percentual_sm':
+      valorMensal = smVigente * ((parcela.percentualBase || 0) / 100);
+      break;
+    default:
+      valorMensal = parcela.valorBase || 0;
+  }
 
   // ---- Total por frequência ----
   let total = 0;

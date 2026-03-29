@@ -5,6 +5,7 @@ import ExportBar from '../../components/ExportBar/index.jsx';
 import AcordoSimulador from '../../components/AcordoSimulador/index.jsx';
 import EncargosPrevidenciarios from '../../components/EncargosPrevidenciarios/index.jsx';
 import { useSalvarSimulacao } from '../../hooks/useCalculo.js';
+import { recalcularEncargos } from '../../utils/encargosCalc.js';
 
 const MODALIDADES = {
   sem_justa_causa: 'Dispensa sem Justa Causa',
@@ -49,9 +50,9 @@ function LinhaResumo({ label, valor, cor = 'normal', sublabel }) {
 
 /**
  * Aplica verbasExcluidas e verbasEditadas sobre o array de verbas de uma modalidade.
- * Retorna o array transformado + totais reativos.
+ * Retorna o array transformado + totais reativos + encargos recalculados.
  */
-function computarModalidade(verbas, deducoes, dadosCalculo) {
+function computarModalidade(verbas, deducoes, dadosCalculo, resultadoOriginal) {
   const { verbasExcluidas, verbasEditadas, percentualHonorarios, honorariosPericiais, aplicarCustas } = dadosCalculo;
   const verbasExibidas = (verbas || []).map((v) => {
     const edit = verbasEditadas?.[v.codigo];
@@ -70,7 +71,29 @@ function computarModalidade(verbas, deducoes, dadosCalculo) {
   const custas = aplicarCustas ? Math.round(total * 0.02 * 100) / 100 : 0;
   const despesasProcessuais = Math.round((honPericiais + custas) * 100) / 100;
   const totalComHonorarios = Math.round((total + honorarios) * 100) / 100;
-  return { verbasExibidas, subtotal, total, honorarios, custas, honPericiais, despesasProcessuais, totalComHonorarios };
+
+  // Recalcular encargos (INSS/IR) com base nas verbas atuais
+  const lapsoMeses = resultadoOriginal?.temporal?.lapsoComAviso?.meses
+    || resultadoOriginal?.temporal?.lapsoSemAviso?.meses || 1;
+  const tabelas = resultadoOriginal?.tabelasEncargos || null;
+  const encargosRecalculados = recalcularEncargos(verbasExibidas, lapsoMeses, tabelas);
+
+  // Recalcular juros proporcionalmente ao novo total
+  let jurosRecalculados = null;
+  if (resultadoOriginal?.juros?.valor > 0 && resultadoOriginal?.totalComHonorarios > 0) {
+    const fatorJuros = resultadoOriginal.juros.valor / resultadoOriginal.totalComHonorarios;
+    const novoValorJuros = Math.round(totalComHonorarios * fatorJuros * 100) / 100;
+    jurosRecalculados = {
+      ...resultadoOriginal.juros,
+      valor: novoValorJuros,
+      recalculado: true,
+    };
+  }
+
+  return {
+    verbasExibidas, subtotal, total, honorarios, custas, honPericiais,
+    despesasProcessuais, totalComHonorarios, encargosRecalculados, jurosRecalculados,
+  };
 }
 
 export default function ResultadoTriplo() {
@@ -96,7 +119,8 @@ export default function ResultadoTriplo() {
       result[mod] = computarModalidade(
         resultadosTriplos?.[mod]?.verbas,
         resultadosTriplos?.[mod]?.deducoes,
-        dadosCalculo
+        dadosCalculo,
+        resultadosTriplos?.[mod]
       );
     }
     return result;
@@ -362,57 +386,65 @@ export default function ResultadoTriplo() {
             )}
 
             {/* ── ENCARGOS PREVIDENCIÁRIOS E FISCAIS ── */}
-            {resultadoAtivo.encargosEmpregado && resultadoAtivo.encargosEmpregado.baseInss > 0 && (
+            {compAtivo.encargosRecalculados && compAtivo.encargosRecalculados.baseInss > 0 && (
               <EncargosPrevidenciarios
-                encargos={resultadoAtivo.encargosEmpregado}
+                encargos={compAtivo.encargosRecalculados}
                 verbas={compAtivo.verbasExibidas}
               />
             )}
 
             {/* ── JUROS E CORREÇÃO MONETÁRIA ── */}
-            {resultadoAtivo.juros && resultadoAtivo.juros.valor > 0 && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
-                <p className="font-semibold text-blue-900 mb-1">
-                  Juros e Correção (ADC 58 STF / Lei 14.905/2024)
-                  {resultadoAtivo.juros.estimado && (
-                    <span className="ml-2 text-xs font-normal text-amber-600">(estimado)</span>
+            {(() => {
+              const jurosAtivo = compAtivo.jurosRecalculados || resultadoAtivo.juros;
+              if (!jurosAtivo || jurosAtivo.valor <= 0) return null;
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm">
+                  <p className="font-semibold text-blue-900 mb-1">
+                    Juros e Correção (ADC 58 STF / Lei 14.905/2024)
+                    {jurosAtivo.estimado && (
+                      <span className="ml-2 text-xs font-normal text-amber-600">(estimado)</span>
+                    )}
+                    {jurosAtivo.recalculado && (
+                      <span className="ml-2 text-xs font-normal text-indigo-600">(recalculado)</span>
+                    )}
+                  </p>
+                  <p className="text-xs text-blue-700 mb-2">
+                    Apurado até:{' '}
+                    {jurosAtivo.dataApuracao
+                      ? new Date(jurosAtivo.dataApuracao + 'T12:00:00').toLocaleDateString('pt-BR')
+                      : jurosAtivo.memoria?.dataApuracao || '—'}.
+                  </p>
+                  {jurosAtivo.fases?.length > 0 && (
+                    <div className="space-y-1 mb-3">
+                      {jurosAtivo.fases.map((f, i) => (
+                        <div key={i} className="flex justify-between text-xs bg-white/60 rounded px-2 py-1">
+                          <span className="text-gray-600 truncate pr-2">{f.descricao}</span>
+                          <span className="font-mono font-semibold text-blue-800 shrink-0">
+                            {f.percentual >= 0 ? '+' : ''}{f.percentual?.toFixed(4)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                </p>
-                <p className="text-xs text-blue-700 mb-2">
-                  Apurado até:{' '}
-                  {resultadoAtivo.juros.dataApuracao
-                    ? new Date(resultadoAtivo.juros.dataApuracao + 'T12:00:00').toLocaleDateString('pt-BR')
-                    : resultadoAtivo.juros.memoria?.dataApuracao || '—'}.
-                </p>
-                {resultadoAtivo.juros.fases?.length > 0 && (
-                  <div className="space-y-1 mb-3">
-                    {resultadoAtivo.juros.fases.map((f, i) => (
-                      <div key={i} className="flex justify-between text-xs bg-white/60 rounded px-2 py-1">
-                        <span className="text-gray-600 truncate pr-2">{f.descricao}</span>
-                        <span className="font-mono font-semibold text-blue-800 shrink-0">
-                          {f.percentual >= 0 ? '+' : ''}{f.percentual?.toFixed(4)}%
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-3 mb-2">
-                  <div>
-                    <p className="campo-label">Taxa Total</p>
-                    <p className="font-mono">{resultadoAtivo.juros.percentual?.toFixed(4)}%</p>
-                  </div>
-                  <div>
-                    <p className="campo-label">Valor dos Juros</p>
-                    <p className="font-mono font-bold text-blue-800">{formatBRL(resultadoAtivo.juros.valor)}</p>
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div>
+                      <p className="campo-label">Taxa Total</p>
+                      <p className="font-mono">{jurosAtivo.percentual?.toFixed(4)}%</p>
+                    </div>
+                    <div>
+                      <p className="campo-label">Valor dos Juros</p>
+                      <p className="font-mono font-bold text-blue-800">{formatBRL(jurosAtivo.valor)}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* ── RESUMO GERAL DO CÁLCULO ── */}
             {(() => {
-              const jurosV = resultadoAtivo.juros?.valor || 0;
-              const encargos = resultadoAtivo.encargosEmpregado;
+              const jurosAtualizado = compAtivo.jurosRecalculados || resultadoAtivo.juros;
+              const jurosV = jurosAtualizado?.valor || 0;
+              const encargos = compAtivo.encargosRecalculados || resultadoAtivo.encargosEmpregado;
               const pctHon = dados.percentualHonorarios ?? 0.15;
               const fgtsTotal = compAtivo.verbasExibidas
                 .filter(v => !v.excluida && /fgts/i.test(v.codigo))
@@ -516,6 +548,7 @@ export default function ResultadoTriplo() {
             resultadoAtivo.temporal?.lapsoSemAviso?.meses ||
             1
           }
+          tabelasEncargos={resultadoAtivo.tabelasEncargos}
         />
       )}
 

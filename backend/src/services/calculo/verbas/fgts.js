@@ -29,6 +29,7 @@ function calcularFGTS(dados, temporal) {
       formula: dados.fgtsIntegralizado
         ? `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) — FGTS integralizado (depositado = R$ ${depositado.toFixed(2)}) = R$ ${valor.toFixed(2)}`
         : `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) − R$ ${depositado.toFixed(2)} (depositado) = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 18 Lei 8.036/90 — FGTS 8% sobre remuneração + multa rescisória 40%.',
       base,
       meses,
       aliquota: '8%',
@@ -58,6 +59,7 @@ function calcularMultaFGTS(fgtsBruto, modalidade) {
     percentual,
     memoria: {
       formula: `R$ ${fgtsBruto.toFixed(2)} × ${(percentual * 100).toFixed(0)}% = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 18 Lei 8.036/90 — FGTS 8% sobre remuneração + multa rescisória 40%.',
       modalidade,
     },
   };

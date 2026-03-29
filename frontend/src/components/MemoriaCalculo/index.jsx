@@ -17,7 +17,6 @@ const MEMORIA_LABELS = {
   adicionalHora: 'Adicional por hora',
   heFixo: 'HE s/ salário fixo',
   heComissoes: 'HE s/ comissões',
-  mesesEfetivos: 'Meses efetivos',
   mediaHeMensal: 'Média HE mensal',
   mediaANMensal: 'Média adicional noturno mensal',
   mediaInsMensal: 'Média insalubridade mensal',
@@ -46,6 +45,14 @@ const MEMORIA_LABELS = {
   integralizado: 'FGTS integralizado',
   depositado: 'FGTS depositado',
   fgtsBruto: 'FGTS bruto (sem depósito)',
+  divisorJornada: 'Divisor de jornada',
+  adicionalHE: 'Adicional HE',
+  horasExtrasMensais: 'Horas extras mensais',
+  horasNoturnas: 'Horas noturnas',
+  adicionalNoturno: 'Adicional noturno',
+  comissoes: 'Comissões',
+  salarioBase: 'Salário base',
+  percentualPericulosidade: 'Percentual',
 };
 
 const VALOR_KEYS = new Set([
@@ -56,6 +63,22 @@ const VALOR_KEYS = new Set([
 ]);
 
 const PCT_KEYS = new Set(['aliquota', 'percentual']);
+
+// Keys handled separately — not shown in scalar loop
+const HIDDEN_KEYS = new Set([
+  'formula', 'motivo', 'distribuicaoMensal', 'itens', 'detalhes',
+  'fundamentoLegal', 'componentes', 'periodo', 'periodosDetalhados',
+  'usouHistorico',
+]);
+
+function formatDate(d) {
+  if (!d) return '—';
+  // Handles YYYY-MM-DD or YYYY-MM
+  const parts = String(d).split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
+  return d;
+}
 
 function formatMemoriaValue(key, val) {
   if (val === null || val === undefined) return '—';
@@ -154,7 +177,15 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
       {!modoEdicao && expandida && verba.memoria && (
         <tr>
           <td colSpan={6} className="bg-slate-50 px-4 py-3 border-b border-slate-200">
-            <div className="text-xs text-slate-600 space-y-1">
+            <div className="text-xs text-slate-600 space-y-2">
+              {/* Fundamento Legal */}
+              {verba.memoria.fundamentoLegal && (
+                <span className="inline-block bg-indigo-50 text-indigo-800 border border-indigo-200 px-2 py-0.5 rounded text-xs">
+                  {verba.memoria.fundamentoLegal}
+                </span>
+              )}
+
+              {/* Fórmula */}
               {verba.memoria.formula && (
                 <p className="font-mono bg-white border border-slate-200 rounded px-3 py-2 text-slate-700 break-words">
                   {verba.memoria.formula}
@@ -163,8 +194,35 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
               {verba.memoria.motivo && (
                 <p className="italic text-slate-500">{verba.memoria.motivo}</p>
               )}
+
+              {/* Período */}
+              {verba.memoria.periodo && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="bg-gray-100 text-gray-700 border border-gray-200 px-2 py-0.5 rounded text-xs font-medium">
+                    Período: {formatDate(verba.memoria.periodo.inicio)} a {formatDate(verba.memoria.periodo.fim)}
+                    {verba.memoria.periodo.meses ? ` (${verba.memoria.periodo.meses} meses)` : ''}
+                  </span>
+                </div>
+              )}
+
+              {/* Composição da Base */}
+              {verba.memoria.componentes && Object.keys(verba.memoria.componentes).length > 0 && (
+                <div className="bg-white border border-slate-200 rounded p-2">
+                  <p className="font-semibold text-slate-700 mb-1">Composição da Base</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5">
+                    {Object.entries(verba.memoria.componentes).map(([k, v]) => (
+                      <p key={k} className="flex gap-1">
+                        <span className="text-slate-500">{MEMORIA_LABELS[k] || k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}:</span>
+                        <span className="font-mono font-medium">{formatMemoriaValue(k, v)}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Campos escalares da memória */}
               {Object.entries(verba.memoria)
-                .filter(([k]) => !['formula', 'motivo', 'distribuicaoMensal', 'itens', 'detalhes'].includes(k))
+                .filter(([k]) => !HIDDEN_KEYS.has(k))
                 .map(([k, v]) => {
                   if (typeof v === 'object' && v !== null) return null;
                   const label = MEMORIA_LABELS[k] || k.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').toLowerCase();
@@ -176,16 +234,50 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
                     </p>
                   );
                 })}
+
+              {/* Períodos detalhados (férias/13º por período) */}
+              {verba.memoria.periodosDetalhados?.length > 0 && (
+                <div className="mt-1">
+                  <p className="font-semibold text-slate-700 mb-1">Detalhamento por Período</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border border-slate-200 rounded">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          <th className="text-left px-3 py-1.5 font-medium text-slate-700">Período / Ano</th>
+                          <th className="text-right px-3 py-1.5 font-medium text-slate-700">Bruto</th>
+                          <th className="text-right px-3 py-1.5 font-medium text-slate-700">Pago</th>
+                          <th className="text-right px-3 py-1.5 font-medium text-slate-700">Devido</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {verba.memoria.periodosDetalhados.map((d, i) => (
+                          <tr key={i} className="border-t border-slate-100 hover:bg-white">
+                            <td className="px-3 py-1 text-slate-600">
+                              {d.periodo || d.anoReferencia || `#${d.numero || i + 1}`}
+                            </td>
+                            <td className="px-3 py-1 text-right font-mono text-slate-600">{formatBRL(d.bruto)}</td>
+                            <td className="px-3 py-1 text-right font-mono text-amber-700">
+                              {d.valorPago > 0 ? `(${formatBRL(d.valorPago)})` : '—'}
+                            </td>
+                            <td className="px-3 py-1 text-right font-mono font-medium text-slate-700">{formatBRL(d.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
               {/* Demonstrativo mensal para parcelas calculadas sobre histórico salarial */}
               {verba.memoria.distribuicaoMensal?.length > 0 && (
-                <div className="mt-2">
+                <div className="mt-1">
                   <button
                     type="button"
                     onClick={() => setMostrarDistribuicao(v => !v)}
                     className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
                   >
                     {mostrarDistribuicao ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    {mostrarDistribuicao ? 'Ocultar demonstrativo mensal' : 'Ver demonstrativo mensal'}
+                    {mostrarDistribuicao ? 'Ocultar demonstrativo mensal' : `Ver demonstrativo mensal (${verba.memoria.distribuicaoMensal.length} meses)`}
                   </button>
                   {mostrarDistribuicao && (
                     <div className="mt-2 overflow-x-auto">
@@ -198,19 +290,22 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
                           </tr>
                         </thead>
                         <tbody>
-                          {verba.memoria.distribuicaoMensal.map((m) => (
-                            <tr key={m.mes} className="border-t border-slate-100 hover:bg-white">
-                              <td className="px-3 py-1 font-mono text-slate-600">
-                                {m.mes.split('-').reverse().join('/')}
-                              </td>
-                              <td className="px-3 py-1 text-right font-mono text-slate-600">
-                                {formatBRL(m.valorBase)}
-                              </td>
-                              <td className="px-3 py-1 text-right font-mono font-medium text-slate-700">
-                                {formatBRL(m.valor)}
-                              </td>
-                            </tr>
-                          ))}
+                          {verba.memoria.distribuicaoMensal.map((m) => {
+                            const comp = m.mes || m.competencia;
+                            return (
+                              <tr key={comp} className="border-t border-slate-100 hover:bg-white">
+                                <td className="px-3 py-1 font-mono text-slate-600">
+                                  {comp.split('-').reverse().join('/')}
+                                </td>
+                                <td className="px-3 py-1 text-right font-mono text-slate-600">
+                                  {formatBRL(m.valorBase || m.salarioBase)}
+                                </td>
+                                <td className="px-3 py-1 text-right font-mono font-medium text-slate-700">
+                                  {formatBRL(m.valor)}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-slate-300 bg-slate-100">

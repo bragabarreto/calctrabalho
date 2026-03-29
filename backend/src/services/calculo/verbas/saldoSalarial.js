@@ -23,6 +23,7 @@ function calcularSaldoSalarial(dados, temporal) {
     excluida: false,
     memoria: {
       formula: `(R$ ${base.toFixed(2)} / 30) × ${dias} dias = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 457 CLT — saldo de salário proporcional aos dias trabalhados no mês da rescisão.',
       base,
       dias,
       diasNoMes,

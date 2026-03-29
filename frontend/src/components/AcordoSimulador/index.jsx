@@ -1,28 +1,12 @@
 import { useState, useMemo } from 'react';
 import { PlusCircle, Trash2 } from 'lucide-react';
+import evalExpr from '../../utils/evalExpr';
+import { calcINSSProgressivo, calcIR_RRA } from '../../utils/encargosCalc';
 
 const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 const pct = (v) => `${((v || 0) * 100).toFixed(1)}%`;
-
-// Tabela INSS 2025 progressiva
-const INSS_TABELA = [
-  { ate: 1518.00, aliquota: 0.075 },
-  { ate: 2793.88, aliquota: 0.09 },
-  { ate: 4190.83, aliquota: 0.12 },
-  { ate: 8157.41, aliquota: 0.14 },
-];
-const INSS_TETO = 908.86;
-
-// Tabela IR 2025 mensal
-const IR_TABELA = [
-  { ate: 2259.20, aliquota: 0,     deducao: 0 },
-  { ate: 2826.65, aliquota: 0.075, deducao: 169.44 },
-  { ate: 3751.05, aliquota: 0.15,  deducao: 381.44 },
-  { ate: 4664.68, aliquota: 0.225, deducao: 662.77 },
-  { ate: Infinity, aliquota: 0.275, deducao: 896.00 },
-];
 
 const PARCELAS_PREDEFINIDAS = [
   'Aviso prévio indenizado',
@@ -40,96 +24,15 @@ const PARCELAS_PREDEFINIDAS = [
 ];
 
 /**
- * Parser de descida recursiva para expressões matemáticas simples (+, -, *, /, parênteses).
- * Não usa eval nem Function — compatível com CSP restrito.
- */
-function evalExpr(raw) {
-  if (!raw || !String(raw).trim()) return 0;
-  const str = String(raw).replace(',', '.').trim();
-
-  const tokens = [];
-  let i = 0;
-  while (i < str.length) {
-    if (/\s/.test(str[i])) { i++; continue; }
-    if (/[\d.]/.test(str[i])) {
-      let num = '';
-      while (i < str.length && /[\d.]/.test(str[i])) num += str[i++];
-      tokens.push({ t: 'n', v: parseFloat(num) });
-    } else if (/[+\-*/()]/.test(str[i])) {
-      tokens.push({ t: 'o', v: str[i++] });
-    } else {
-      return parseFloat(str) || 0;
-    }
-  }
-
-  let pos = 0;
-  const peek = () => (pos < tokens.length ? tokens[pos] : null);
-  const consume = () => tokens[pos++];
-
-  function expr() {
-    let left = term();
-    while (peek() && (peek().v === '+' || peek().v === '-')) {
-      const op = consume().v;
-      left = op === '+' ? left + term() : left - term();
-    }
-    return left;
-  }
-  function term() {
-    let left = factor();
-    while (peek() && (peek().v === '*' || peek().v === '/')) {
-      const op = consume().v;
-      const r = factor();
-      left = op === '*' ? left * r : (r !== 0 ? left / r : 0);
-    }
-    return left;
-  }
-  function factor() {
-    const t = peek();
-    if (!t) return 0;
-    if (t.v === '(') { consume(); const v = expr(); if (peek()?.v === ')') consume(); return v; }
-    if (t.t === 'n') { consume(); return t.v; }
-    if (t.v === '-') { consume(); return -factor(); }
-    return 0;
-  }
-
-  try {
-    const result = expr();
-    if (isFinite(result)) return Math.round(result * 100) / 100;
-  } catch (_) {}
-  return parseFloat(str) || 0;
-}
-
-function calcINSS(base) {
-  let inss = 0;
-  let baseAnt = 0;
-  for (const f of INSS_TABELA) {
-    if (base <= baseAnt) break;
-    const faixaBase = Math.min(base, f.ate) - baseAnt;
-    if (faixaBase > 0) inss += faixaBase * f.aliquota;
-    baseAnt = f.ate;
-    if (base <= f.ate) break;
-  }
-  return Math.round(Math.min(inss, INSS_TETO) * 100) / 100;
-}
-
-function calcIR_RRA(baseTributavel, meses) {
-  if (!baseTributavel || baseTributavel <= 0) return 0;
-  const m = Math.max(1, Math.min(meses || 1, 12));
-  const mensal = baseTributavel / m;
-  let faixa = IR_TABELA.find(f => mensal <= f.ate) || IR_TABELA[IR_TABELA.length - 1];
-  const irMensal = mensal * faixa.aliquota - faixa.deducao;
-  return Math.round(Math.max(0, irMensal) * m * 100) / 100;
-}
-
-/**
  * AcordoSimulador — apura INSS e IR sobre o valor do acordo conforme OJ 376 SDI-1 TST
  *
  * Props:
  *   percentualSalarial {number}  — fração salarial do cálculo original (0–1)
  *   verbas             {Array}   — verbas do resultado para pré-popular parcelas indenizatórias
  *   lapsoMeses         {number}  — meses do contrato (para RRA)
+ *   tabelasEncargos    {Object}  — { inss: { faixas, contribuicaoMaxima }, ir } do backend (opcional)
  */
-export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses }) {
+export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses, tabelasEncargos }) {
   const [valorAcordo, setValorAcordo] = useState('');
   const [modoDiscriminacao, setModoDiscriminacao] = useState(false);
   const [inssEmpregadoEmpresa, setInssEmpregadoEmpresa] = useState(false);
@@ -171,14 +74,19 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
 
   const baseIndenizatoriaAcordo = valorAcordoNum - baseSalarialAcordo;
 
-  // INSS sobre a base salarial
-  const inssEmpregado = calcINSS(baseSalarialAcordo);
+  // INSS sobre a base salarial (usa tabelas do backend se disponíveis)
+  const inssTabela = tabelasEncargos?.inss?.faixas;
+  const inssMax = tabelasEncargos?.inss?.contribuicaoMaxima;
+  const irTabela = tabelasEncargos?.ir;
+
+  const inssEmpregado = calcINSSProgressivo(baseSalarialAcordo, inssTabela, inssMax);
   const inssEmpregador = Math.round(baseSalarialAcordo * 0.20 * 100) / 100;
   const inssTotal = Math.round((inssEmpregado + inssEmpregador) * 100) / 100;
 
   // IR (RRA) sobre base salarial - INSS empregado
   const baseTributavel = Math.max(0, baseSalarialAcordo - inssEmpregado);
-  const irEstimado = calcIR_RRA(baseTributavel, lapsoMeses);
+  const irResult = calcIR_RRA(baseTributavel, lapsoMeses, irTabela);
+  const irEstimado = irResult.valor;
 
   // Condições especiais: encargos que ficam a cargo da empresa
   const deducaoDoEmpregado =

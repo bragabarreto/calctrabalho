@@ -125,14 +125,26 @@ export function prepararDadosContrato(dados) {
       const pf = dados.periodosFerias || [];
       if (pf.length === 0) return {};
       const ativos = pf.filter(p => !p.excluida);
-      const vencidos = ativos.filter(p => p.tipo === 'vencida');
+      const integrais = ativos.filter(p => p.tipo === 'integral');
       const proporcionalFerias = ativos.find(p => p.tipo === 'proporcional');
+
+      // Dobradas: vencidas + não gozadas + (não pagas OU pagas com valor parcial)
+      const dobradas = integrais.filter(p =>
+        p.vencidas && !p.gozadas && (!p.pagas || (p.pagas && parseFloat(p.valorPago) > 0))
+      );
+      // Integrais simples: todos os integrais devidos que NÃO são dobrados
+      // Inclui: não vencidos não pagos, gozados não pagos, vencidos gozados não pagos, parcialmente pagos
+      const simples = integrais.filter(p => {
+        if (p.vencidas && !p.gozadas) return false; // estes vão para dobradas
+        return !p.pagas || (p.pagas && parseFloat(p.valorPago) > 0);
+      });
+
       return {
-        qtdeFeriasVencidasDobradas: vencidos.filter(p => p.vencidas && !p.gozadas).length,
-        qtdeFeriasVencidasSimples: vencidos.filter(p =>
-          (!p.vencidas && !p.gozadas) || (p.gozadas && !p.pagas)
-        ).length,
-        feriasDeducaoPagas: ativos.filter(p => p.tipo === 'vencida').reduce((sum, p) => sum + (p.pagas ? Number(p.valorPago || 0) : 0), 0),
+        qtdeFeriasVencidasDobradas: dobradas.length,
+        qtdeFeriasVencidasSimples: simples.length,
+        feriasDeducaoPagas: integrais
+          .filter(p => p.pagas && parseFloat(p.valorPago) > 0)
+          .reduce((sum, p) => sum + parseFloat(p.valorPago), 0),
         feriasProporcionaisPagas: proporcionalFerias?.pagas || false,
         valorPagoFeriasProporcionais: proporcionalFerias?.pagas ? (Number(proporcionalFerias.valorPago) || 0) : 0,
       };

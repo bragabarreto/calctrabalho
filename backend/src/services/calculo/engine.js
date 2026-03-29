@@ -25,7 +25,7 @@ const { calcularJurosADC58 } = require('./verbas/jurosCorrecao');
 const { calcularTotalPorHistorico, resolverBaseHistoricoId } = require('../../utils/historicoSalarial');
 const { calcularParcelaGenerica, calcularReflexosParcela } = require('./verbas/parcelasGenericas');
 const { aplicarCascataOJ394 } = require('./reflexosCascata');
-const { DATA_OJ394 } = require('../../config/constants');
+const { DATA_OJ394, INSS_TABELA_2025, INSS_CONTRIBUICAO_MAXIMA_2025, IR_TABELA_2025 } = require('../../config/constants');
 const db = require('../../config/database');
 
 /**
@@ -387,6 +387,11 @@ async function calcular(dados, modalidade) {
     temporal,
     auditoria: auditoria.toArray(),
     modalidade,
+    // Tabelas INSS/IR para recálculo dinâmico no frontend
+    tabelasEncargos: {
+      inss: { faixas: INSS_TABELA_2025, contribuicaoMaxima: INSS_CONTRIBUICAO_MAXIMA_2025 },
+      ir: IR_TABELA_2025,
+    },
   };
 }
 

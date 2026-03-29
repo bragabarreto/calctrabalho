@@ -49,6 +49,7 @@ function calcularIntervaloIntrajornada(dados, temporal, diasCartao) {
       natureza: 'indenizatoria',
       memoria: {
         formula: `${totalMinDeficit} min déficit ÷ 60 = ${horasDeficit}h × R$ ${valorHora.toFixed(2)}/h (M/D × (1+adicional)) = R$ ${valor.toFixed(2)}`,
+        fundamentoLegal: 'Art. 71 §4º CLT — intervalo intrajornada suprimido tem natureza indenizatória.',
         totalMinDeficit,
         horasDeficit,
         valorHora,
@@ -72,6 +73,7 @@ function calcularIntervaloIntrajornada(dados, temporal, diasCartao) {
     natureza: 'indenizatoria',
     memoria: {
       formula: `R$ ${valorHora.toFixed(2)}/h × ${horasMensais}h × ${mesesEfetivos} meses = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 71 §4º CLT — intervalo intrajornada suprimido tem natureza indenizatória.',
       valorHora,
       horasMensais,
       mesesEfetivos,

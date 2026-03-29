@@ -27,6 +27,7 @@ function calcularMultaArt467(dados, temporal) {
       excluida: false,
       memoria: {
         formula: `Pagamento não efetuado ou efetuado após ${format(prazo, 'dd/MM/yyyy')} — art. 467 CLT = R$ ${valor.toFixed(2)}`,
+        fundamentoLegal: 'Art. 467 CLT — multa de 50% sobre verbas incontroversas não pagas na audiência.',
         base,
         prazo: format(prazo, 'dd/MM/yyyy'),
       },
@@ -58,6 +59,7 @@ function calcularMultaArt477(dados, temporal) {
       excluida: false,
       memoria: {
         formula: `Verbas rescisórias pagas após ${format(prazo, 'dd/MM/yyyy')} — art. 477 §8º CLT = R$ ${valor.toFixed(2)}`,
+        fundamentoLegal: 'Art. 477 §8º CLT — multa por atraso no pagamento das verbas rescisórias.',
         base,
         prazo: format(prazo, 'dd/MM/yyyy'),
       },

@@ -72,10 +72,10 @@ describe('IR RRA (art. 12-A Lei 7.713/88)', () => {
     expect(result.aliquotaEfetiva).toBe(0);
   });
 
-  test('meses limitados a maximo 12', () => {
+  test('meses acima de 12 devem ser usados sem cap (art. 12-A Lei 7.713/88)', () => {
     const result = calcularIR_RRA(50000, 24);
-    // Internamente usa Math.min(24, 12) = 12 meses
-    expect(result.memoria.mesesReferencia).toBe(12);
+    // RRA usa o período real — sem cap em 12 meses
+    expect(result.memoria.mesesReferencia).toBe(24);
   });
 
   test('meses minimo 1', () => {

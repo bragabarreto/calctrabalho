@@ -132,7 +132,7 @@ function calcularIR_RRA(baseCalculo, mesesReferencia) {
   const { IR_TABELA_2025 } = require('../../../config/constants');
   if (!baseCalculo || baseCalculo <= 0) return { valor: 0, aliquotaEfetiva: 0, memoria: { motivo: 'Sem base tributável' } };
 
-  const meses = Math.max(1, Math.min(mesesReferencia || 1, 12)); // máximo 12 meses p/ RRA
+  const meses = Math.max(1, mesesReferencia || 1); // RRA — art. 12-A Lei 7.713/88 (sem cap)
   const rendimentoMensal = baseCalculo / meses;
 
   // Aplica tabela progressiva ao rendimento mensal

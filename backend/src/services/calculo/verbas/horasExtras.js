@@ -2,6 +2,8 @@
 
 const { round2 } = require('../../../utils/formatacao');
 const { calcularPeriodoJornada } = require('./cartaoPontoVirtual');
+const { encontrarHistoricoPrincipal } = require('../../../utils/resolverSalarioBase');
+const { valorParaCompetencia } = require('../../../utils/historicoSalarial');
 
 /**
  * Deriva qtdeHorasExtrasMensais, divisorJornada e adicionalHoraExtra a partir de jornadaPeriodos.
@@ -38,6 +40,8 @@ function resolverJornadaPeriodos(dados) {
  * Fórmula (planilha):
  * HE = (M + M/D × AHN × HN) / D × (1 + AHE) × HE × mesesEfetivos
  *    + C / (D + HE) × (1 + AHE) × HE × mesesEfetivos
+ *
+ * Quando histórico salarial disponível: calcula mês a mês usando salário de cada competência.
  */
 function calcularHorasExtras(dados, temporal) {
   if (dados.verbasExcluidas?.includes('horas_extras')) {
@@ -47,7 +51,6 @@ function calcularHorasExtras(dados, temporal) {
   // Se jornadaPeriodos preenchido, derivar parâmetros de HE dos períodos
   const periodoResolvido = resolverJornadaPeriodos(dados);
 
-  const M = dados.mediaSalarial || dados.ultimoSalario || 0;
   const D = periodoResolvido?.divisorJornada ?? dados.divisorJornada ?? 220;
   const AHE = periodoResolvido?.adicionalHoraExtra ?? dados.adicionalHoraExtra ?? 0.5;
   const HE = periodoResolvido?.qtdeHorasExtrasMensais ?? dados.qtdeHorasExtrasMensais ?? 0;
@@ -59,6 +62,73 @@ function calcularHorasExtras(dados, temporal) {
   if (HE === 0) return { valor: 0, excluida: false, valorHora: 0, memoria: { motivo: 'Qtde horas extras = 0' } };
 
   const mesesEfetivos = temporal.lapsoSemAviso.meses - AF;
+
+  // Verificar se há histórico salarial para cálculo mês a mês
+  const hist = encontrarHistoricoPrincipal(dados.historicosSalariais);
+
+  if (hist && temporal.marcoPrescricional && temporal.dataDispensa) {
+    // Cálculo mês a mês usando salário histórico
+    const compInicio = (typeof temporal.marcoPrescricional === 'string'
+      ? temporal.marcoPrescricional
+      : temporal.marcoPrescricional.toISOString().split('T')[0]
+    ).substring(0, 7);
+    const compFim = (typeof temporal.dataDispensa === 'string'
+      ? temporal.dataDispensa
+      : temporal.dataDispensa.toISOString().split('T')[0]
+    ).substring(0, 7);
+
+    let totalHE = 0;
+    let mesesContados = 0;
+    const distribuicaoMensal = [];
+    let comp = compInicio;
+
+    while (comp <= compFim && mesesContados < mesesEfetivos) {
+      const salarioMes = valorParaCompetencia(hist, comp);
+      if (salarioMes > 0) {
+        const valorHoraMes = (salarioMes + (salarioMes / D) * AHN * HN) / D;
+        const heMes = valorHoraMes * (1 + AHE) * HE;
+        const heComMes = C > 0 ? (C / (D + HE)) * (1 + AHE) * HE : 0;
+        const totalMes = round2(heMes + heComMes);
+        totalHE += totalMes;
+        distribuicaoMensal.push({ competencia: comp, salarioBase: salarioMes, valor: totalMes });
+      }
+      mesesContados++;
+      const [y, m] = comp.split('-').map(Number);
+      comp = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+    }
+
+    const valor = round2(totalHE);
+    const mediaM = mesesContados > 0 ? round2(totalHE / mesesContados) : 0;
+    const ultimoSalario = distribuicaoMensal.length > 0
+      ? distribuicaoMensal[distribuicaoMensal.length - 1].salarioBase
+      : (dados.mediaSalarial || dados.ultimoSalario || 0);
+    const valorHoraNormal = (ultimoSalario + (ultimoSalario / D) * AHN * HN) / D;
+
+    return {
+      valor,
+      excluida: false,
+      valorHora: round2(valorHoraNormal * (1 + AHE)),
+      memoriaInputs: { D, AHE, HE, AHN, HN, C, AF, mesesEfetivos },
+      memoria: {
+        formula: `Σ salário(mês)/D × (1+${(AHE * 100).toFixed(0)}%) × ${HE}h ao longo de ${mesesContados} meses = R$ ${valor.toFixed(2)}`,
+        fundamentoLegal: 'Art. 59 CLT — horas suplementares remuneradas com adicional mínimo de 50%',
+        componentes: {
+          divisorJornada: D,
+          adicionalHE: `${(AHE * 100).toFixed(0)}%`,
+          horasExtrasMensais: HE,
+          ...(HN > 0 ? { horasNoturnas: HN, adicionalNoturno: `${(AHN * 100).toFixed(0)}%` } : {}),
+          ...(C > 0 ? { comissoes: round2(C) } : {}),
+        },
+        periodo: { inicio: compInicio, fim: compFim, meses: mesesContados },
+        mesesEfetivos: mesesContados,
+        usouHistorico: true,
+        distribuicaoMensal,
+      },
+    };
+  }
+
+  // Fallback: cálculo com salário médio/único (legado)
+  const M = dados.mediaSalarial || dados.ultimoSalario || 0;
 
   // Valor hora normal incluindo redução noturna
   const valorHoraNormal = (M + (M / D) * AHN * HN) / D;
@@ -78,6 +148,15 @@ function calcularHorasExtras(dados, temporal) {
     memoriaInputs: { M, D, AHE, HE, AHN, HN, C, AF, mesesEfetivos },
     memoria: {
       formula: `(${M} + ${M}/${D}×${AHN}×${HN})/${D} × (1+${AHE}) × ${HE}h × ${mesesEfetivos} meses + ${C}/(${D}+${HE}) × (1+${AHE}) × ${HE}h × ${mesesEfetivos}`,
+      fundamentoLegal: 'Art. 59 CLT — horas suplementares remuneradas com adicional mínimo de 50%',
+      componentes: {
+        salarioBase: round2(M),
+        divisorJornada: D,
+        adicionalHE: `${(AHE * 100).toFixed(0)}%`,
+        horasExtrasMensais: HE,
+        ...(HN > 0 ? { horasNoturnas: HN, adicionalNoturno: `${(AHN * 100).toFixed(0)}%` } : {}),
+        ...(C > 0 ? { comissoes: round2(C) } : {}),
+      },
       valorHoraNormal: valorHoraNormal.toFixed(6),
       heFixo: heFixo.toFixed(2),
       heComissoes: heComissoes.toFixed(2),
