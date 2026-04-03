@@ -234,6 +234,16 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
                             className="campo-input w-full text-right font-mono text-sm py-1"
                             placeholder="0,00 ou 1000+500"
                           />
+                          {saldoSalarial > 0 && !evalExpr(p.valorRaw) && (
+                            <button
+                              type="button"
+                              onClick={() => updateParcela(p.id, 'valorRaw', saldoSalarial.toFixed(2))}
+                              className="text-xs text-blue-600 hover:text-blue-800 mt-0.5 w-full text-right leading-tight"
+                              title="Atribuir o valor remanescente do acordo a esta parcela"
+                            >
+                              ← {fmt(saldoSalarial)}
+                            </button>
+                          )}
                         </td>
                         <td className="px-2 py-1 text-center">
                           <button

@@ -495,7 +495,7 @@ export default function SimuladorAcordoPage() {
               {parcelas.map((p, idx) => (
                 <div
                   key={idx}
-                  className="grid gap-2 items-center"
+                  className="grid gap-2 items-start"
                   style={{ gridTemplateColumns: '1fr 9rem 1.5rem' }}
                 >
                   {/* Coluna nome */}
@@ -529,21 +529,33 @@ export default function SimuladorAcordoPage() {
                   )}
 
                   {/* Coluna valor */}
-                  <input
-                    type="text"
-                    value={p.valorRaw}
-                    onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
-                    onBlur={e => handleValorBlur(idx, e.target.value)}
-                    className="campo-input w-full text-right font-mono text-sm"
-                    placeholder="0,00"
-                  />
+                  <div>
+                    <input
+                      type="text"
+                      value={p.valorRaw}
+                      onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
+                      onBlur={e => handleValorBlur(idx, e.target.value)}
+                      className="campo-input w-full text-right font-mono text-sm"
+                      placeholder="0,00"
+                    />
+                    {valorAcordoNum > 0 && restante > 0 && !evalExpr(p.valorRaw) && (
+                      <button
+                        type="button"
+                        onClick={() => updateParcela(idx, 'valorRaw', restante.toFixed(2))}
+                        className="text-xs text-blue-600 hover:text-blue-800 mt-0.5 w-full text-right leading-tight"
+                        title="Atribuir o valor remanescente do acordo a esta parcela"
+                      >
+                        ← {fmt(restante)}
+                      </button>
+                    )}
+                  </div>
 
                   {/* Coluna excluir */}
                   {parcelas.length > 1 ? (
                     <button
                       type="button"
                       onClick={() => removeParcela(idx)}
-                      className="text-red-400 hover:text-red-600"
+                      className="text-red-400 hover:text-red-600 mt-1"
                     >
                       <Trash2 size={16} />
                     </button>
