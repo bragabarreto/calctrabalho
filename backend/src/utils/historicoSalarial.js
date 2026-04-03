@@ -129,18 +129,39 @@ function encontrarHistorico(historicosSalariais, id) {
 }
 
 /**
- * Resolve baseHistoricoId que pode ser "histId" ou "histId:parcelaId".
- * Retorna { historico, parcelaId } para uso em calcularTotalPorHistorico.
+ * Encontra o histórico "principal" do reclamante.
+ * Usa o histórico marcado como fixo (principal), ou o primeiro da lista.
+ *
+ * @param {Array} historicosSalariais
+ * @returns {Object|null}
+ */
+function encontrarHistoricoReclamante(historicosSalariais) {
+  const lista = historicosSalariais || [];
+  return lista.find((h) => h.fixo) || lista[0] || null;
+}
+
+/**
+ * Resolve baseHistoricoId que pode ser:
+ *   - "reclamante"         → sentinel: usa o histórico principal do reclamante
+ *   - "histId"             → soma todas as parcelas do histórico
+ *   - "histId:parcelaId"   → parcela específica de um histórico
  *
  * @param {Array} historicosSalariais
  * @param {string} baseHistoricoId
- * @returns {{ historico: Object|null, parcelaId: string|null }}
+ * @returns {{ historico: Object|null, parcelaId: string|null, usouSentinelReclamante: boolean }}
  */
 function resolverBaseHistoricoId(historicosSalariais, baseHistoricoId) {
-  if (!baseHistoricoId) return { historico: null, parcelaId: null };
+  if (!baseHistoricoId) return { historico: null, parcelaId: null, usouSentinelReclamante: false };
+
+  // Sentinel especial: "reclamante" → usa o histórico principal do reclamante
+  if (baseHistoricoId === 'reclamante') {
+    const historico = encontrarHistoricoReclamante(historicosSalariais);
+    return { historico, parcelaId: null, usouSentinelReclamante: true };
+  }
+
   const [histId, parcelaId] = baseHistoricoId.split(':');
   const historico = encontrarHistorico(historicosSalariais, histId);
-  return { historico, parcelaId: parcelaId || null };
+  return { historico, parcelaId: parcelaId || null, usouSentinelReclamante: false };
 }
 
 module.exports = {
@@ -149,5 +170,6 @@ module.exports = {
   valorParaCompetencia,
   calcularTotalPorHistorico,
   encontrarHistorico,
+  encontrarHistoricoReclamante,
   resolverBaseHistoricoId,
 };

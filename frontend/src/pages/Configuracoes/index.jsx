@@ -13,6 +13,7 @@ import {
   CATEGORIAS_TEMATICAS,
   TEMPLATE_ID_PARA_GRUPO,
   mapParcelaBDParaForm,
+  resolverGrupoParcela,
 } from '../../data/parcelasTemplates.js';
 
 const TABS = [
@@ -1067,7 +1068,6 @@ function TabVerbas() {
   );
 }
 
-// Converte registro DB (snake_case) para form (camelCase) para pré-preencher ParcelaEditor
 // ---- ABA BIBLIOTECA DE PARCELAS ----
 function TabBiblioteca() {
   const { data: parcelas = [], isLoading } = useParcelas();
@@ -1084,7 +1084,7 @@ function TabBiblioteca() {
     setGruposAbertos(prev => ({ ...prev, [grupoId]: !prev[grupoId] }));
   }
 
-  // Set de templateIds que já têm versão customizada salva na biblioteca
+  // Set de templateIds que já têm versão salva na biblioteca (usada para ocultar template puro)
   const templateIdsSalvos = new Set(
     parcelas.map(p => p.template_id).filter(Boolean)
   );
@@ -1114,83 +1114,82 @@ function TabBiblioteca() {
     }
   }
 
-  // Resolve grupo de um template ou parcela DB
-  function grupoDeTemplate(templateId) {
-    const tpl = TEMPLATES_PADRAO.find(t => t._templateId === templateId);
-    if (tpl) return tpl.grupo;
-    const grupoLabel = TEMPLATE_ID_PARA_GRUPO[templateId];
-    if (grupoLabel) {
-      const g = GRUPOS_PADRAO.find(gp => gp.label === grupoLabel);
-      if (g) return g.id;
-    }
-    return null;
+  // Resolve grupo efetivo de uma parcela do BD (usa resolverGrupoParcela sem overrides de localStorage)
+  function grupoEfetivoDaParcela(p) {
+    return resolverGrupoParcela(p, {});
   }
 
-  // Renderiza card de template built-in (somente leitura)
-  function TemplateRow({ t }) {
-    const customizado = templateIdsSalvos.has(t._templateId);
+  // Badge de vínculo com histórico salarial
+  function BadgeHistorico({ p }) {
+    if (!p.base_historico_id) return null;
+    if (p.base_historico_id === 'reclamante') {
+      return (
+        <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
+          ↪ hist. reclamante
+        </span>
+      );
+    }
     return (
-      <div className={`flex items-center gap-3 p-3 rounded-lg ${customizado ? 'bg-gray-50 opacity-60' : 'border border-gray-200 hover:bg-gray-50'}`}>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-medium text-sm truncate">{t.nome}</p>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">modelo</span>
-            {customizado && <span className="text-xs px-1.5 py-0.5 rounded bg-blue-200 text-blue-700">personalizado</span>}
-          </div>
-          <p className="text-xs text-gray-400 mt-0.5 leading-snug line-clamp-2">{t.descricao}</p>
-          <div className="flex gap-1.5 mt-1 flex-wrap">
-            <span className={`text-xs px-1.5 py-0.5 rounded ${t.natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-              {t.natureza}
-            </span>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-              {FREQUENCIA_LABELS[t.frequencia] || t.frequencia}
-            </span>
-            {t.geraReflexos && <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-600">com reflexos</span>}
-          </div>
-        </div>
-        {!customizado && (
-          <button
-            type="button"
-            onClick={() => setEditorCtx({ mode: 'personalizar', template: t })}
-            className="text-gray-400 hover:text-primaria p-1 flex-shrink-0"
-            title="Personalizar e salvar na biblioteca"
-          >
-            <Edit2 size={16} />
-          </button>
-        )}
-      </div>
+      <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">
+        ↪ histórico vinculado
+      </span>
     );
   }
 
-  // Renderiza card de parcela salva no BD
-  function ParcelaSalvaRow({ p }) {
+  // Card unificado — templates e parcelas salvas têm aparência idêntica
+  function ParcelaCard({ p, isTemplate = false, template = null }) {
+    const nome = isTemplate ? template.nome : p.nome;
+    const descricao = isTemplate ? template.descricao : p.descricao;
+    const natureza = isTemplate ? template.natureza : p.natureza;
+    const frequencia = isTemplate ? template.frequencia : p.frequencia;
+    const geraReflexos = isTemplate ? template.geraReflexos : p.gera_reflexos;
+
     return (
-      <div className="flex items-center gap-3 p-3 border border-blue-200 bg-blue-50 rounded-lg">
+      <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-medium text-sm truncate">{p.nome}</p>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-200 text-blue-700">personalizado</span>
+            <p className="font-medium text-sm truncate">{nome}</p>
           </div>
-          <div className="flex gap-2 mt-0.5 flex-wrap">
-            <span className={`text-xs px-1.5 py-0.5 rounded ${p.natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
-              {p.natureza}
+          {descricao && <p className="text-xs text-gray-400 mt-0.5 leading-snug line-clamp-2">{descricao}</p>}
+          <div className="flex gap-1.5 mt-1 flex-wrap">
+            <span className={`text-xs px-1.5 py-0.5 rounded ${natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+              {natureza}
             </span>
-            <span className="text-xs text-gray-400">{FREQUENCIA_LABELS[p.frequencia] || p.frequencia}</span>
-            {p.valor_base && <span className="text-xs text-gray-400">{formatBRL(Number(p.valor_base))}</span>}
-            {p.percentual_base && <span className="text-xs text-gray-400">{(p.percentual_base * 100).toFixed(1)}%</span>}
-            <span className="text-xs text-gray-300">
-              {[p.incide_fgts && 'FGTS', p.incide_inss && 'INSS', p.incide_ir && 'IR'].filter(Boolean).join(' · ') || 'Sem incidências'}
+            <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+              {FREQUENCIA_LABELS[frequencia] || frequencia}
             </span>
+            {geraReflexos && <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-600">com reflexos</span>}
+            {!isTemplate && <BadgeHistorico p={p} />}
+            {!isTemplate && p.valor_base && (
+              <span className="text-xs text-gray-400">{formatBRL(Number(p.valor_base))}</span>
+            )}
+            {!isTemplate && p.percentual_base && (
+              <span className="text-xs text-gray-400">{(p.percentual_base * 100).toFixed(1)}%</span>
+            )}
           </div>
         </div>
-        <button type="button" onClick={() => setEditorCtx({ mode: 'editar', parcela: p })}
-          className="text-gray-400 hover:text-primaria p-1 flex-shrink-0" title="Editar">
+        <button
+          type="button"
+          onClick={() => isTemplate
+            ? setEditorCtx({ mode: 'personalizar', template })
+            : setEditorCtx({ mode: 'editar', parcela: p })
+          }
+          className="text-gray-400 hover:text-primaria p-1 flex-shrink-0"
+          title={isTemplate ? 'Personalizar e salvar na biblioteca' : 'Editar parcela'}
+        >
           <Edit2 size={16} />
         </button>
-        <button type="button" onClick={() => handleExcluir(p.id)} disabled={excluindo === p.id}
-          className="text-red-400 hover:text-red-600 p-1 flex-shrink-0" title="Remover">
-          <Trash2 size={16} />
-        </button>
+        {!isTemplate && (
+          <button
+            type="button"
+            onClick={() => handleExcluir(p.id)}
+            disabled={excluindo === p.id}
+            className="text-red-400 hover:text-red-600 p-1 flex-shrink-0"
+            title="Remover da biblioteca"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
     );
   }
@@ -1216,6 +1215,7 @@ function TabBiblioteca() {
           onSalvar={handleSalvar}
           salvando={salvando}
           onCancelar={() => setEditorCtx(null)}
+          historicos={[]}
         />
       )}
 
@@ -1225,28 +1225,34 @@ function TabBiblioteca() {
             <BookOpen size={18} className="text-primaria" />
             <h3 className="font-titulo text-lg text-primaria">Biblioteca de Parcelas</h3>
           </div>
-          <button type="button" className="btn-primario flex items-center gap-2 text-sm" onClick={() => setEditorCtx({ mode: 'nova' })}>
+          <button
+            type="button"
+            className="btn-primario flex items-center gap-2 text-sm"
+            onClick={() => setEditorCtx({ mode: 'nova' })}
+          >
             <Plus size={16} /> Nova Parcela
           </button>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Modelos pré-configurados por tema. Clique no lápis para personalizar e salvar na biblioteca. Parcelas personalizadas ficam disponíveis em todos os cálculos.
+          Todas as parcelas — modelos e personalizadas — são editáveis. Clique no lápis para configurar os parâmetros.
+          As alterações ficam disponíveis em todos os cálculos futuros.
         </p>
 
         {isLoading ? (
           <p className="text-sm text-gray-400">Carregando...</p>
         ) : (
           <>
-            {/* Grupos temáticos */}
             {GRUPOS_PADRAO.map((grupo) => {
-              const templatesDoGrupo = TEMPLATES_PADRAO.filter(t => t.grupo === grupo.id);
-              const parcelasSalvasDoGrupo = parcelas.filter(p => {
-                if (!p.template_id) return false;
-                return grupoDeTemplate(p.template_id) === grupo.id;
-              });
-              const total = templatesDoGrupo.length + parcelasSalvasDoGrupo.filter(p =>
-                !templatesDoGrupo.some(t => t._templateId === p.template_id)
-              ).length;
+              // Templates deste grupo que ainda NÃO têm versão salva no banco
+              const templatesDoGrupo = TEMPLATES_PADRAO.filter(
+                t => t.grupo === grupo.id && !templateIdsSalvos.has(t._templateId)
+              );
+              // Parcelas salvas no banco neste grupo
+              const parcelasSalvasDoGrupo = parcelas.filter(
+                p => grupoEfetivoDaParcela(p) === grupo.id
+              );
+
+              const total = templatesDoGrupo.length + parcelasSalvasDoGrupo.length;
               if (total === 0) return null;
 
               const aberto = Boolean(gruposAbertos[grupo.id]);
@@ -1265,79 +1271,26 @@ function TabBiblioteca() {
                   </button>
                   {aberto && (
                     <div className="px-4 pb-4 space-y-2">
-                      {templatesDoGrupo.map(t => <TemplateRow key={t._templateId} t={t} />)}
-                      {/* Parcelas DB deste grupo que NÃO têm template correspondente nos built-in */}
-                      {parcelasSalvasDoGrupo
-                        .filter(p => !templatesDoGrupo.some(t => t._templateId === p.template_id))
-                        .map(p => <ParcelaSalvaRow key={p.id} p={p} />)}
+                      {/* Templates sem versão salva */}
+                      {templatesDoGrupo.map(t => (
+                        <ParcelaCard key={t._templateId} isTemplate template={t} p={null} />
+                      ))}
+                      {/* Parcelas salvas no banco */}
+                      {parcelasSalvasDoGrupo.map(p => (
+                        <ParcelaCard key={p.id} p={p} />
+                      ))}
                     </div>
                   )}
                 </div>
               );
             })}
-
-            {/* Minhas Parcelas — parcelas salvas sem template_id */}
-            {(() => {
-              const minhasParcelas = parcelas.filter(p => !p.template_id);
-              if (minhasParcelas.length === 0) return null;
-              const aberto = Boolean(gruposAbertos['_minhas']);
-              return (
-                <div className="border border-gray-200 rounded-lg mb-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleGrupo('_minhas')}
-                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 rounded-lg"
-                  >
-                    <span className="font-medium text-sm text-gray-700">
-                      Minhas Parcelas
-                      <span className="ml-2 text-xs text-gray-400 font-normal">({minhasParcelas.length})</span>
-                    </span>
-                    {aberto ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-                  </button>
-                  {aberto && (
-                    <div className="px-4 pb-4 space-y-2">
-                      {minhasParcelas.map(p => <ParcelaSalvaRow key={p.id} p={p} />)}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
-            {/* Outras Parcelas — parcelas DB com template_id que não mapeia para nenhum grupo */}
-            {(() => {
-              const outrasParcelas = parcelas.filter(p =>
-                p.template_id && !grupoDeTemplate(p.template_id)
-              );
-              if (outrasParcelas.length === 0) return null;
-              const aberto = Boolean(gruposAbertos['_outras']);
-              return (
-                <div className="border border-gray-200 rounded-lg mb-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleGrupo('_outras')}
-                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 rounded-lg"
-                  >
-                    <span className="font-medium text-sm text-gray-700">
-                      Outras Parcelas
-                      <span className="ml-2 text-xs text-gray-400 font-normal">({outrasParcelas.length})</span>
-                    </span>
-                    {aberto ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
-                  </button>
-                  {aberto && (
-                    <div className="px-4 pb-4 space-y-2">
-                      {outrasParcelas.map(p => <ParcelaSalvaRow key={p.id} p={p} />)}
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
           </>
         )}
       </div>
 
       <div className="aviso-judicial">
-        Parcelas personalizadas ficam disponíveis em todos os cálculos na etapa de Parcelas Personalizadas.
-        Modelos pré-configurados são somente leitura — clique no lápis para criar uma versão customizada.
+        As alterações feitas aqui afetam todos os cálculos futuros. Para alterar uma parcela apenas no cálculo
+        em curso, use o editor dentro da etapa de Parcelas Personalizadas na calculadora.
       </div>
     </div>
   );

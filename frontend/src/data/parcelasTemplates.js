@@ -613,5 +613,42 @@ export function mapParcelaBDParaForm(p) {
     incideFgts: p.incide_fgts,
     templateId: p.template_id,
     baseHistoricoId: p.base_historico_id || '',
+    // Grupo temático na biblioteca (campo grupo_biblioteca do BD)
+    grupoId: p.grupo_biblioteca || '',
   };
+}
+
+/**
+ * Resolve o grupo temático de uma parcela salva no banco de dados.
+ * Usa grupo_biblioteca (preferencial), depois template_id via TEMPLATE_ID_PARA_GRUPO,
+ * e depois TEMPLATES_PADRAO como fallback.
+ *
+ * @param {Object} p - parcela do banco (snake_case)
+ * @param {Object} gruposCustom - overrides do localStorage
+ * @returns {string} ID do grupo
+ */
+export function resolverGrupoParcela(p, gruposCustom = {}) {
+  // 1. Override manual do usuário (localStorage)
+  if (p.template_id && gruposCustom[p.template_id]) return gruposCustom[p.template_id];
+
+  // 2. Campo grupo_biblioteca do banco (mais confiável)
+  if (p.grupo_biblioteca) return p.grupo_biblioteca;
+
+  // 3. Mapeamento via template_id → GRUPOS_PADRAO (busca no TEMPLATES_PADRAO)
+  if (p.template_id) {
+    const tpl = TEMPLATES_PADRAO.find(t => t._templateId === p.template_id);
+    if (tpl) {
+      // Respeita override do localStorage também
+      return gruposCustom[tpl._templateId] ?? tpl.grupo;
+    }
+    // Fallback via TEMPLATE_ID_PARA_GRUPO (mapeamento de categorias)
+    const grupoLabel = TEMPLATE_ID_PARA_GRUPO[p.template_id];
+    if (grupoLabel) {
+      const grupo = GRUPOS_PADRAO.find(g => g.label === grupoLabel);
+      if (grupo) return grupo.id;
+    }
+  }
+
+  // 4. Default: remuneracao (grupo mais genérico)
+  return 'remuneracao';
 }

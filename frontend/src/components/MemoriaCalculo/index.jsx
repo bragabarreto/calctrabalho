@@ -268,7 +268,7 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
                 </div>
               )}
 
-              {/* Demonstrativo mensal para parcelas calculadas sobre histórico salarial */}
+              {/* Demonstrativo mensal — parcelas calculadas mês a mês */}
               {verba.memoria.distribuicaoMensal?.length > 0 && (
                 <div className="mt-1">
                   <button
@@ -277,47 +277,80 @@ function VerbaRow({ verba, onToggle, modoEdicao, getNomeVerba, getValorVerba, ed
                     className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-xs font-medium"
                   >
                     {mostrarDistribuicao ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    {mostrarDistribuicao ? 'Ocultar demonstrativo mensal' : `Ver demonstrativo mensal (${verba.memoria.distribuicaoMensal.length} meses)`}
+                    {mostrarDistribuicao
+                      ? 'Ocultar demonstrativo mensal'
+                      : `Ver demonstrativo mensal (${verba.memoria.distribuicaoMensal.length} competências)`}
                   </button>
-                  {mostrarDistribuicao && (
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="w-full text-xs border border-slate-200 rounded">
-                        <thead>
-                          <tr className="bg-slate-100">
-                            <th className="text-left px-3 py-1.5 font-medium text-slate-700">Competência</th>
-                            <th className="text-right px-3 py-1.5 font-medium text-slate-700">Salário Base</th>
-                            <th className="text-right px-3 py-1.5 font-medium text-slate-700">Valor Parcela</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {verba.memoria.distribuicaoMensal.map((m) => {
-                            const comp = m.mes || m.competencia;
-                            return (
-                              <tr key={comp} className="border-t border-slate-100 hover:bg-white">
-                                <td className="px-3 py-1 font-mono text-slate-600">
-                                  {comp.split('-').reverse().join('/')}
-                                </td>
-                                <td className="px-3 py-1 text-right font-mono text-slate-600">
-                                  {formatBRL(m.valorBase || m.salarioBase)}
-                                </td>
-                                <td className="px-3 py-1 text-right font-mono font-medium text-slate-700">
-                                  {formatBRL(m.valor)}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-slate-300 bg-slate-100">
-                            <td colSpan={2} className="px-3 py-1.5 font-bold text-slate-700">Total</td>
-                            <td className="px-3 py-1.5 text-right font-bold font-mono text-slate-800">
-                              {formatBRL(verba.memoria.distribuicaoMensal.reduce((s, m) => s + (m.valor || 0), 0))}
-                            </td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  )}
+                  {mostrarDistribuicao && (() => {
+                    const dist = verba.memoria.distribuicaoMensal;
+                    // Verifica se algum mês é proporcional para exibir coluna de dias
+                    const temProporcional = dist.some(m => m.ehProporcional || (m.diasTrabalhados && m.diasNoMes && m.diasTrabalhados < m.diasNoMes));
+                    return (
+                      <div className="mt-2 overflow-x-auto">
+                        <table className="w-full text-xs border border-slate-200 rounded">
+                          <thead>
+                            <tr className="bg-slate-100">
+                              <th className="text-left px-3 py-1.5 font-medium text-slate-700">Competência</th>
+                              {temProporcional && (
+                                <th className="text-center px-3 py-1.5 font-medium text-slate-700">Dias</th>
+                              )}
+                              <th className="text-right px-3 py-1.5 font-medium text-slate-700">Base</th>
+                              <th className="text-right px-3 py-1.5 font-medium text-slate-700">Valor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dist.map((m) => {
+                              const comp = m.mes || m.competencia;
+                              const ehProp = m.ehProporcional || (m.diasTrabalhados && m.diasNoMes && m.diasTrabalhados < m.diasNoMes);
+                              const [ano, mes] = (comp || '').split('-');
+                              const compFormatada = mes && ano ? `${mes}/${ano}` : comp;
+                              return (
+                                <tr
+                                  key={comp}
+                                  className={`border-t border-slate-100 hover:bg-white${ehProp ? ' bg-amber-50' : ''}`}
+                                >
+                                  <td className="px-3 py-1 font-mono text-slate-600">
+                                    {compFormatada}
+                                  </td>
+                                  {temProporcional && (
+                                    <td className="px-3 py-1 text-center font-mono text-slate-500">
+                                      {m.diasTrabalhados && m.diasNoMes
+                                        ? `${m.diasTrabalhados}/${m.diasNoMes}`
+                                        : '—'}
+                                    </td>
+                                  )}
+                                  <td className="px-3 py-1 text-right font-mono text-slate-600">
+                                    {formatBRL(m.valorBase || m.salarioBase)}
+                                  </td>
+                                  <td className="px-3 py-1 text-right font-mono font-medium text-slate-700">
+                                    {formatBRL(m.valor)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="border-t-2 border-slate-300 bg-slate-100">
+                              <td
+                                colSpan={temProporcional ? 3 : 2}
+                                className="px-3 py-1.5 font-bold text-slate-700"
+                              >
+                                Total
+                              </td>
+                              <td className="px-3 py-1.5 text-right font-bold font-mono text-slate-800">
+                                {formatBRL(dist.reduce((s, m) => s + (m.valor || 0), 0))}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                        {temProporcional && (
+                          <p className="text-xs text-amber-700 mt-1">
+                            * Meses em amarelo com cálculo proporcional (dias trabalhados / dias no mês).
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

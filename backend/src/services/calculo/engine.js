@@ -197,12 +197,28 @@ async function calcular(dados, modalidade) {
   reflexos.intervaloDigitacao = calcularReflexosIntervaloDigitacao(verbas.intervaloDigitacao, dados, temporal, modalidade);
 
   // ---- PARCELAS PERSONALIZADAS COM BASE EM HISTÓRICO SALARIAL ----
-  // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId
+  // Parcelas do array dados.parcelasPersonalizadas que possuem baseHistoricoId.
+  // historicoIdCalculo: override por cálculo (quando há múltiplos históricos e o usuário escolhe outro).
+  const errosParcelas = [];
   verbas.parcelasHistorico = [];
-  const parcelasComHistorico = (dados.parcelasPersonalizadas || []).filter((p) => p.baseHistoricoId);
+  const parcelasComHistorico = (dados.parcelasPersonalizadas || []).filter((p) => {
+    const effectiveId = p.historicoIdCalculo || p.baseHistoricoId;
+    return !!effectiveId;
+  });
   for (const parcela of parcelasComHistorico) {
-    const { historico, parcelaId } = resolverBaseHistoricoId(historicosSalariais, parcela.baseHistoricoId);
-    if (!historico) continue;
+    const effectiveHistId = parcela.historicoIdCalculo || parcela.baseHistoricoId;
+    const { historico, parcelaId, usouSentinelReclamante } = resolverBaseHistoricoId(historicosSalariais, effectiveHistId);
+    if (!historico) {
+      if (usouSentinelReclamante) {
+        errosParcelas.push({
+          parcelaId: parcela.id || null,
+          parcelaNome: parcela.nome,
+          erro: `A parcela "${parcela.nome}" requer o histórico salarial do reclamante, mas nenhum histórico foi cadastrado neste cálculo. Cadastre o histórico na etapa anterior e recalcule.`,
+          tipo: 'historico_reclamante_ausente',
+        });
+      }
+      continue;
+    }
     const periodoInicio = parcela.periodoInicio || dados.dataAdmissao;
     const periodoFim = parcela.periodoFim || dados.dataDispensa;
     const percentual = parcela.percentualBase ? (parcela.percentualBase / 100) : 1;
@@ -237,19 +253,21 @@ async function calcular(dados, modalidade) {
     'tpl_intervalo',                                    // calcularIntervaloIntrajornada
   ]);
 
-  // Buscar SM vigente na data de dispensa (necessário para parcelas percentual_sm)
-  let smVigente = 0;
+  // Buscar histórico completo do SM (necessário para parcelas percentual_sm com cálculo mês a mês)
+  let smHistorico = [];
   const hasSmParcela = (dados.parcelasPersonalizadas || []).some(
     (p) => p.tipoValor === 'percentual_sm' && !p.baseHistoricoId && !TEMPLATES_DEDICADOS.has(p.templateId)
   );
   if (hasSmParcela) {
-    const smRow = await db.query(
-      `SELECT valor FROM salario_minimo_historico
-       WHERE mes_ano <= DATE_TRUNC('month', $1::date)
-       ORDER BY mes_ano DESC LIMIT 1`,
-      [dados.dataDispensa]
+    const smRows = await db.query(
+      `SELECT TO_CHAR(mes_ano, 'YYYY-MM') AS mes_ano, valor
+       FROM salario_minimo_historico
+       ORDER BY mes_ano ASC`
     );
-    smVigente = parseFloat(smRow.rows[0]?.valor || 0);
+    smHistorico = smRows.rows.map((r) => ({
+      mesAno: r.mes_ano,
+      valor: parseFloat(r.valor),
+    }));
   }
 
   verbas.parcelasCustom = [];
@@ -262,8 +280,8 @@ async function calcular(dados, modalidade) {
 
   for (let idx = 0; idx < parcelasGenericas.length; idx++) {
     const parcela = parcelasGenericas[idx];
-    const { valorMensal, total, nMeses, formulaFreq } =
-      calcularParcelaGenerica(parcela, dados, temporal, smVigente);
+    const { valorMensal, total, nMeses, formulaFreq, distribuicaoMensal } =
+      calcularParcelaGenerica(parcela, dados, temporal, smHistorico);
 
     if (total === 0 && parcela.frequencia !== 'unica') continue;
 
@@ -285,6 +303,7 @@ async function calcular(dados, modalidade) {
         nMeses,
         frequencia: parcela.frequencia,
         tipoValor: parcela.tipoValor,
+        ...(distribuicaoMensal && distribuicaoMensal.length > 0 ? { distribuicaoMensal } : {}),
       },
     });
   }
@@ -387,6 +406,8 @@ async function calcular(dados, modalidade) {
     temporal,
     auditoria: auditoria.toArray(),
     modalidade,
+    // Erros de parcelas (ex: histórico do reclamante ausente)
+    errosParcelas: errosParcelas.length > 0 ? errosParcelas : undefined,
     // Tabelas INSS/IR para recálculo dinâmico no frontend
     tabelasEncargos: {
       inss: { faixas: INSS_TABELA_2025, contribuicaoMaxima: INSS_CONTRIBUICAO_MAXIMA_2025 },

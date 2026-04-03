@@ -454,7 +454,19 @@ export default function Resultado() {
         />
       )}
 
-      {/* ── 9. AVISOS LEGAIS ── */}
+      {/* ── 9. ERROS DE PARCELAS (ex: histórico do reclamante ausente) ── */}
+      {resultado.errosParcelas?.length > 0 && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-2">
+          <p className="font-semibold text-sm text-red-700">⚠ Parcelas não calculadas por erro de configuração</p>
+          {resultado.errosParcelas.map((e, i) => (
+            <div key={i} className="text-xs text-red-700 bg-white border border-red-100 rounded px-3 py-2">
+              <span className="font-medium">{e.parcelaNome}:</span>{' '}{e.erro}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── 10. AVISOS LEGAIS ── */}
       <div className="space-y-2">
         {AVISOS.map((a) => (
           <div key={a.id} className="aviso-judicial">{a.texto}</div>

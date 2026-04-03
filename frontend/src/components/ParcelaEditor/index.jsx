@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { GRUPOS_PADRAO } from '../../data/parcelasTemplates.js';
 
 const FREQUENCIAS = [
   { value: 'horaria', label: 'Horária' },
@@ -13,9 +14,9 @@ const FREQUENCIAS = [
 
 const TIPO_VALOR = [
   { value: 'fixo', label: 'Valor fixo (R$)' },
-  { value: 'percentual_salario', label: '% do último salário' },
-  { value: 'percentual_sm', label: '% do salário mínimo' },
-  { value: 'percentual_historico', label: '% de histórico salarial' },
+  { value: 'percentual_salario', label: '% do salário (histórico mês a mês)' },
+  { value: 'percentual_sm', label: '% do salário mínimo (histórico mês a mês)' },
+  { value: 'percentual_historico', label: '% de histórico salarial específico' },
 ];
 
 const REFLEXOS_OPCOES = [
@@ -47,16 +48,27 @@ const INICIAL = {
   incideFgts: false,
   incidePrevidenciaPrivada: false,
   aliquotaPrevidenciaPrivada: '',
+  grupoId: 'remuneracao',
 };
 
 /**
- * @param {Object} parcela - existing parcela to edit (null = new)
+ * Editor de parcela (modal).
+ *
+ * @param {Object} parcela   - parcela existente para editar (null = nova)
  * @param {Function} onSalvar
  * @param {Function} onCancelar
  * @param {string} titulo
- * @param {Array} historicos - lista de históricos do cálculo atual para selecionar como base
+ * @param {Array} historicos - lista de históricos do cálculo atual
+ * @param {boolean} mostrarGrupo - exibir seletor de grupo (padrão: true)
  */
-export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 'Nova Parcela', historicos = [] }) {
+export default function ParcelaEditor({
+  parcela,
+  onSalvar,
+  onCancelar,
+  titulo = 'Nova Parcela',
+  historicos = [],
+  mostrarGrupo = true,
+}) {
   // Decompose baseHistoricoId into histId + parcelaId for the UI
   function decomporBaseHistoricoId(id) {
     if (!id) return { histId: '', parcelaId: '' };
@@ -64,7 +76,12 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
     return { histId, parcelaId };
   }
 
-  const initial = { ...INICIAL, ...(parcela || {}) };
+  const initial = {
+    ...INICIAL,
+    ...(parcela || {}),
+    // Compatibilidade: templates usam campo 'grupo', parcelas do BD usam 'grupoId'
+    grupoId: parcela?.grupoId || parcela?.grupo || 'remuneracao',
+  };
   const { histId: initHistId, parcelaId: initParcelaId } = decomporBaseHistoricoId(initial.baseHistoricoId);
 
   const [form, setForm] = useState(initial);
@@ -78,7 +95,7 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
         'Alterar a natureza jurídica de salarial para indenizatória removerá todos os reflexos ' +
         '(férias, 13º, FGTS, aviso prévio) e incidências (INSS, IR). Deseja continuar?'
       );
-      if (!confirmar) return; // reverte — não altera nada
+      if (!confirmar) return;
       setForm((prev) => ({
         ...prev,
         natureza: 'indenizatoria',
@@ -104,7 +121,7 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
 
   // Parcelas disponíveis no histórico selecionado
   const histSelecionado = historicos.find((h) => h.id === histSel);
-  const parcelasDoHist = histSelecionado?.parcelas || [];
+  const parcelasDoHist  = histSelecionado?.parcelas || [];
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -113,7 +130,10 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
     if (form.tipoValor === 'percentual_historico') {
       if (!histSel) { alert('Selecione um histórico salarial como base.'); return; }
       if (!form.percentualBase) { alert('Informe o percentual a aplicar sobre o histórico.'); return; }
-      const baseHistoricoId = parcelaSel ? `${histSel}:${parcelaSel}` : histSel;
+      // Sentinel 'reclamante': não usa parcelaSel
+      const baseHistoricoId = histSel === 'reclamante'
+        ? 'reclamante'
+        : (parcelaSel ? `${histSel}:${parcelaSel}` : histSel);
       onSalvar({
         ...form,
         valorBase: null,
@@ -187,6 +207,23 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
                 ))}
               </select>
             </div>
+
+            {/* Grupo temático na biblioteca */}
+            {mostrarGrupo && (
+              <div className="sm:col-span-2">
+                <label className="campo-label">Grupo na Biblioteca</label>
+                <select
+                  value={form.grupoId || 'remuneracao'}
+                  onChange={(e) => set('grupoId', e.target.value)}
+                  className="campo-input"
+                >
+                  {GRUPOS_PADRAO.map((g) => (
+                    <option key={g.id} value={g.id}>{g.label}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">Onde esta parcela aparecerá na biblioteca de parcelas.</p>
+              </div>
+            )}
           </div>
 
           {/* Período */}
@@ -247,8 +284,8 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
                 <input type="number" value={form.percentualBase} onChange={(e) => set('percentualBase', e.target.value)} className="campo-input" step="0.1" min="0" placeholder="0.0" />
                 <p className="text-xs text-gray-400 mt-1">
                   {form.tipoValor === 'percentual_sm'
-                    ? 'Aplicado sobre o salário mínimo de cada competência'
-                    : 'Aplicado sobre o último salário informado'}
+                    ? 'Aplicado sobre o salário mínimo de cada competência (cálculo mês a mês)'
+                    : 'Aplicado sobre o salário de cada competência do histórico salarial (cálculo mês a mês)'}
                 </p>
               </div>
             )}
@@ -257,25 +294,41 @@ export default function ParcelaEditor({ parcela, onSalvar, onCancelar, titulo = 
               <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div>
                   <label className="campo-label">Histórico Salarial</label>
-                  {historicos.length === 0 ? (
-                    <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
-                      Nenhum histórico salarial disponível neste cálculo. Configure os históricos na etapa anterior.
+                  <select
+                    value={histSel}
+                    onChange={(e) => {
+                      setHistSel(e.target.value);
+                      setParcelaSel('');
+                    }}
+                    className="campo-input"
+                  >
+                    <option value="">Selecione o histórico...</option>
+                    <option value="reclamante">↪ Histórico do Reclamante (principal)</option>
+                    {historicos.map((h) => (
+                      <option key={h.id} value={h.id}>{h.titulo}</option>
+                    ))}
+                  </select>
+
+                  {/* Contexto: biblioteca (sem históricos disponíveis) */}
+                  {historicos.length === 0 && histSel !== 'reclamante' && (
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-1">
+                      Nenhum histórico disponível aqui. Selecione <strong>"Histórico do Reclamante"</strong> para vincular
+                      permanentemente ao histórico principal do reclamante — que será exigido no cálculo.
                     </p>
-                  ) : (
-                    <select
-                      value={histSel}
-                      onChange={(e) => { setHistSel(e.target.value); setParcelaSel(''); }}
-                      className="campo-input"
-                    >
-                      <option value="">Selecione o histórico...</option>
-                      {historicos.map((h) => (
-                        <option key={h.id} value={h.id}>{h.titulo}</option>
-                      ))}
-                    </select>
+                  )}
+
+                  {/* Informativo quando sentinel reclamante está selecionado */}
+                  {histSel === 'reclamante' && (
+                    <p className="text-xs text-blue-700 bg-blue-100 border border-blue-200 rounded p-2 mt-1">
+                      Esta parcela usará automaticamente o histórico principal do reclamante em cada cálculo.
+                      Se nenhum histórico estiver cadastrado, o cálculo exibirá um aviso de erro para esta parcela.
+                      Em cálculos com múltiplos históricos, o usuário poderá escolher outro.
+                    </p>
                   )}
                 </div>
 
-                {histSel && parcelasDoHist.length > 0 && (
+                {/* Parcela específica — disponível apenas para histórico concreto (não para sentinel) */}
+                {histSel && histSel !== 'reclamante' && parcelasDoHist.length > 0 && (
                   <div>
                     <label className="campo-label">Parcela Específica (opcional)</label>
                     <select
