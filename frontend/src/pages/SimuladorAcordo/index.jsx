@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Calculator, CheckSquare, Square } from 'lucide-react';
 import evalExpr from '../../utils/evalExpr';
 
 function fmt(v) {
@@ -8,6 +8,174 @@ function fmt(v) {
 function pct(v) {
   return `${((v || 0) * 100).toFixed(1)}%`;
 }
+function round2(v) {
+  return Math.round((v || 0) * 100) / 100;
+}
+
+// ─── Helpers de data (timezone local, sem deslocamento UTC) ──────────────────
+
+function parseData(str) {
+  if (!str) return null;
+  const [y, m, d] = str.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function formatDataBR(date) {
+  if (!date) return '';
+  return date.toLocaleDateString('pt-BR');
+}
+
+// Anos completos entre duas datas
+function anosCompletos(from, to) {
+  let anos = to.getFullYear() - from.getFullYear();
+  const m = to.getMonth() - from.getMonth();
+  const d = to.getDate() - from.getDate();
+  if (m < 0 || (m === 0 && d < 0)) anos--;
+  return Math.max(0, anos);
+}
+
+// Meses completos entre duas datas (sem fração)
+function mesesCompletos(from, to) {
+  let m = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (to.getDate() < from.getDate()) m--;
+  return Math.max(0, m);
+}
+
+// Avos (cada mês completo conta; fração > 14 dias também conta)
+function calcularAvos(from, to) {
+  let avos = 0;
+  let current = new Date(from);
+  while (current < to) {
+    const prox = new Date(current);
+    prox.setMonth(prox.getMonth() + 1);
+    if (prox <= to) {
+      avos++;
+      current = prox;
+    } else {
+      const diasParciais = Math.round((to - current) / 86400000);
+      if (diasParciais > 14) avos++;
+      break;
+    }
+  }
+  return avos;
+}
+
+// Períodos aquisitivos de férias (integrais + proporcional)
+function calcularPeriodosFerias(admDate, dispDate, salario) {
+  const periodos = [];
+  let current = new Date(admDate);
+  let num = 1;
+
+  while (true) {
+    const inicioPeriodoSeg = new Date(current);
+    inicioPeriodoSeg.setFullYear(inicioPeriodoSeg.getFullYear() + 1);
+
+    if (inicioPeriodoSeg <= dispDate) {
+      // Período integral completo
+      const fimLabel = new Date(inicioPeriodoSeg);
+      fimLabel.setDate(fimLabel.getDate() - 1);
+      periodos.push({
+        id: `ferias_integral_${num}`,
+        nome: `Férias + 1/3 (${num}° Período Integral: ${formatDataBR(current)} – ${formatDataBR(fimLabel)})`,
+        valor: round2(salario * (4 / 3)),
+        avos: 12,
+        tipo: 'integral',
+      });
+      num++;
+      current = inicioPeriodoSeg;
+    } else {
+      // Período proporcional final
+      if (current < dispDate) {
+        const avos = calcularAvos(current, dispDate);
+        if (avos > 0) {
+          periodos.push({
+            id: `ferias_prop`,
+            nome: `Férias Proporcionais + 1/3 (${avos}/12 avos: ${formatDataBR(current)} – ${formatDataBR(dispDate)})`,
+            valor: round2(salario * (avos / 12) * (4 / 3)),
+            avos,
+            tipo: 'proporcional',
+          });
+        }
+      }
+      break;
+    }
+  }
+
+  return periodos;
+}
+
+// Calcula todas as verbas rescisórias estimadas
+function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, salario) {
+  const admDate = parseData(dataAdmissao);
+  const dispDate = parseData(dataDispensa);
+  const salNum = evalExpr(salario);
+
+  if (!admDate || !dispDate || !salNum || dispDate <= admDate) return [];
+
+  const verbas = [];
+
+  // 1. Aviso Prévio Indenizado (30 + 3 dias/ano, máx 90)
+  const anos = anosCompletos(admDate, dispDate);
+  const diasAviso = Math.min(30 + anos * 3, 90);
+  verbas.push({
+    id: 'aviso_previo',
+    nome: `Aviso Prévio Indenizado (${diasAviso} dias — ${anos} ano${anos !== 1 ? 's' : ''} completo${anos !== 1 ? 's' : ''} de serviço)`,
+    valor: round2((salNum / 30) * diasAviso),
+    grupo: 'rescisoria',
+  });
+
+  // 2. Férias + 1/3 (todos os períodos aquisitivos)
+  const periodosFerias = calcularPeriodosFerias(admDate, dispDate, salNum);
+  for (const p of periodosFerias) {
+    verbas.push({ ...p, grupo: 'ferias' });
+  }
+
+  // 3. FGTS – Depósitos (período imprescrito)
+  let fgtsInicio = admDate;
+  let labelFgts = '';
+  if (dataAjuizamento) {
+    const ajuizDate = parseData(dataAjuizamento);
+    if (ajuizDate) {
+      const prescricaoMarco = new Date(ajuizDate);
+      prescricaoMarco.setFullYear(prescricaoMarco.getFullYear() - 5);
+      if (prescricaoMarco > admDate) {
+        fgtsInicio = prescricaoMarco;
+        labelFgts = ` — a partir de ${formatDataBR(prescricaoMarco)}`;
+      }
+    }
+  }
+  const mesesFgts = mesesCompletos(fgtsInicio, dispDate);
+  if (mesesFgts > 0) {
+    verbas.push({
+      id: 'fgts_depositos',
+      nome: `FGTS – Depósitos (${mesesFgts} meses${labelFgts})`,
+      valor: round2(salNum * 0.08 * mesesFgts),
+      grupo: 'fgts',
+    });
+  }
+
+  // 4. Multa Rescisória FGTS 40% (período integral — sem prescrição)
+  const mesesTotal = mesesCompletos(admDate, dispDate);
+  const fgtsBrutoTotal = salNum * 0.08 * mesesTotal;
+  verbas.push({
+    id: 'multa_fgts',
+    nome: `Indenização Rescisória FGTS – 40% (período integral: ${mesesTotal} meses)`,
+    valor: round2(fgtsBrutoTotal * 0.40),
+    grupo: 'fgts',
+  });
+
+  // 5. Multa art. 477 CLT (= último salário)
+  verbas.push({
+    id: 'multa_477',
+    nome: 'Multa Art. 477 CLT (1 salário)',
+    valor: round2(salNum),
+    grupo: 'multa',
+  });
+
+  return verbas;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const PARCELAS_PREDEFINIDAS = [
   'Aviso prévio indenizado',
@@ -28,6 +196,7 @@ export default function SimuladorAcordoPage() {
   const [valorAcordo, setValorAcordo] = useState('');
   const [dataAdmissao, setDataAdmissao] = useState('');
   const [dataDispensa, setDataDispensa] = useState('');
+  const [dataAjuizamento, setDataAjuizamento] = useState('');
   const [salario, setSalario] = useState('');
   const [parcelas, setParcelas] = useState([
     { seletor: '', nomeCustom: '', valorRaw: '' },
@@ -38,7 +207,47 @@ export default function SimuladorAcordoPage() {
   const [inssEmpregadoEmpresa, setInssEmpregadoEmpresa] = useState(false);
   const [irEmpresa, setIrEmpresa] = useState(false);
 
-  // Valores derivados das condições especiais (baseados no resultado do backend)
+  // Verbas rescisórias estimadas — computadas automaticamente quando os campos estão preenchidos
+  const verbasEstimadas = useMemo(
+    () => calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, salario),
+    [dataAdmissao, dataDispensa, dataAjuizamento, salario]
+  );
+  const [verbasesSelecionadas, setVerbasesSelecionadas] = useState(new Set());
+
+  function toggleVerbaSelecionada(id) {
+    setVerbasesSelecionadas(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function selecionarTodas() {
+    setVerbasesSelecionadas(new Set(verbasEstimadas.map(v => v.id)));
+  }
+
+  function deselecionarTodas() {
+    setVerbasesSelecionadas(new Set());
+  }
+
+  function adicionarSelecionadasAoAcordo() {
+    const selecionadas = verbasEstimadas.filter(v => verbasesSelecionadas.has(v.id));
+    if (selecionadas.length === 0) return;
+
+    // Filtra linhas vazias antes de adicionar
+    const atuais = parcelas.filter(p => p.seletor || p.nomeCustom || p.valorRaw);
+    const novas = selecionadas.map(v => ({
+      seletor: 'Personalizada...',
+      nomeCustom: v.nome,
+      valorRaw: v.valor.toFixed(2),
+    }));
+
+    // Se só tinha a linha vazia inicial, substituir
+    setParcelas([...atuais, ...novas]);
+    setVerbasesSelecionadas(new Set());
+  }
+
+  // Condições especiais
   const inssEmpregadoVal = resultado?.inssEmpregado || 0;
   const irVal = resultado?.ir?.valor || 0;
   const deducaoDoEmpregado =
@@ -48,14 +257,15 @@ export default function SimuladorAcordoPage() {
     (resultado?.inssEmpregador || 0) +
     (inssEmpregadoEmpresa ? inssEmpregadoVal : 0) +
     (irEmpresa ? irVal : 0);
-  const custoTotalAcordo = Math.round(((resultado?.valorAcordo || 0) + custoAdicionalEmpresa) * 100) / 100;
+  const custoTotalAcordo = round2((resultado?.valorAcordo || 0) + custoAdicionalEmpresa);
 
   function addParcela() {
     setParcelas(prev => [...prev, { seletor: '', nomeCustom: '', valorRaw: '' }]);
   }
 
   function removeParcela(idx) {
-    setParcelas(prev => prev.filter((_, i) => i !== idx));
+    const nova = parcelas.filter((_, i) => i !== idx);
+    setParcelas(nova.length > 0 ? nova : [{ seletor: '', nomeCustom: '', valorRaw: '' }]);
   }
 
   function updateParcela(idx, field, value) {
@@ -108,6 +318,8 @@ export default function SimuladorAcordoPage() {
     }
   }
 
+  const temDadosParaEstimar = dataAdmissao && dataDispensa && evalExpr(salario) > 0;
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h2 className="font-titulo text-2xl text-primaria mb-1">Simulador de Acordo</h2>
@@ -119,7 +331,7 @@ export default function SimuladorAcordoPage() {
         {/* Coluna esquerda — formulário */}
         <div className="space-y-4">
 
-          {/* Valor do acordo */}
+          {/* Dados do Acordo */}
           <div className="card p-5">
             <h3 className="font-titulo text-base mb-3 text-primaria">Dados do Acordo</h3>
             <div className="space-y-3">
@@ -157,27 +369,115 @@ export default function SimuladorAcordoPage() {
                   />
                 </div>
               </div>
-              <div>
-                <label className="campo-label">Último Salário (R$)</label>
-                <input
-                  type="text"
-                  value={salario}
-                  onChange={e => setSalario(e.target.value)}
-                  onBlur={e => {
-                    const n = evalExpr(e.target.value);
-                    if (n > 0 && n.toFixed(2) !== e.target.value) setSalario(n.toFixed(2));
-                  }}
-                  className="campo-input font-mono"
-                  placeholder="Para referência — limite INSS/IR"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="campo-label">Último Salário (R$)</label>
+                  <input
+                    type="text"
+                    value={salario}
+                    onChange={e => setSalario(e.target.value)}
+                    onBlur={e => {
+                      const n = evalExpr(e.target.value);
+                      if (n > 0 && n.toFixed(2) !== e.target.value) setSalario(n.toFixed(2));
+                    }}
+                    className="campo-input font-mono"
+                    placeholder="Para referência — limite INSS/IR"
+                  />
+                </div>
+                <div>
+                  <label className="campo-label">Data de Ajuizamento</label>
+                  <input
+                    type="date"
+                    value={dataAjuizamento}
+                    onChange={e => setDataAjuizamento(e.target.value)}
+                    className="campo-input"
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">Define a prescrição quinquenal do FGTS</p>
+                </div>
               </div>
             </div>
           </div>
 
+          {/* Verbas Rescisórias Estimadas — aparece quando os dados estão preenchidos */}
+          {temDadosParaEstimar && (
+            <div className="card p-5 border border-indigo-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Calculator size={16} className="text-indigo-600" />
+                  <h3 className="font-titulo text-base text-indigo-700">Verbas Rescisórias Estimadas</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selecionarTodas}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                  >
+                    Todas
+                  </button>
+                  <span className="text-gray-300">|</span>
+                  <button
+                    type="button"
+                    onClick={deselecionarTodas}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Nenhuma
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                Verbas calculadas para dispensa sem justa causa com base nas datas e salário informados.
+                Selecione as que compõem o acordo para adicioná-las à discriminação.
+              </p>
+
+              <div className="space-y-2">
+                {verbasEstimadas.map(v => {
+                  const sel = verbasesSelecionadas.has(v.id);
+                  return (
+                    <label
+                      key={v.id}
+                      className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors select-none ${
+                        sel ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50 border border-transparent'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleVerbaSelecionada(v.id)}
+                        className={`mt-0.5 shrink-0 ${sel ? 'text-indigo-600' : 'text-gray-300 hover:text-gray-500'}`}
+                      >
+                        {sel ? <CheckSquare size={18} /> : <Square size={18} />}
+                      </button>
+                      <div className="flex-1 min-w-0" onClick={() => toggleVerbaSelecionada(v.id)}>
+                        <span className="text-sm text-gray-700 leading-snug">{v.nome}</span>
+                      </div>
+                      <span className="font-mono text-sm font-semibold shrink-0 text-gray-800">
+                        {fmt(v.valor)}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-between gap-3">
+                <p className="text-xs text-gray-400 italic">
+                  * Estimativa com salário constante. Aviso prévio, férias e multa FGTS calculados sobre todo o período; FGTS depósitos limitados ao período imprescrito.
+                </p>
+                <button
+                  type="button"
+                  onClick={adicionarSelecionadasAoAcordo}
+                  disabled={verbasesSelecionadas.size === 0}
+                  className="btn-primario text-xs py-1.5 px-3 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus size={12} className="inline mr-1" />
+                  Adicionar ({verbasesSelecionadas.size})
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Parcelas indenizatórias */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="font-titulo text-base text-primaria">Parcelas Indenizatórias</h3>
+              <h3 className="font-titulo text-base text-primaria">Discriminação das Parcelas Indenizatórias</h3>
               <button
                 type="button"
                 onClick={addParcela}
@@ -198,7 +498,7 @@ export default function SimuladorAcordoPage() {
                   className="grid gap-2 items-center"
                   style={{ gridTemplateColumns: '1fr 9rem 1.5rem' }}
                 >
-                  {/* Coluna nome — sempre um único elemento */}
+                  {/* Coluna nome */}
                   {p.seletor !== 'Personalizada...' ? (
                     <select
                       value={p.seletor}
@@ -218,7 +518,6 @@ export default function SimuladorAcordoPage() {
                         onChange={e => updateParcela(idx, 'nomeCustom', e.target.value)}
                         className="campo-input flex-1 text-sm min-w-0"
                         placeholder="Descrição da parcela..."
-                        autoFocus
                       />
                       <button
                         type="button"
@@ -236,7 +535,7 @@ export default function SimuladorAcordoPage() {
                     onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
                     onBlur={e => handleValorBlur(idx, e.target.value)}
                     className="campo-input w-full text-right font-mono text-sm"
-                    placeholder="0,00 ou 1000+200"
+                    placeholder="0,00"
                   />
 
                   {/* Coluna excluir */}
@@ -355,6 +654,20 @@ export default function SimuladorAcordoPage() {
                       </span>
                     )}
                   </div>
+                  {/* Discriminação das parcelas indenizatórias */}
+                  {resultado.parcelasIndenizatorias?.length > 0 && (
+                    <div className="mt-3 pt-2 border-t border-gray-100">
+                      <p className="text-xs font-semibold text-gray-500 mb-2">Parcelas informadas:</p>
+                      <div className="space-y-1">
+                        {resultado.parcelasIndenizatorias.map((p, i) => (
+                          <div key={i} className="flex justify-between text-xs text-gray-600">
+                            <span className="truncate mr-2">{p.nome}</span>
+                            <span className="font-mono shrink-0">{fmt(p.valor)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -454,6 +767,11 @@ export default function SimuladorAcordoPage() {
               <p className="text-4xl mb-3">⚖</p>
               <p className="font-semibold text-gray-500">Preencha os dados e clique em Calcular</p>
               <p className="text-xs mt-2">O sistema calculará INSS, IR (RRA) e o líquido ao trabalhador</p>
+              {temDadosParaEstimar && (
+                <p className="text-xs mt-2 text-indigo-500">
+                  ✓ Verbas rescisórias estimadas disponíveis na coluna esquerda
+                </p>
+              )}
             </div>
           )}
         </div>
