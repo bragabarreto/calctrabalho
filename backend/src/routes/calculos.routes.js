@@ -289,4 +289,107 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
   }
 });
 
+/**
+ * Sincronização geral de todos os índices monetários via BACEN
+ * Atualiza: IPCA-E, IPCA, SELIC, TR, Taxa Legal
+ */
+router.post('/sync-indices', async (req, res, next) => {
+  try {
+    const hoje = new Date();
+    const anoInicio = hoje.getFullYear() - 10;
+    const ini = `01/01/${anoInicio}`;
+    const fim = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+    const db = require('../config/database');
+
+    const resultados = { ipcaE: 0, ipca: 0, selic: 0, tr: 0, taxaLegal: 0, erros: [] };
+
+    // 1. IPCA-E (série 10764)
+    try {
+      const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.10764/dados?formato=json&dataInicial=${ini}&dataFinal=${fim}`, { signal: AbortSignal.timeout(15000) });
+      if (resp.ok) {
+        const dados = await resp.json();
+        if (Array.isArray(dados)) {
+          const porMes = {};
+          for (const item of dados) { const [, m, a] = item.data.split('/'); porMes[`${a}-${m}`] = parseFloat(item.valor); }
+          for (const [mesAno, valor] of Object.entries(porMes)) {
+            await db.query(`INSERT INTO ipca_e_historico (mes_ano, valor) VALUES ($1, $2) ON CONFLICT (mes_ano) DO UPDATE SET valor = EXCLUDED.valor`, [mesAno + '-01', valor]);
+            resultados.ipcaE++;
+          }
+        }
+      }
+    } catch (e) { resultados.erros.push('IPCA-E: ' + e.message); }
+
+    // 2. IPCA (série 433)
+    try {
+      const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.433/dados?formato=json&dataInicial=${ini}&dataFinal=${fim}`, { signal: AbortSignal.timeout(15000) });
+      if (resp.ok) {
+        const dados = await resp.json();
+        if (Array.isArray(dados)) {
+          const porMes = {};
+          for (const item of dados) { const [, m, a] = item.data.split('/'); porMes[`${a}-${m}`] = parseFloat(item.valor); }
+          for (const [mesAno, valor] of Object.entries(porMes)) {
+            await db.query(`INSERT INTO ipca_historico (mes_ano, valor) VALUES ($1, $2) ON CONFLICT (mes_ano) DO UPDATE SET valor = EXCLUDED.valor`, [mesAno + '-01', valor]);
+            resultados.ipca++;
+          }
+        }
+      }
+    } catch (e) { resultados.erros.push('IPCA: ' + e.message); }
+
+    // 3. SELIC mensal (série 4390)
+    const selicPorMes = {};
+    try {
+      const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.4390/dados?formato=json&dataInicial=${ini}&dataFinal=${fim}`, { signal: AbortSignal.timeout(15000) });
+      if (resp.ok) {
+        const dados = await resp.json();
+        if (Array.isArray(dados)) {
+          for (const item of dados) { const [, m, a] = item.data.split('/'); selicPorMes[`${a}-${m}`] = parseFloat(item.valor); }
+          for (const [mesAno, taxaMensal] of Object.entries(selicPorMes)) {
+            const taxaAnual = ((1 + taxaMensal / 100) ** 12 - 1) * 100;
+            await db.query(`INSERT INTO selic_historico (mes_ano, taxa_anual, taxa_mensal) VALUES ($1, $2, $3) ON CONFLICT (mes_ano) DO UPDATE SET taxa_anual = EXCLUDED.taxa_anual, taxa_mensal = EXCLUDED.taxa_mensal`, [mesAno + '-01', +taxaAnual.toFixed(4), +taxaMensal.toFixed(6)]);
+            resultados.selic++;
+          }
+        }
+      }
+    } catch (e) { resultados.erros.push('SELIC: ' + e.message); }
+
+    // 4. TR (série 226)
+    try {
+      const resp = await fetch(`https://api.bcb.gov.br/dados/serie/bcdata.sgs.226/dados?formato=json&dataInicial=${ini}&dataFinal=${fim}`, { signal: AbortSignal.timeout(20000) });
+      if (resp.ok) {
+        const dados = await resp.json();
+        if (Array.isArray(dados)) {
+          const porMes = {};
+          for (const item of dados) {
+            const [d, m, a] = item.data.split('/');
+            const chave = `${a}-${m}`;
+            if (!porMes[chave] || d === '01') porMes[chave] = parseFloat(item.valor);
+          }
+          for (const [mesAno, valor] of Object.entries(porMes)) {
+            await db.query(`INSERT INTO tr_historico (mes_ano, valor) VALUES ($1, $2) ON CONFLICT (mes_ano) DO UPDATE SET valor = EXCLUDED.valor`, [mesAno + '-01', valor]);
+            resultados.tr++;
+          }
+        }
+      }
+    } catch (e) { resultados.erros.push('TR: ' + e.message); }
+
+    // 5. Taxa Legal = max(0, SELIC_mensal - IPCA_mensal)
+    try {
+      const { rows: ipcaRows } = await db.query(`SELECT TO_CHAR(mes_ano, 'YYYY-MM') AS mes_ano, valor FROM ipca_historico ORDER BY mes_ano`);
+      const ipcaMap = {};
+      for (const r of ipcaRows) ipcaMap[r.mes_ano] = parseFloat(r.valor);
+
+      for (const [mesAno, selicMensal] of Object.entries(selicPorMes)) {
+        const ipcaVal = ipcaMap[mesAno];
+        if (ipcaVal !== undefined) {
+          const taxaLegal = Math.max(0, +(selicMensal - ipcaVal).toFixed(6));
+          await db.query(`INSERT INTO taxa_legal_historico (mes_ano, valor) VALUES ($1, $2) ON CONFLICT (mes_ano) DO UPDATE SET valor = EXCLUDED.valor`, [mesAno + '-01', taxaLegal]);
+          resultados.taxaLegal++;
+        }
+      }
+    } catch (e) { resultados.erros.push('Taxa Legal: ' + e.message); }
+
+    res.json({ sucesso: true, ...resultados });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

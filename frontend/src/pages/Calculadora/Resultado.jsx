@@ -325,11 +325,11 @@ export default function Resultado() {
           {resultado.juros.fases?.length > 0 && (
             <div className="space-y-2 mb-4">
               {resultado.juros.fases.map((f, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg px-4 py-2">
-                  <div className="flex justify-between items-start gap-2">
+                <div key={i} className="bg-gray-50 rounded-lg px-4 py-3">
+                  <div className="flex justify-between items-start gap-2 mb-1">
                     <div>
                       <p className="font-medium text-gray-700 text-xs leading-snug">{f.descricao}</p>
-                      <p className="text-xs text-gray-400">{f.periodo}</p>
+                      <p className="text-xs text-gray-400">{f.periodo}{f.meses ? ` (${f.meses} meses)` : ''}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-mono font-semibold text-blue-700 text-sm">
@@ -338,22 +338,40 @@ export default function Resultado() {
                       {f.estimado && <span className="text-xs text-amber-600">estimado</span>}
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs mt-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400">Correção ({f.indiceCorrecao || '—'}):</span>
+                      <span className="font-mono font-medium text-green-700">{f.pctCorrecao?.toFixed(4) || '0.0000'}%</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-400">Juros ({f.indiceJuros || '—'}):</span>
+                      <span className="font-mono font-medium text-orange-700">{f.pctJuros?.toFixed(4) || '0.0000'}%</span>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm mb-3">
             <div><p className="campo-label">Base de Cálculo</p>
               <p className="font-mono">{formatBRL(totalComHonorariosComputado)}</p>
             </div>
-            <div><p className="campo-label">Taxa Total Acumulada</p>
-              <p className="font-mono">{resultado.juros.percentual?.toFixed(4)}%</p>
+            <div><p className="campo-label">Correção Monetária</p>
+              <p className="font-mono text-green-700">{resultado.juros.percentualCorrecao?.toFixed(4) || resultado.juros.percentual?.toFixed(4)}%</p>
+              {resultado.juros.valorCorrecao != null && <p className="font-mono text-xs text-green-600">{formatBRL(resultado.juros.valorCorrecao)}</p>}
             </div>
-            <div><p className="campo-label">Valor dos Juros/Correção</p>
+            <div><p className="campo-label">Juros de Mora</p>
+              <p className="font-mono text-orange-700">{resultado.juros.percentualJuros?.toFixed(4) || '0.0000'}%</p>
+              {resultado.juros.valorJuros != null && <p className="font-mono text-xs text-orange-600">{formatBRL(resultado.juros.valorJuros)}</p>}
+            </div>
+            <div><p className="campo-label">Total (Correção + Juros)</p>
               <p className="font-mono font-bold text-blue-700">{formatBRL(resultado.juros.valor)}</p>
             </div>
           </div>
+          {resultado.juros.memoria?.detalhamento && (
+            <p className="text-xs text-gray-500 mt-1 font-mono">{resultado.juros.memoria.detalhamento}</p>
+          )}
           {resultado.juros.estimado && (
             <p className="text-xs text-amber-600 mt-1">{resultado.juros.memoria?.aviso}</p>
           )}
