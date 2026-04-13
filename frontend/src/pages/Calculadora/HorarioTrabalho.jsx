@@ -46,41 +46,101 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
     horasJornadaPadrao12x36 = 12,
     adicionalHoraExtra = 0.5, adicionalHoraNoturna = 0.2,
     prorrogacaoNoturna = false,
+    usarHorariosPorDia = false, horariosPorDia = null, escalaPattern = null,
   } = periodo;
 
   if (!horaEntrada || !horaSaida) return null;
 
+  // Helper: calcula métricas de jornada para um dia com horários específicos
+  function calcDia(entrada, saida, intervalo) {
+    const eMin = toMinutos(entrada);
+    const sMin = toMinutos(saida);
+    const brutos = sMin >= eMin ? sMin - eMin : (1440 - eMin) + sMin;
+    const liquidos = Math.max(0, brutos - (intervalo || 0));
+    const intervLegal = brutos > 360 ? 60 : brutos > 240 ? 15 : 0;
+    const deficit = Math.max(0, intervLegal - (intervalo || 0));
+    const noct = calcMinNoturnos(eMin, sMin >= eMin ? sMin : sMin + 1440, prorrogacaoNoturna);
+    const noctLiq = Math.min(noct, liquidos);
+    const efetivos = (liquidos - noctLiq) + noctLiq * (60 / 52.5);
+    return { entrada, saida, intervalo, brutos, liquidos, deficit, noct, noctLiq, efetivos };
+  }
+
+  // Obter horários de um dia (com horariosPorDia ou fallback)
+  function getDia(dia) {
+    if (usarHorariosPorDia && horariosPorDia && horariosPorDia[String(dia)]) {
+      const cfg = horariosPorDia[String(dia)];
+      return calcDia(cfg.horaEntrada || horaEntrada, cfg.horaSaida || horaSaida, cfg.intervaloMinutos ?? intervaloMinutos);
+    }
+    return calcDia(horaEntrada, horaSaida, intervaloMinutos);
+  }
+
   const sal = salario || 0;
-  const entradaMin = toMinutos(horaEntrada);
-  const saidaMin = toMinutos(horaSaida);
-  const minBrutosDia = saidaMin >= entradaMin ? saidaMin - entradaMin : (1440 - entradaMin) + saidaMin;
-  const minLiquidosDia = Math.max(0, minBrutosDia - (intervaloMinutos || 0));
-
-  // Intervalo legal e déficit
-  const intervaloLegalMin = minBrutosDia > 360 ? 60 : minBrutosDia > 240 ? 15 : 0;
-  const intervaloDeficitDia = Math.max(0, intervaloLegalMin - (intervaloMinutos || 0));
-
-  // Minutos noturnos reais por dia (com prorrogação se configurada)
-  const minNocturnos = calcMinNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, prorrogacaoNoturna);
-
-  // Redução da hora noturna (CLT art. 73 §1°): 52min30s = 1h contratual
-  const minNocturnosLiq = Math.min(minNocturnos, minLiquidosDia);
-  const minEfetivosDia = (minLiquidosDia - minNocturnosLiq) + minNocturnosLiq * (60 / 52.5);
-
+  const valorHora = sal > 0 ? sal / divisorJornada : 0;
   const horasSemanais = divisorJornada / 5;
   const minContratualSemana = horasSemanais * 60;
-  const minContratualDia = diasSemana.length > 0 ? minContratualSemana / diasSemana.length : 0;
-  const diasUteisMedia = diasSemana.length * 4.33;
-  const valorHora = sal > 0 ? sal / divisorJornada : 0;
+  const diasAtivos = escalaPattern ? [] : diasSemana; // Cíclico não usa semana fixa
+  const minContratualDia = diasAtivos.length > 0 ? minContratualSemana / diasAtivos.length : 0;
+  const diasUteisMedia = diasAtivos.length * 4.33;
+  const intraAtivo = (verbasConfig?.intrajornadaModo || 'automatico') !== 'desabilitado';
+
+  // Escala cíclica — mostrar preview do turno padrão ao invés de semana
+  if (escalaPattern) {
+    const d = getDia(1); // turno padrão
+    const cicloTotal = (escalaPattern.diasTrab || 1) + (escalaPattern.diasFolga || 1);
+    const turnosMes = Math.round(30 / cicloTotal * (escalaPattern.diasTrab || 1));
+
+    if (padraoApuracao === '12x36') {
+      const minPadraoTurno = horasJornadaPadrao12x36 * 60;
+      const heMinTurno = Math.max(0, d.efetivos - minPadraoTurno);
+      return (
+        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-xs font-medium text-blue-800 mb-2">Regime 12×36 — Ciclo {escalaPattern.diasTrab}×{escalaPattern.diasFolga}</p>
+          <div className="flex gap-3">
+            <div className="flex-1 p-2 bg-blue-100 rounded text-center">
+              <p className="text-sm font-bold text-blue-900">{horasJornadaPadrao12x36}h padrão</p>
+              <p className="text-xs text-blue-700">Turno contratual</p>
+              <p className="text-xs text-blue-600 font-mono">{d.entrada} → {d.saida} ({formatMin(d.liquidos)} efetivo)</p>
+            </div>
+            <div className="flex-1 p-2 bg-gray-100 rounded text-center">
+              <p className="text-sm font-bold text-gray-600">{escalaPattern.diasFolga * 24}h</p>
+              <p className="text-xs text-gray-500">Descanso</p>
+              <p className="text-xs text-gray-400">~{turnosMes} turnos/mês</p>
+            </div>
+          </div>
+          {heMinTurno > 0 && <p className="text-xs text-amber-700 mt-2 font-medium">HE/turno: {formatMin(heMinTurno)} × ~{turnosMes} ≈ {formatMin(heMinTurno * turnosMes)}/mês</p>}
+          {d.noct > 0 && <p className="text-xs text-indigo-700 mt-1">AN/turno: {formatMin(d.noct)} noturno × ~{turnosMes}</p>}
+          {d.deficit > 0 && intraAtivo && <p className="text-xs text-orange-700 mt-1">Intrajornada: {formatMin(d.deficit)} déficit/turno × ~{turnosMes}</p>}
+        </div>
+      );
+    }
+
+    return (
+      <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+        <p className="text-xs font-medium text-blue-800 mb-2">Escala cíclica {escalaPattern.diasTrab}×{escalaPattern.diasFolga}</p>
+        <div className="flex gap-3">
+          <div className="flex-1 p-2 bg-blue-100 rounded text-center">
+            <p className="text-sm font-bold text-blue-900">{formatMin(d.efetivos)}</p>
+            <p className="text-xs text-blue-700">Jornada efetiva/turno</p>
+            <p className="text-xs text-blue-600 font-mono">{d.entrada} → {d.saida}</p>
+          </div>
+          <div className="flex-1 p-2 bg-gray-100 rounded text-center">
+            <p className="text-sm font-bold text-gray-600">~{turnosMes} turnos</p>
+            <p className="text-xs text-gray-500">por mês</p>
+          </div>
+        </div>
+        {d.noct > 0 && <p className="text-xs text-indigo-700 mt-2">Noturno: {formatMin(d.noct)}/turno × ~{turnosMes}</p>}
+        {d.deficit > 0 && intraAtivo && <p className="text-xs text-orange-700 mt-1">Intrajornada: {formatMin(d.deficit)} déficit/turno × ~{turnosMes}</p>}
+      </div>
+    );
+  }
 
   if (padraoApuracao === '12x36') {
+    const d = getDia(1);
     const minPadraoTurno = horasJornadaPadrao12x36 * 60;
-    // Usa minutos efetivos (com redução noturna) para apurar HE do turno
-    const heMinTurno = Math.max(0, minEfetivosDia - minPadraoTurno);
+    const heMinTurno = Math.max(0, d.efetivos - minPadraoTurno);
     const valorHEMensal = valorHora * (1 + adicionalHoraExtra) * (heMinTurno / 60) * 15;
-    const valorANMensal = valorHora * adicionalHoraNoturna * (60 / 52.5) * (minNocturnos / 60) * 15;
-    const intraAtivo = (verbasConfig?.intrajornadaModo || 'automatico') !== 'desabilitado';
-    const valorIntraMensal = intraAtivo ? valorHora * (1 + adicionalHoraExtra) * (intervaloDeficitDia / 60) * 15 : 0;
+    const valorANMensal = valorHora * adicionalHoraNoturna * (60 / 52.5) * (d.noct / 60) * 15;
+    const valorIntraMensal = intraAtivo ? valorHora * (1 + adicionalHoraExtra) * (d.deficit / 60) * 15 : 0;
     return (
       <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
         <p className="text-xs font-medium text-blue-800 mb-2">Regime 12×36 — Ciclo padrão</p>
@@ -88,7 +148,7 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
           <div className="flex-1 p-2 bg-blue-100 rounded text-center">
             <p className="text-sm font-bold text-blue-900">{horasJornadaPadrao12x36}h padrão</p>
             <p className="text-xs text-blue-700">Turno contratual</p>
-            <p className="text-xs text-blue-600 font-mono">{horaEntrada} → {horaSaida} ({formatMin(minLiquidosDia)} efetivo)</p>
+            <p className="text-xs text-blue-600 font-mono">{d.entrada} → {d.saida} ({formatMin(d.liquidos)} efetivo)</p>
           </div>
           <div className="flex-1 p-2 bg-gray-100 rounded text-center">
             <p className="text-sm font-bold text-gray-600">36h</p>
@@ -97,14 +157,14 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
           </div>
         </div>
         {heMinTurno > 0 && <p className="text-xs text-amber-700 mt-2 font-medium">HE/turno: {formatMin(heMinTurno)} × ~15 ≈ {formatMin(heMinTurno * 15)}/mês</p>}
-        {minNocturnos > 0 && <p className="text-xs text-indigo-700 mt-1">AN/turno: {formatMin(minNocturnos)} noturno × ~15</p>}
-        {intervaloDeficitDia > 0 && intraAtivo && <p className="text-xs text-orange-700 mt-1">Intrajornada: {formatMin(intervaloDeficitDia)} déficit/turno × ~15</p>}
-        {sal > 0 && (heMinTurno > 0 || minNocturnos > 0 || (intervaloDeficitDia > 0 && intraAtivo)) && (
+        {d.noct > 0 && <p className="text-xs text-indigo-700 mt-1">AN/turno: {formatMin(d.noct)} noturno × ~15</p>}
+        {d.deficit > 0 && intraAtivo && <p className="text-xs text-orange-700 mt-1">Intrajornada: {formatMin(d.deficit)} déficit/turno × ~15</p>}
+        {sal > 0 && (heMinTurno > 0 || d.noct > 0 || (d.deficit > 0 && intraAtivo)) && (
           <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-0.5">
             <p className="font-semibold text-amber-800">Estimativa /mês:</p>
             {heMinTurno > 0 && <p>HE: <strong>{fmt2(valorHEMensal)}</strong></p>}
-            {minNocturnos > 0 && <p>AN: <strong>{fmt2(valorANMensal)}</strong></p>}
-            {intervaloDeficitDia > 0 && intraAtivo && <p>Intrajornada: <strong>{fmt2(valorIntraMensal)}</strong></p>}
+            {d.noct > 0 && <p>AN: <strong>{fmt2(valorANMensal)}</strong></p>}
+            {d.deficit > 0 && intraAtivo && <p>Intrajornada: <strong>{fmt2(valorIntraMensal)}</strong></p>}
           </div>
         )}
       </div>
@@ -113,19 +173,23 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
 
   let somaDiasMin = 0;
   let somaHEDiariasMin = 0;
+  let somaNoct = 0;
+  let somaDeficit = 0;
 
   const linhas = ORDEM_DIAS.map((dia) => {
-    const trabalha = diasSemana.includes(dia);
+    const trabalha = diasAtivos.includes(dia);
+    const d = trabalha ? getDia(dia) : null;
     let heMin = 0;
-    if (trabalha) {
-      // Soma minutos efetivos (com redução noturna) para comparar com limite semanal/diário
-      somaDiasMin += minEfetivosDia;
+    if (trabalha && d) {
+      somaDiasMin += d.efetivos;
+      somaNoct += d.noct;
+      somaDeficit += d.deficit;
       if (padraoApuracao === 'diario' || padraoApuracao === 'misto') {
-        heMin = Math.max(0, minEfetivosDia - minContratualDia);
+        heMin = Math.max(0, d.efetivos - minContratualDia);
         somaHEDiariasMin += heMin;
       }
     }
-    return { dia, trabalha, heMin };
+    return { dia, trabalha, heMin, d };
   });
 
   let heSemanalAdicionalMin = 0;
@@ -137,21 +201,20 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
   const totalHEMin = somaHEDiariasMin + heSemanalAdicionalMin;
 
   const mostraColHE = padraoApuracao === 'diario' || padraoApuracao === 'misto';
-  const mostraColAN = minNocturnos > 0;
-  const intraAtivo = (verbasConfig?.intrajornadaModo || 'automatico') !== 'desabilitado';
-  const mostraColIntra = intervaloDeficitDia > 0 && intraAtivo;
+  const mostraColAN = somaNoct > 0;
+  const mostraColIntra = somaDeficit > 0 && intraAtivo;
   const numCols = 4 + (mostraColHE ? 1 : 0) + (mostraColAN ? 1 : 0) + (mostraColIntra ? 1 : 0);
 
   // Estimativas monetárias mensais
-  const valorHEMensal = padraoApuracao === 'semanal'
-    ? valorHora * (1 + adicionalHoraExtra) * (totalHEMin / 60) * 4.33
-    : valorHora * (1 + adicionalHoraExtra) * (totalHEMin / 60) * 4.33;
-  const valorANMensal = valorHora * adicionalHoraNoturna * (60 / 52.5) * (minNocturnos / 60) * diasUteisMedia;
-  const valorIntraMensal = valorHora * (1 + adicionalHoraExtra) * (intervaloDeficitDia / 60) * diasUteisMedia;
+  const valorHEMensal = valorHora * (1 + adicionalHoraExtra) * (totalHEMin / 60) * 4.33;
+  const valorANMensal = somaNoct > 0 ? valorHora * adicionalHoraNoturna * (60 / 52.5) * (somaNoct / 60) * 4.33 : 0;
+  const valorIntraMensal = somaDeficit > 0 ? valorHora * (1 + adicionalHoraExtra) * (somaDeficit / 60) * 4.33 : 0;
+
+  const temHorarioDiferente = usarHorariosPorDia && horariosPorDia;
 
   return (
     <div className="mt-3">
-      <p className="text-xs font-medium text-gray-600 mb-1.5">Semana padrão</p>
+      <p className="text-xs font-medium text-gray-600 mb-1.5">Semana padrão{temHorarioDiferente ? ' (horários por dia)' : ''}</p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs border border-gray-200 rounded">
           <thead>
@@ -166,12 +229,12 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
             </tr>
           </thead>
           <tbody>
-            {linhas.map(({ dia, trabalha, heMin }) => (
+            {linhas.map(({ dia, trabalha, heMin, d }) => (
               <tr key={dia} className={trabalha ? 'hover:bg-blue-50' : 'opacity-40 bg-gray-50'}>
                 <td className="px-2 py-1 font-medium">{NOMES_DIAS[dia]}</td>
-                <td className="px-2 py-1 text-center font-mono">{trabalha ? horaEntrada : '—'}</td>
-                <td className="px-2 py-1 text-center font-mono">{trabalha ? horaSaida : '—'}</td>
-                <td className="px-2 py-1 text-center">{trabalha ? formatMin(Math.round(minEfetivosDia)) : 'Folga'}</td>
+                <td className="px-2 py-1 text-center font-mono">{trabalha && d ? d.entrada : '—'}</td>
+                <td className="px-2 py-1 text-center font-mono">{trabalha && d ? d.saida : '—'}</td>
+                <td className="px-2 py-1 text-center">{trabalha && d ? formatMin(Math.round(d.efetivos)) : 'Folga'}</td>
                 {mostraColHE && (
                   <td className={`px-2 py-1 text-center ${heMin > 0 ? 'text-orange-600 font-medium' : 'text-gray-400'}`}>
                     {trabalha ? (heMin > 0 ? formatMin(heMin) : '—') : '—'}
@@ -179,12 +242,12 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
                 )}
                 {mostraColAN && (
                   <td className="px-2 py-1 text-center text-indigo-600">
-                    {trabalha ? formatMin(minNocturnos) : '—'}
+                    {trabalha && d && d.noct > 0 ? formatMin(d.noct) : '—'}
                   </td>
                 )}
                 {mostraColIntra && (
                   <td className="px-2 py-1 text-center text-red-600 font-medium">
-                    {trabalha ? formatMin(intervaloDeficitDia) : '—'}
+                    {trabalha && d && d.deficit > 0 ? formatMin(d.deficit) : '—'}
                   </td>
                 )}
               </tr>
@@ -195,8 +258,8 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
               <td colSpan={3} className="px-2 py-1.5 text-gray-700">Total semana</td>
               <td className="px-2 py-1.5 text-center" title="Horas efetivas com redução noturna (52min30s=1h)">{formatMin(Math.round(somaDiasMin))}</td>
               {mostraColHE && <td className={`px-2 py-1.5 text-center ${somaHEDiariasMin > 0 ? 'text-orange-600' : ''}`}>{somaHEDiariasMin > 0 ? formatMin(somaHEDiariasMin) : '—'}</td>}
-              {mostraColAN && <td className="px-2 py-1.5 text-center text-indigo-600">{formatMin(minNocturnos * diasSemana.length)}</td>}
-              {mostraColIntra && <td className="px-2 py-1.5 text-center text-red-600">{formatMin(intervaloDeficitDia * diasSemana.length)}</td>}
+              {mostraColAN && <td className="px-2 py-1.5 text-center text-indigo-600">{formatMin(somaNoct)}</td>}
+              {mostraColIntra && <td className="px-2 py-1.5 text-center text-red-600">{formatMin(somaDeficit)}</td>}
             </tr>
             {heSemanalAdicionalMin > 0 && (
               <tr className="bg-orange-50">
@@ -217,19 +280,18 @@ function SemanaPadrao({ periodo, salario, verbasConfig }) {
       {padraoApuracao === 'semanal' && (
         <p className="text-xs text-gray-400 mt-1">HE apuradas somente quando o total semanal excede o limite contratual ({formatMin(Math.round(minContratualSemana))}).</p>
       )}
-      {minNocturnosLiq > 0 && (
+      {somaNoct > 0 && (
         <p className="text-xs text-indigo-500 mt-1">
           Redução da hora noturna aplicada (CLT art. 73 §1°): cada 52min30s noturnos equivalem a 1h contratual.
           {prorrogacaoNoturna && ' Prorrogação após 5h incluída (art. 73 §5°).'}
-          {' '}Horas exibidas são efetivas ({(minNocturnosLiq/60).toFixed(1)}h noturnas reais → {(minNocturnosLiq*(60/52.5)/60).toFixed(1)}h efetivas/dia).
         </p>
       )}
-      {sal > 0 && (totalHEMin > 0 || minNocturnos > 0 || (mostraColIntra)) && (
+      {sal > 0 && (totalHEMin > 0 || somaNoct > 0 || mostraColIntra) && (
         <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs space-y-0.5">
           <p className="font-semibold text-amber-800">Estimativa /mês (semana padrão × 4,33):</p>
           {totalHEMin > 0 && <p>HE: <strong>{fmt2(valorHEMensal)}</strong> ({(totalHEMin/60).toFixed(2)}h/sem × {Math.round((1+adicionalHoraExtra)*100)}% × 4,33)</p>}
-          {minNocturnos > 0 && <p>AN: <strong>{fmt2(valorANMensal)}</strong> ({(minNocturnos/60).toFixed(2)}h noturno/dia × {diasSemana.length} dias × {Math.round(adicionalHoraNoturna*100)}%)</p>}
-          {mostraColIntra && <p>Intrajornada: <strong>{fmt2(valorIntraMensal)}</strong> ({(intervaloDeficitDia/60).toFixed(2)}h déficit/dia × {diasSemana.length} dias)</p>}
+          {somaNoct > 0 && <p>AN: <strong>{fmt2(valorANMensal)}</strong> ({(somaNoct/60).toFixed(2)}h noturno/sem × {Math.round(adicionalHoraNoturna*100)}%)</p>}
+          {mostraColIntra && <p>Intrajornada: <strong>{fmt2(valorIntraMensal)}</strong> ({(somaDeficit/60).toFixed(2)}h déficit/sem × {Math.round((1+adicionalHoraExtra)*100)}%)</p>}
         </div>
       )}
     </div>
@@ -241,6 +303,18 @@ const PADROES = [
   { value: 'semanal', label: 'Semanal', desc: 'HE apuradas por semana: excesso sobre limite semanal' },
   { value: 'misto', label: 'Misto', desc: 'HE diárias + excesso semanal adicional (Súm. 291 TST)' },
   { value: '12x36', label: '12×36', desc: 'Turnos de 12h com 36h de descanso; HE por turno' },
+];
+
+// Escalas pré-definidas
+const ESCALAS = [
+  { value: 'semanal',      label: 'Semanal (dias fixos)',      desc: 'Selecionar dias da semana', diasTrab: null, diasFolga: null, ciclo: false },
+  { value: '5x1',          label: '5×1',                       desc: '5 dias trabalhados, 1 de folga', diasTrab: 5, diasFolga: 1, ciclo: false, diasSemana: [1,2,3,4,5,6] },
+  { value: '5x2',          label: '5×2',                       desc: '5 dias trabalhados, 2 de folga (seg-sex)', diasTrab: 5, diasFolga: 2, ciclo: false, diasSemana: [1,2,3,4,5] },
+  { value: '6x1',          label: '6×1',                       desc: '6 dias trabalhados, 1 de folga', diasTrab: 6, diasFolga: 1, ciclo: false, diasSemana: [1,2,3,4,5,6] },
+  { value: '12x36_cycle',  label: '12×36 (cíclica)',           desc: '1 dia trabalho, 1 dia folga — ciclo a partir da admissão', diasTrab: 1, diasFolga: 1, ciclo: true },
+  { value: '24x24',        label: '24×24',                     desc: '1 dia trabalho, 1 dia folga', diasTrab: 1, diasFolga: 1, ciclo: true },
+  { value: '24x48',        label: '24×48',                     desc: '1 dia trabalho, 2 dias folga', diasTrab: 1, diasFolga: 2, ciclo: true },
+  { value: 'custom_cycle', label: 'Personalizado (cíclica)',   desc: 'Definir ciclo customizado (X trab, Y folga)', diasTrab: 5, diasFolga: 2, ciclo: true },
 ];
 
 function novoPeriodo(dataAdmissao, dataDispensa) {
@@ -269,6 +343,13 @@ function novoPeriodo(dataAdmissao, dataDispensa) {
     diasSemana: [1, 2, 3, 4, 5],
     horasJornadaPadrao12x36: 12,
     prorrogacaoNoturna: false,
+    // Horários por dia da semana (quando habilitado, sobrescreve horaEntrada/horaSaida)
+    horariosPorDia: null, // { "1": { horaEntrada, horaSaida, intervaloMinutos }, ... }
+    usarHorariosPorDia: false,
+    // Escala pré-definida
+    escalaPattern: null, // { tipo, diasTrab, diasFolga }
+    escalaTipo: 'semanal', // UI selector value
+    // ---
     afastamentos: [],
     // Resultado cartão
     totalHorasExtras: null,
@@ -486,6 +567,8 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
           padraoApuracao: periodo.padraoApuracao,
           horasJornadaPadrao12x36: periodo.horasJornadaPadrao12x36,
           prorrogacaoNoturna: periodo.prorrogacaoNoturna,
+          horariosPorDia: periodo.usarHorariosPorDia ? periodo.horariosPorDia : null,
+          escalaPattern: periodo.escalaPattern || null,
         },
         dataInicio: periodo.dataInicio || dataAdmissao,
         dataFim: periodo.dataFim || dataDispensa,
@@ -493,14 +576,21 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
         divisorJornada: periodo.divisorJornada || 220,
       });
 
-      // Intrajornada: deficit/dia × total de dias trabalhados
-      const entMin = toMinutos(periodo.horaEntrada);
-      const saiMin = toMinutos(periodo.horaSaida);
-      const minBrutos = saiMin >= entMin ? saiMin - entMin : (1440 - entMin) + saiMin;
-      const intervaloLegal = minBrutos > 360 ? 60 : minBrutos > 240 ? 15 : 0;
-      const intervaloDeficit = Math.max(0, intervaloLegal - (periodo.intervaloMinutos || 0));
-      const totalDias = (res.distribuicaoMensal || []).reduce((s, m) => s + (m.diasTrabalhados || 0), 0);
-      const horasIntraTotal = +(( intervaloDeficit / 60) * totalDias).toFixed(2);
+      // Intrajornada: soma déficit de intervalo de todos os dias do cartão
+      let horasIntraTotal = 0;
+      if ((res.dias || []).length > 0) {
+        const totalDeficitMin = res.dias.reduce((s, d) => s + (d.minIntervaloDeficit || 0), 0);
+        horasIntraTotal = +(totalDeficitMin / 60).toFixed(2);
+      } else {
+        // Fallback: cálculo simples para quando dias não estiver disponível
+        const entMin = toMinutos(periodo.horaEntrada);
+        const saiMin = toMinutos(periodo.horaSaida);
+        const minBrutos = saiMin >= entMin ? saiMin - entMin : (1440 - entMin) + saiMin;
+        const intervaloLegal = minBrutos > 360 ? 60 : minBrutos > 240 ? 15 : 0;
+        const intervaloDeficit = Math.max(0, intervaloLegal - (periodo.intervaloMinutos || 0));
+        const totalDias = (res.distribuicaoMensal || []).reduce((s, m) => s + (m.diasTrabalhados || 0), 0);
+        horasIntraTotal = +((intervaloDeficit / 60) * totalDias).toFixed(2);
+      }
 
       // Interjornada: apura a partir dos dias do cartão
       let horasInterTotal = 0;
@@ -800,20 +890,154 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                 </div>
               )}
 
+              {/* Escala de trabalho */}
               <div>
-                <label className="campo-label mb-1 block">Dias trabalhados na semana</label>
-                <div className="flex gap-2 flex-wrap">
-                  {DIAS_SEMANA.map(({ value, label }) => (
-                    <button key={value} type="button" onClick={() => toggleDia(value)}
-                      className={`w-12 h-9 rounded text-xs font-medium border transition-colors ${
-                        periodo.diasSemana.includes(value)
-                          ? 'bg-primaria text-white border-primaria'
-                          : 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                      }`}>
-                      {label}
-                    </button>
+                <label className="campo-label mb-2 block">Escala de trabalho</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                  {ESCALAS.map(e => (
+                    <label key={e.value} className={`flex flex-col gap-0.5 p-2 rounded-lg border-2 cursor-pointer transition-colors text-xs ${
+                      (periodo.escalaTipo || 'semanal') === e.value ? 'border-primaria bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <div className="flex items-center gap-1">
+                        <input type="radio" name={`escala_${periodo.id}`} value={e.value}
+                          checked={(periodo.escalaTipo || 'semanal') === e.value}
+                          onChange={() => {
+                            const updates = { escalaTipo: e.value };
+                            if (e.ciclo) {
+                              updates.escalaPattern = { tipo: e.value, diasTrab: e.diasTrab, diasFolga: e.diasFolga };
+                            } else {
+                              updates.escalaPattern = null;
+                              if (e.diasSemana) updates.diasSemana = e.diasSemana;
+                            }
+                            if (e.value === '12x36_cycle') {
+                              updates.padraoApuracao = '12x36';
+                            }
+                            onChange({ ...periodo, ...updates });
+                          }} />
+                        <span className="font-semibold">{e.label}</span>
+                      </div>
+                      <span className="text-gray-500 leading-tight">{e.desc}</span>
+                    </label>
                   ))}
                 </div>
+
+                {/* Ciclo customizado */}
+                {(periodo.escalaTipo === 'custom_cycle') && (
+                  <div className="flex gap-3 items-center bg-gray-50 p-2 rounded mb-3">
+                    <div>
+                      <label className="campo-label text-xs">Dias trabalhados</label>
+                      <input type="number" value={periodo.escalaPattern?.diasTrab || 5}
+                        onChange={e => set('escalaPattern', { ...periodo.escalaPattern, tipo: 'custom_cycle', diasTrab: Number(e.target.value), diasFolga: periodo.escalaPattern?.diasFolga || 2 })}
+                        className="campo-input w-20" min="1" max="30" />
+                    </div>
+                    <span className="text-gray-400 text-lg mt-4">×</span>
+                    <div>
+                      <label className="campo-label text-xs">Dias de folga</label>
+                      <input type="number" value={periodo.escalaPattern?.diasFolga || 2}
+                        onChange={e => set('escalaPattern', { ...periodo.escalaPattern, tipo: 'custom_cycle', diasTrab: periodo.escalaPattern?.diasTrab || 5, diasFolga: Number(e.target.value) })}
+                        className="campo-input w-20" min="1" max="30" />
+                    </div>
+                    <p className="text-xs text-gray-400 mt-4">Ciclo a partir do início do período</p>
+                  </div>
+                )}
+
+                {/* Dias da semana — apenas para escalas semanais (não cíclicas) */}
+                {!periodo.escalaPattern && (
+                  <div>
+                    <label className="campo-label mb-1 block text-xs text-gray-500">Dias trabalhados na semana</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {DIAS_SEMANA.map(({ value, label }) => (
+                        <button key={value} type="button" onClick={() => toggleDia(value)}
+                          className={`w-12 h-9 rounded text-xs font-medium border transition-colors ${
+                            periodo.diasSemana.includes(value)
+                              ? 'bg-primaria text-white border-primaria'
+                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                          }`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Escalas cíclicas — info sobre ciclo */}
+                {periodo.escalaPattern && (
+                  <div className="bg-blue-50 border border-blue-200 rounded p-2 text-xs text-blue-700">
+                    <strong>Escala cíclica:</strong> {periodo.escalaPattern.diasTrab} dia{periodo.escalaPattern.diasTrab > 1 ? 's' : ''} de trabalho seguido{periodo.escalaPattern.diasTrab > 1 ? 's' : ''} de {periodo.escalaPattern.diasFolga} dia{periodo.escalaPattern.diasFolga > 1 ? 's' : ''} de folga.
+                    O ciclo é calculado a partir de {periodo.dataInicio || 'admissão'}.
+                  </div>
+                )}
+              </div>
+
+              {/* Horários por dia da semana */}
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const novo = !periodo.usarHorariosPorDia;
+                      const updates = { usarHorariosPorDia: novo };
+                      if (novo && !periodo.horariosPorDia) {
+                        // Inicializar com o horário padrão para os dias selecionados
+                        const h = {};
+                        const diasAtivos = periodo.escalaPattern ? [1,2,3,4,5,6] : periodo.diasSemana;
+                        diasAtivos.forEach(d => {
+                          h[String(d)] = { horaEntrada: periodo.horaEntrada, horaSaida: periodo.horaSaida, intervaloMinutos: periodo.intervaloMinutos };
+                        });
+                        updates.horariosPorDia = h;
+                      } else if (!novo) {
+                        updates.horariosPorDia = null;
+                      }
+                      onChange({ ...periodo, ...updates });
+                    }}
+                    className={`relative inline-flex h-4 w-8 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${periodo.usarHorariosPorDia ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${periodo.usarHorariosPorDia ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">Horários diferentes por dia da semana</p>
+                    <p className="text-xs text-gray-400">Ex: Seg-Qui 08h-17h, Sex 08h-16h, Sáb 08h-12h</p>
+                  </div>
+                </div>
+
+                {periodo.usarHorariosPorDia && periodo.horariosPorDia && (
+                  <div className="bg-gray-50 rounded-lg p-3 space-y-2">
+                    <div className="grid grid-cols-[3rem_1fr_1fr_4rem] gap-2 text-xs text-gray-500 font-medium">
+                      <span>Dia</span>
+                      <span>Entrada</span>
+                      <span>Saída</span>
+                      <span>Interv.</span>
+                    </div>
+                    {ORDEM_DIAS.map(dia => {
+                      const key = String(dia);
+                      const cfg = periodo.horariosPorDia[key];
+                      if (!cfg) return null;
+                      return (
+                        <div key={dia} className="grid grid-cols-[3rem_1fr_1fr_4rem] gap-2 items-center">
+                          <span className="text-xs font-medium text-gray-700">{NOMES_DIAS[dia]}</span>
+                          <input type="time" value={cfg.horaEntrada || ''}
+                            onChange={e => {
+                              const updated = { ...periodo.horariosPorDia, [key]: { ...cfg, horaEntrada: e.target.value } };
+                              set('horariosPorDia', updated);
+                            }}
+                            className="campo-input text-xs py-1" />
+                          <input type="time" value={cfg.horaSaida || ''}
+                            onChange={e => {
+                              const updated = { ...periodo.horariosPorDia, [key]: { ...cfg, horaSaida: e.target.value } };
+                              set('horariosPorDia', updated);
+                            }}
+                            className="campo-input text-xs py-1" />
+                          <input type="number" value={cfg.intervaloMinutos ?? 60}
+                            onChange={e => {
+                              const updated = { ...periodo.horariosPorDia, [key]: { ...cfg, intervaloMinutos: Number(e.target.value) } };
+                              set('horariosPorDia', updated);
+                            }}
+                            className="campo-input text-xs py-1 text-center" min="0" max="120" step="15" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Prorrogação noturna — art. 73 §5 CLT */}

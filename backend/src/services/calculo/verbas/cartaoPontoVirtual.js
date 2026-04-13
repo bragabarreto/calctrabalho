@@ -120,8 +120,98 @@ function calcularMinutosNoturnos(entradaMin, saidaMin, prorrogacao) {
 }
 
 /**
+ * Retorna horário de entrada/saída/intervalo para um dia da semana específico,
+ * usando horariosPorDia (se disponível) ou os valores padrão do período.
+ *
+ * @param {number} diaSemana        - dia da semana (0=Dom..6=Sab)
+ * @param {Object|null} horariosPorDia - mapa { "0".."6": { horaEntrada, horaSaida, intervaloMinutos } }
+ * @param {string} defaultEntrada   - horaEntrada padrão do período
+ * @param {string} defaultSaida     - horaSaida padrão do período
+ * @param {number} defaultIntervalo - intervaloMinutos padrão do período
+ * @returns {{ horaEntrada: string, horaSaida: string, intervaloMinutos: number }}
+ */
+function getScheduleForDay(diaSemana, horariosPorDia, defaultEntrada, defaultSaida, defaultIntervalo) {
+  const key = String(diaSemana);
+  if (horariosPorDia && horariosPorDia[key]) {
+    const cfg = horariosPorDia[key];
+    return {
+      horaEntrada: cfg.horaEntrada || defaultEntrada,
+      horaSaida: cfg.horaSaida || defaultSaida,
+      intervaloMinutos: cfg.intervaloMinutos ?? defaultIntervalo,
+    };
+  }
+  return { horaEntrada: defaultEntrada, horaSaida: defaultSaida, intervaloMinutos: defaultIntervalo };
+}
+
+/**
+ * Determina se um dia é dia de trabalho com base em um padrão de escala cíclica
+ * (ex: 12x36, 24x24, 24x48, custom).
+ * Retorna null se não há escalaPattern ou se o padrão não é cíclico — nesse caso
+ * o chamador deve usar diasSemana como fallback.
+ *
+ * @param {Date} current        - data corrente
+ * @param {Date} inicio         - data de início do período (âncora do ciclo)
+ * @param {Object|null} escalaPattern - { tipo, diasTrab, diasFolga }
+ * @returns {boolean|null} true/false para dia de trabalho/folga, null para fallback
+ */
+function ehDiaTrabalhadoEscala(current, inicio, escalaPattern) {
+  if (!escalaPattern || !escalaPattern.tipo) return null; // use diasSemana fallback
+  const { diasTrab, diasFolga } = escalaPattern;
+  if (!diasTrab || !diasFolga) return null;
+  const totalCiclo = diasTrab + diasFolga;
+  const dayIndex = differenceInDays(current, inicio);
+  return (dayIndex % totalCiclo) < diasTrab;
+}
+
+/**
+ * Calcula os campos de jornada diária (minBrutos, minLiquidos, minEfetivos, minNoturnos, etc.)
+ * para um dia específico. Usado tanto para horário fixo quanto para horariosPorDia.
+ *
+ * @param {string} horaEntrada       - "HH:MM"
+ * @param {string} horaSaida         - "HH:MM"
+ * @param {number} intervaloMin      - minutos de intervalo
+ * @param {boolean} prorrogacaoNoturna
+ * @returns {Object} campos calculados de jornada
+ */
+function calcularJornadaDiaria(horaEntrada, horaSaida, intervaloMin, prorrogacaoNoturna) {
+  const entradaMin = toMinutos(horaEntrada);
+  const saidaMin = toMinutos(horaSaida);
+  const minBrutosDia = saidaMin >= entradaMin
+    ? saidaMin - entradaMin
+    : (1440 - entradaMin) + saidaMin; // atravessa meia-noite
+  const minLiquidosDia = Math.max(0, minBrutosDia - (intervaloMin || 0));
+  const intervMinLegal = minIntervaloLegal(minBrutosDia);
+  const intervDeficit = Math.max(0, intervMinLegal - (intervaloMin || 0));
+
+  // Minutos noturnos reais por dia
+  const minNocturnos = (horaEntrada && horaSaida)
+    ? calcularMinutosNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, prorrogacaoNoturna)
+    : 0;
+
+  // Redução da hora noturna (CLT art. 73 §1°): 52min30s = 1h contratual
+  const minNocturnosLiq = Math.min(minNocturnos, minLiquidosDia);
+  const minEfetivosDia = (minLiquidosDia - minNocturnosLiq) + minNocturnosLiq * (60 / 52.5);
+
+  return {
+    entradaMin,
+    saidaMin,
+    minBrutosDia,
+    minLiquidosDia,
+    minEfetivosDia,
+    intervaloMinLegal: intervMinLegal,
+    intervaloDeficit: intervDeficit,
+    minNocturnos,
+    intervaloMinutos: intervaloMin || 0,
+  };
+}
+
+/**
  * Gera o array completo de dias para um período de jornada.
  * Retorna cada dia com todos os campos necessários para cálculo de qualquer verba de duração do trabalho.
+ *
+ * Suporta:
+ *   - horariosPorDia: horários diferenciados por dia da semana (objeto { "0".."6": { horaEntrada, horaSaida, intervaloMinutos } })
+ *   - escalaPattern: padrões cíclicos de escala (12x36, 24x24, 24x48, custom) com { tipo, diasTrab, diasFolga }
  *
  * @param {Object} periodo   - Configuração do período (campos do jornadaPeriodos)
  * @param {string} dataAdm   - dataAdmissao do contrato (fallback quando periodo.dataInicio = null)
@@ -141,33 +231,21 @@ function gerarDiasPeriodo(periodo, dataAdm, dataDisp, feriadosAdicionais = []) {
     divisorJornada = 220,
     prorrogacaoNoturna = false,
     ferias: feriasPeriodo = [],
+    horariosPorDia = null,
+    escalaPattern = null,
   } = periodo;
 
   const afastamentos = periodo.afastamentos || [];
+  const usaHorarioPorDia = horariosPorDia && typeof horariosPorDia === 'object' && Object.keys(horariosPorDia).length > 0;
+  const usaEscalaCiclica = escalaPattern && escalaPattern.tipo &&
+    ['12x36_cycle', '24x24', '24x48', 'custom_cycle'].includes(escalaPattern.tipo);
 
   // Jornada contratual diária em minutos
   const horasSemanais = divisorJornada / 5;
   const minContratualDia = (horasSemanais * 60) / Math.max(1, diasSemana.length);
 
-  const entradaMin = toMinutos(horaEntrada);
-  const saidaMin = toMinutos(horaSaida);
-  const minBrutosDia = saidaMin >= entradaMin
-    ? saidaMin - entradaMin
-    : (1440 - entradaMin) + saidaMin; // atravessa meia-noite
-  const minLiquidosDia = Math.max(0, minBrutosDia - (intervaloMinutos || 0));
-  const intervaloMinLegal = minIntervaloLegal(minBrutosDia);
-  const intervaloDeficit = Math.max(0, intervaloMinLegal - (intervaloMinutos || 0));
-
-  // Minutos noturnos reais por dia
-  const minNocturnos = (horaEntrada && horaSaida)
-    ? calcularMinutosNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, prorrogacaoNoturna)
-    : 0;
-
-  // Redução da hora noturna (CLT art. 73 §1°): 52min30s = 1h contratual
-  // minutos noturnos líquidos (cap no total líquido — o intervalo não é reduzido)
-  const minNocturnosLiq = Math.min(minNocturnos, minLiquidosDia);
-  // Minutos efetivos: trecho diurno permanece 1:1; trecho noturno é multiplicado por 60/52.5
-  const minEfetivosDia = (minLiquidosDia - minNocturnosLiq) + minNocturnosLiq * (60 / 52.5);
+  // Pré-calcula jornada fixa (usada como default ou quando não há horariosPorDia)
+  const jornadaFixa = calcularJornadaDiaria(horaEntrada, horaSaida, intervaloMinutos, prorrogacaoNoturna);
 
   const dias = [];
   let current = new Date(inicio);
@@ -178,10 +256,35 @@ function gerarDiasPeriodo(periodo, dataAdm, dataDisp, feriadosAdicionais = []) {
     const afastado = estaEmAfastamento(current, afastamentos);
     const emFerias = estaEmFerias(current, feriasPeriodo);
     const eFeriado = ehFeriado(dataStr, feriadosAdicionais);
-    const ehDiaTrabalhado = diasSemana.includes(diaSemana) && !afastado && !emFerias;
-    // RSR = dia fora da escala semanal mas que foi trabalhado (detectável externamente)
-    // No cartão virtual, marcamos ehRSR como dia que NÃO está na escala semanal regular
-    const ehRSR = !diasSemana.includes(diaSemana) && !afastado && !emFerias;
+
+    // ── Determinar se é dia de trabalho ──────────────────────────────
+    let ehDiaTrabalhado;
+    let ehRSR;
+
+    if (usaEscalaCiclica) {
+      // Escala cíclica: ciclo de diasTrab + diasFolga a partir da data de início
+      const escalaDiz = ehDiaTrabalhadoEscala(current, inicio, escalaPattern);
+      if (escalaDiz !== null) {
+        ehDiaTrabalhado = escalaDiz && !afastado && !emFerias;
+        ehRSR = !escalaDiz && !afastado && !emFerias;
+      } else {
+        // fallback para diasSemana
+        ehDiaTrabalhado = diasSemana.includes(diaSemana) && !afastado && !emFerias;
+        ehRSR = !diasSemana.includes(diaSemana) && !afastado && !emFerias;
+      }
+    } else {
+      ehDiaTrabalhado = diasSemana.includes(diaSemana) && !afastado && !emFerias;
+      ehRSR = !diasSemana.includes(diaSemana) && !afastado && !emFerias;
+    }
+
+    // ── Calcular jornada do dia (horário por dia ou fixo) ────────────
+    let jornada;
+    if (usaHorarioPorDia) {
+      const sched = getScheduleForDay(diaSemana, horariosPorDia, horaEntrada, horaSaida, intervaloMinutos);
+      jornada = calcularJornadaDiaria(sched.horaEntrada, sched.horaSaida, sched.intervaloMinutos, prorrogacaoNoturna);
+    } else {
+      jornada = jornadaFixa;
+    }
 
     dias.push({
       data: dataStr,
@@ -192,18 +295,18 @@ function gerarDiasPeriodo(periodo, dataAdm, dataDisp, feriadosAdicionais = []) {
       trabalhado: ehDiaTrabalhado,
       ehFeriado: eFeriado,
       ehRSR,
-      minEntrada: entradaMin,
-      minSaida: saidaMin,
-      minBrutosDia: ehDiaTrabalhado ? minBrutosDia : 0,
-      minLiquidosDia: ehDiaTrabalhado ? minLiquidosDia : 0,
-      minEfetivosDia: ehDiaTrabalhado ? minEfetivosDia : 0,
+      minEntrada: jornada.entradaMin,
+      minSaida: jornada.saidaMin,
+      minBrutosDia: ehDiaTrabalhado ? jornada.minBrutosDia : 0,
+      minLiquidosDia: ehDiaTrabalhado ? jornada.minLiquidosDia : 0,
+      minEfetivosDia: ehDiaTrabalhado ? jornada.minEfetivosDia : 0,
       minContratualDia: Math.round(minContratualDia),
       // minExtras usa minutos EFETIVOS (com redução noturna de 52min30s → CLT art. 73 §1°)
-      minExtras: ehDiaTrabalhado ? Math.max(0, minEfetivosDia - minContratualDia) : 0,
-      intervaloMinutos: ehDiaTrabalhado ? (intervaloMinutos || 0) : 0,
-      minIntervaloMinimo: ehDiaTrabalhado ? intervaloMinLegal : 0,
-      minIntervaloDeficit: ehDiaTrabalhado ? intervaloDeficit : 0,
-      minNoturnosDia: ehDiaTrabalhado ? minNocturnos : 0,
+      minExtras: ehDiaTrabalhado ? Math.max(0, jornada.minEfetivosDia - minContratualDia) : 0,
+      intervaloMinutos: ehDiaTrabalhado ? jornada.intervaloMinutos : 0,
+      minIntervaloMinimo: ehDiaTrabalhado ? jornada.intervaloMinLegal : 0,
+      minIntervaloDeficit: ehDiaTrabalhado ? jornada.intervaloDeficit : 0,
+      minNoturnosDia: ehDiaTrabalhado ? jornada.minNocturnos : 0,
     });
 
     current = addDays(current, 1);
@@ -294,25 +397,7 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp, feriadosAdicionais =
 
   const dias = gerarDiasPeriodo(periodo, dataAdm, dataDisp, feriadosAdicionais);
 
-  const {
-    horaEntrada,
-    horaSaida,
-    intervaloMinutos = 60,
-    diasSemana = [1, 2, 3, 4, 5],
-  } = periodo;
-
-  const entradaMin = toMinutos(horaEntrada);
-  const saidaMin = toMinutos(horaSaida);
-  const minBrutos = saidaMin >= entradaMin ? saidaMin - entradaMin : (1440 - entradaMin) + saidaMin;
-  const minLiquidosDia = Math.max(0, minBrutos - (intervaloMinutos || 0));
   const minContratualDia = horasContratualDiaria * 60;
-
-  // Minutos efetivos por dia considerando a redução da hora noturna (CLT art. 73 §1°)
-  const minNoctPeriodo = (horaEntrada && horaSaida)
-    ? calcularMinutosNoturnos(entradaMin, saidaMin >= entradaMin ? saidaMin : saidaMin + 1440, periodo.prorrogacaoNoturna || false)
-    : 0;
-  const minNoctLiqPeriodo = Math.min(minNoctPeriodo, minLiquidosDia);
-  const minEfetivosPerDia = (minLiquidosDia - minNoctLiqPeriodo) + minNoctLiqPeriodo * (60 / 52.5);
 
   let totalMinHE = 0;
   let totalMinHN = 0;
@@ -354,19 +439,13 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp, feriadosAdicionais =
       return format(seg, 'yyyy-MM-dd');
     }
 
-    let curr2 = new Date(inicio);
-    while (curr2 <= fim) {
-      const iso = chaveSemanaDe(curr2);
-      const diaSemana = curr2.getDay();
-      const mes = format(curr2, 'yyyy-MM');
-      const afastado = estaEmAfastamento(curr2, afastamentos);
-
-      if (diasSemana.includes(diaSemana) && !afastado) {
-        if (!semanas[iso]) semanas[iso] = { minTotal: 0, mes };
-        // Usa minutos efetivos (com redução noturna) para comparar com limite semanal
-        semanas[iso].minTotal += minEfetivosPerDia;
-      }
-      curr2 = addDays(curr2, 1);
+    // Para padrão semanal, usamos os dias já gerados (que incluem horariosPorDia e escalaPattern)
+    // em vez de recalcular — os minutos efetivos já estão corretos em cada dia
+    for (const d of dias) {
+      if (!d.trabalhado) continue;
+      const iso = chaveSemanaDe(toDate(d.data));
+      if (!semanas[iso]) semanas[iso] = { minTotal: 0, mes: d.mes };
+      semanas[iso].minTotal += d.minEfetivosDia;
     }
 
     if (padraoApuracao === 'semanal') {
@@ -455,6 +534,8 @@ function gerarCartaoPontoVirtual(jornadaDefinida, dataInicio, dataFim, afastamen
     prorrogacaoNoturna: jornadaDefinida.prorrogacaoNoturna || false,
     divisorJornada: divisorJornada || 220,
     afastamentos: afastamentos || [],
+    horariosPorDia: jornadaDefinida.horariosPorDia || null,
+    escalaPattern: jornadaDefinida.escalaPattern || null,
   };
   return calcularPeriodoJornada(periodo, dataInicio, dataFim, []);
 }

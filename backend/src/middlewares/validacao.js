@@ -154,6 +154,21 @@ const schemaDadosContrato = Joi.object({
     intervaloMinutos: Joi.number().min(0).default(60),
     diasSemana: Joi.array().items(Joi.number().integer().min(0).max(6)).default([1,2,3,4,5]),
     horasJornadaPadrao12x36: Joi.number().positive().default(12),
+    // Horários diferentes por dia da semana (chave = dia 0-6)
+    horariosPorDia: Joi.object().pattern(
+      Joi.string().pattern(/^[0-6]$/),
+      Joi.object({
+        horaEntrada: Joi.string().allow(null, '').optional(),
+        horaSaida: Joi.string().allow(null, '').optional(),
+        intervaloMinutos: Joi.number().min(0).optional(),
+      })
+    ).allow(null).optional(),
+    // Escala pré-definida (12x36, 24x24, 24x48, 6x1, 5x1, 5x2, custom)
+    escalaPattern: Joi.object({
+      tipo: Joi.string().valid('12x36_cycle', '24x24', '24x48', '6x1', '5x1', '5x2', 'custom_cycle', 'semanal').optional(),
+      diasTrab: Joi.number().integer().min(1).optional(),
+      diasFolga: Joi.number().integer().min(1).optional(),
+    }).allow(null).optional(),
     afastamentos: Joi.array().items(Joi.object().unknown(true)).default([]),
     totalHorasExtras: Joi.number().min(0).allow(null).optional(),
     totalHorasNoturnas: Joi.number().min(0).allow(null).optional(),

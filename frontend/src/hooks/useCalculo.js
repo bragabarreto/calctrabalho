@@ -213,6 +213,8 @@ export function prepararDadosContrato(dados) {
       intervaloMinutos: Number(p.intervaloMinutos) || 60,
       diasSemana: p.diasSemana || [1, 2, 3, 4, 5],
       horasJornadaPadrao12x36: Number(p.horasJornadaPadrao12x36) || 12,
+      horariosPorDia: p.horariosPorDia || null,
+      escalaPattern: p.escalaPattern || null,
       afastamentos: (p.afastamentos || []).map(a => ({ inicio: a.inicio, fim: a.fim, motivo: a.motivo })),
       totalHorasExtras: p.totalHorasExtras != null ? Number(p.totalHorasExtras) : null,
       totalHorasNoturnas: p.totalHorasNoturnas != null ? Number(p.totalHorasNoturnas) : null,
