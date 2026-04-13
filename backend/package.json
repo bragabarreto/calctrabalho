@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
+    "setup": "node scripts/setup.js",
     "test": "jest --verbose --forceExit"
   },
   "dependencies": {

@@ -10,8 +10,13 @@ const connectionString =
     ? `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME}`
     : undefined);
 
+// Neon e outros provedores cloud exigem SSL; rejectUnauthorized: false permite certificados auto-assinados
+const sslConfig = process.env.NODE_ENV === 'production' || process.env.DATABASE_SSL === 'true'
+  ? { rejectUnauthorized: false }
+  : false;
+
 const poolConfig = connectionString
-  ? { connectionString, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false }
+  ? { connectionString, ssl: sslConfig }
   : { host: 'localhost', port: 5432, database: 'calctrabalho', user: 'calctrabalho', password: 'calctrabalho123' };
 
 const pool = new Pool({

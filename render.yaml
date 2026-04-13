@@ -1,0 +1,31 @@
+# ─── Render Blueprint — CalcTrabalho ─────────────────────────────────────────
+# Deploy: conecte o repo no Render Dashboard e ele detecta este arquivo.
+# PostgreSQL fica no Neon (free tier permanente) — configure DATABASE_URL nas env vars.
+
+services:
+  - type: web
+    name: calctrabalho
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    repo: https://github.com/SEU_USUARIO/calctrabalho  # ← ajuste para seu repo
+    branch: master
+    plan: free
+    healthCheckPath: /api/health
+    buildFilter:
+      paths:
+        - backend/**
+        - frontend/**
+        - Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: DATABASE_URL
+        sync: false  # ← definir manualmente no Render Dashboard (Neon connection string)
+      - key: ANTHROPIC_API_KEY
+        sync: false  # ← definir manualmente no Render Dashboard
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: "true"
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium
