@@ -122,12 +122,13 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
     nome: `Aviso Prévio Indenizado (${diasAviso} dias — ${anos} ano${anos !== 1 ? 's' : ''} completo${anos !== 1 ? 's' : ''} de serviço)`,
     valor: round2((salNum / 30) * diasAviso),
     grupo: 'rescisoria',
+    incideInss: true, incideIr: true, incideFgts: true,
   });
 
   // 2. Férias + 1/3 (todos os períodos aquisitivos)
   const periodosFerias = calcularPeriodosFerias(admDate, dispDate, salNum);
   for (const p of periodosFerias) {
-    verbas.push({ ...p, grupo: 'ferias' });
+    verbas.push({ ...p, grupo: 'ferias', incideInss: false, incideIr: false, incideFgts: false });
   }
 
   // 3. FGTS – Depósitos (período imprescrito)
@@ -151,6 +152,7 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
       nome: `FGTS – Depósitos (${mesesFgts} meses${labelFgts})`,
       valor: round2(salNum * 0.08 * mesesFgts),
       grupo: 'fgts',
+      incideInss: false, incideIr: false, incideFgts: false,
     });
   }
 
@@ -162,6 +164,7 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
     nome: `Indenização Rescisória FGTS – 40% (período integral: ${mesesTotal} meses)`,
     valor: round2(fgtsBrutoTotal * 0.40),
     grupo: 'fgts',
+    incideInss: false, incideIr: false, incideFgts: false,
   });
 
   // 5. Multa art. 477 CLT (= último salário)
@@ -170,6 +173,7 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
     nome: 'Multa Art. 477 CLT (1 salário)',
     valor: round2(salNum),
     grupo: 'multa',
+    incideInss: false, incideIr: false, incideFgts: false,
   });
 
   return verbas;
@@ -177,20 +181,31 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Cada parcela predefinida carrega suas flags de incidência conforme a legislação/biblioteca
 const PARCELAS_PREDEFINIDAS = [
-  'Aviso prévio indenizado',
-  'Férias + 1/3 constitucional',
-  'Depósitos de FGTS',
-  'Indenização rescisória FGTS (40%)',
-  'Indenização rescisória FGTS (20% – culpa recíproca)',
-  'Multa do art. 477 da CLT',
-  'Indenização do intervalo intrajornada',
-  'Indenização do intervalo interjornada',
-  'Indenização vale-transporte',
-  'Indenização vale-alimentação',
-  'Honorários advocatícios',
-  'Personalizada...',
+  { nome: 'Aviso prévio indenizado',                             incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Férias + 1/3 constitucional',                         incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Depósitos de FGTS',                                   incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Indenização rescisória FGTS (40%)',                    incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Indenização rescisória FGTS (20% – culpa recíproca)', incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Multa do art. 477 da CLT',                            incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Indenização do intervalo intrajornada',                incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Indenização do intervalo interjornada',                incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Indenização vale-transporte',                          incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Indenização vale-alimentação',                         incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Honorários advocatícios',                              incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'Saldo salarial',                                      incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Salários atrasados',                                  incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Comissões atrasadas',                                 incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: '13º salário',                                         incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Horas extras + reflexos',                             incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Adicional noturno',                                   incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Adicional de insalubridade',                          incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Adicional de periculosidade',                         incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Dano moral',                                          incideInss: false, incideIr: false, incideFgts: false },
+  { nome: 'PLR',                                                 incideInss: false, incideIr: true,  incideFgts: false },
 ];
+const NOME_PERSONALIZADA = 'Personalizada...';
 
 export default function SimuladorAcordoPage() {
   const [valorAcordo, setValorAcordo] = useState('');
@@ -199,7 +214,7 @@ export default function SimuladorAcordoPage() {
   const [dataAjuizamento, setDataAjuizamento] = useState('');
   const [salario, setSalario] = useState('');
   const [parcelas, setParcelas] = useState([
-    { seletor: '', nomeCustom: '', valorRaw: '' },
+    { seletor: '', nomeCustom: '', valorRaw: '', incideInss: false, incideIr: false, incideFgts: false },
   ]);
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
@@ -237,9 +252,12 @@ export default function SimuladorAcordoPage() {
     // Filtra linhas vazias antes de adicionar
     const atuais = parcelas.filter(p => p.seletor || p.nomeCustom || p.valorRaw);
     const novas = selecionadas.map(v => ({
-      seletor: 'Personalizada...',
+      seletor: NOME_PERSONALIZADA,
       nomeCustom: v.nome,
       valorRaw: v.valor.toFixed(2),
+      incideInss: v.incideInss ?? false,
+      incideIr: v.incideIr ?? false,
+      incideFgts: v.incideFgts ?? false,
     }));
 
     // Se só tinha a linha vazia inicial, substituir
@@ -260,16 +278,29 @@ export default function SimuladorAcordoPage() {
   const custoTotalAcordo = round2((resultado?.valorAcordo || 0) + custoAdicionalEmpresa);
 
   function addParcela() {
-    setParcelas(prev => [...prev, { seletor: '', nomeCustom: '', valorRaw: '' }]);
+    setParcelas(prev => [...prev, { seletor: '', nomeCustom: '', valorRaw: '', incideInss: false, incideIr: false, incideFgts: false }]);
   }
 
   function removeParcela(idx) {
     const nova = parcelas.filter((_, i) => i !== idx);
-    setParcelas(nova.length > 0 ? nova : [{ seletor: '', nomeCustom: '', valorRaw: '' }]);
+    setParcelas(nova.length > 0 ? nova : [{ seletor: '', nomeCustom: '', valorRaw: '', incideInss: false, incideIr: false, incideFgts: false }]);
   }
 
   function updateParcela(idx, field, value) {
-    setParcelas(prev => prev.map((p, i) => i === idx ? { ...p, [field]: value } : p));
+    setParcelas(prev => prev.map((p, i) => {
+      if (i !== idx) return p;
+      const updated = { ...p, [field]: value };
+      // Ao selecionar parcela predefinida, auto-preencher flags de incidência
+      if (field === 'seletor' && value !== NOME_PERSONALIZADA) {
+        const predef = PARCELAS_PREDEFINIDAS.find(pp => pp.nome === value);
+        if (predef) {
+          updated.incideInss = predef.incideInss;
+          updated.incideIr = predef.incideIr;
+          updated.incideFgts = predef.incideFgts;
+        }
+      }
+      return updated;
+    }));
   }
 
   function handleValorBlur(idx, raw) {
@@ -280,15 +311,23 @@ export default function SimuladorAcordoPage() {
   }
 
   function nomeFinal(p) {
-    return p.seletor === 'Personalizada...' ? p.nomeCustom : p.seletor;
+    return p.seletor === NOME_PERSONALIZADA ? p.nomeCustom : p.seletor;
   }
 
-  const totalIndenizatorio = useMemo(
+  // Total de todas as parcelas listadas
+  const totalParcelas = useMemo(
     () => parcelas.reduce((sum, p) => sum + evalExpr(p.valorRaw), 0),
     [parcelas]
   );
+  // Total das parcelas sem nenhuma incidência (puramente indenizatórias)
+  const totalIndenizatorio = useMemo(
+    () => parcelas
+      .filter(p => !p.incideInss && !p.incideIr && !p.incideFgts)
+      .reduce((sum, p) => sum + evalExpr(p.valorRaw), 0),
+    [parcelas]
+  );
   const valorAcordoNum = evalExpr(valorAcordo) || 0;
-  const restante = Math.max(0, valorAcordoNum - totalIndenizatorio);
+  const restante = Math.max(0, valorAcordoNum - totalParcelas);
 
   async function calcular() {
     if (!valorAcordoNum) { setErro('Informe o valor do acordo.'); return; }
@@ -303,8 +342,18 @@ export default function SimuladorAcordoPage() {
           dataAdmissao: dataAdmissao || null,
           dataDispensa: dataDispensa || null,
           salario: evalExpr(salario) || null,
-          parcelasIndenizatorias: parcelas
+          parcelas: parcelas
             .filter(p => nomeFinal(p) && evalExpr(p.valorRaw) > 0)
+            .map(p => ({
+              nome: nomeFinal(p),
+              valor: evalExpr(p.valorRaw),
+              incideInss: p.incideInss,
+              incideIr: p.incideIr,
+              incideFgts: p.incideFgts,
+            })),
+          // Retrocompatibilidade: ainda envia parcelasIndenizatorias (parcelas sem INSS)
+          parcelasIndenizatorias: parcelas
+            .filter(p => nomeFinal(p) && evalExpr(p.valorRaw) > 0 && !p.incideInss && !p.incideIr && !p.incideFgts)
             .map(p => ({ nome: nomeFinal(p), valor: evalExpr(p.valorRaw) })),
         }),
       });
@@ -487,80 +536,116 @@ export default function SimuladorAcordoPage() {
               </button>
             </div>
             <div className="aviso-judicial mb-3 text-xs">
-              Informe as parcelas de natureza <strong>indenizatória</strong> — estas não sofrem
-              incidência de INSS e IR. O saldo restante será considerado salarial.
+              Informe as parcelas que compõem o acordo e marque as incidências de cada uma.
+              As parcelas predefinidas já vêm com as incidências configuradas conforme a legislação.
+              O saldo restante (valor do acordo menos parcelas listadas) será considerado salarial.
             </div>
 
             <div className="space-y-3">
               {parcelas.map((p, idx) => (
-                <div
-                  key={idx}
-                  className="grid gap-2 items-start"
-                  style={{ gridTemplateColumns: '1fr 9rem 1.5rem' }}
-                >
-                  {/* Coluna nome */}
-                  {p.seletor !== 'Personalizada...' ? (
-                    <select
-                      value={p.seletor}
-                      onChange={e => updateParcela(idx, 'seletor', e.target.value)}
-                      className="campo-input w-full text-sm"
-                    >
-                      <option value="">— selecionar parcela —</option>
-                      {PARCELAS_PREDEFINIDAS.map(o => (
-                        <option key={o} value={o}>{o}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="flex items-center gap-1 min-w-0">
+                <div key={idx} className="space-y-1">
+                  <div
+                    className="grid gap-2 items-start"
+                    style={{ gridTemplateColumns: '1fr 9rem 1.5rem' }}
+                  >
+                    {/* Coluna nome */}
+                    {p.seletor !== NOME_PERSONALIZADA ? (
+                      <select
+                        value={p.seletor}
+                        onChange={e => updateParcela(idx, 'seletor', e.target.value)}
+                        className="campo-input w-full text-sm"
+                      >
+                        <option value="">— selecionar parcela —</option>
+                        {PARCELAS_PREDEFINIDAS.map(o => (
+                          <option key={o.nome} value={o.nome}>{o.nome}</option>
+                        ))}
+                        <option value={NOME_PERSONALIZADA}>{NOME_PERSONALIZADA}</option>
+                      </select>
+                    ) : (
+                      <div className="flex items-center gap-1 min-w-0">
+                        <input
+                          type="text"
+                          value={p.nomeCustom}
+                          onChange={e => updateParcela(idx, 'nomeCustom', e.target.value)}
+                          className="campo-input flex-1 text-sm min-w-0"
+                          placeholder="Descrição da parcela..."
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateParcela(idx, 'seletor', '')}
+                          title="Voltar à lista"
+                          className="text-gray-400 hover:text-gray-600 shrink-0 text-xs leading-none"
+                        >✕</button>
+                      </div>
+                    )}
+
+                    {/* Coluna valor */}
+                    <div>
                       <input
                         type="text"
-                        value={p.nomeCustom}
-                        onChange={e => updateParcela(idx, 'nomeCustom', e.target.value)}
-                        className="campo-input flex-1 text-sm min-w-0"
-                        placeholder="Descrição da parcela..."
+                        value={p.valorRaw}
+                        onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
+                        onBlur={e => handleValorBlur(idx, e.target.value)}
+                        className="campo-input w-full text-right font-mono text-sm"
+                        placeholder="0,00"
                       />
-                      <button
-                        type="button"
-                        onClick={() => updateParcela(idx, 'seletor', '')}
-                        title="Voltar à lista"
-                        className="text-gray-400 hover:text-gray-600 shrink-0 text-xs leading-none"
-                      >✕</button>
+                      {valorAcordoNum > 0 && restante > 0 && !evalExpr(p.valorRaw) && (
+                        <button
+                          type="button"
+                          onClick={() => updateParcela(idx, 'valorRaw', restante.toFixed(2))}
+                          className="text-xs text-blue-600 hover:text-blue-800 mt-0.5 w-full text-right leading-tight"
+                          title="Atribuir o valor remanescente do acordo a esta parcela"
+                        >
+                          ← {fmt(restante)}
+                        </button>
+                      )}
                     </div>
-                  )}
 
-                  {/* Coluna valor */}
-                  <div>
-                    <input
-                      type="text"
-                      value={p.valorRaw}
-                      onChange={e => updateParcela(idx, 'valorRaw', e.target.value)}
-                      onBlur={e => handleValorBlur(idx, e.target.value)}
-                      className="campo-input w-full text-right font-mono text-sm"
-                      placeholder="0,00"
-                    />
-                    {valorAcordoNum > 0 && restante > 0 && !evalExpr(p.valorRaw) && (
+                    {/* Coluna excluir */}
+                    {parcelas.length > 1 ? (
                       <button
                         type="button"
-                        onClick={() => updateParcela(idx, 'valorRaw', restante.toFixed(2))}
-                        className="text-xs text-blue-600 hover:text-blue-800 mt-0.5 w-full text-right leading-tight"
-                        title="Atribuir o valor remanescente do acordo a esta parcela"
+                        onClick={() => removeParcela(idx)}
+                        className="text-red-400 hover:text-red-600 mt-1"
                       >
-                        ← {fmt(restante)}
+                        <Trash2 size={16} />
                       </button>
+                    ) : (
+                      <span />
                     )}
                   </div>
 
-                  {/* Coluna excluir */}
-                  {parcelas.length > 1 ? (
-                    <button
-                      type="button"
-                      onClick={() => removeParcela(idx)}
-                      className="text-red-400 hover:text-red-600 mt-1"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  ) : (
-                    <span />
+                  {/* Flags de incidência */}
+                  {(p.seletor || p.nomeCustom) && (
+                    <div className="flex gap-3 ml-1 text-xs text-gray-500">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={p.incideInss}
+                          onChange={e => updateParcela(idx, 'incideInss', e.target.checked)}
+                          className="w-3 h-3"
+                        />
+                        INSS
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={p.incideIr}
+                          onChange={e => updateParcela(idx, 'incideIr', e.target.checked)}
+                          className="w-3 h-3"
+                        />
+                        IR
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={p.incideFgts}
+                          onChange={e => updateParcela(idx, 'incideFgts', e.target.checked)}
+                          className="w-3 h-3"
+                        />
+                        FGTS
+                      </label>
+                    </div>
                   )}
                 </div>
               ))}
@@ -650,9 +735,21 @@ export default function SimuladorAcordoPage() {
                     <span className="font-mono text-amber-700">({fmt(resultado.totalIndenizatorio)})</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-gray-100 text-sm">
-                    <span className="text-blue-700 font-semibold">= Base salarial (INSS/IR incidem)</span>
-                    <span className="font-mono font-bold text-blue-700">{fmt(resultado.baseSalarial)}</span>
+                    <span className="text-blue-700 font-semibold">= Base INSS</span>
+                    <span className="font-mono font-bold text-blue-700">{fmt(resultado.baseInss ?? resultado.baseSalarial)}</span>
                   </div>
+                  {resultado.baseIr != null && resultado.baseIr !== resultado.baseInss && (
+                    <div className="flex justify-between py-1 border-b border-gray-100 text-sm">
+                      <span className="text-blue-600">= Base IR (antes de deduzir INSS)</span>
+                      <span className="font-mono text-blue-600">{fmt(resultado.baseIr)}</span>
+                    </div>
+                  )}
+                  {resultado.baseFgts != null && resultado.baseFgts !== resultado.baseInss && (
+                    <div className="flex justify-between py-1 border-b border-gray-100 text-sm">
+                      <span className="text-blue-600">= Base FGTS</span>
+                      <span className="font-mono text-blue-600">{fmt(resultado.baseFgts)}</span>
+                    </div>
+                  )}
                   <div className="flex gap-2 mt-2 text-xs">
                     <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full border border-blue-200">
                       Salarial: {pct(resultado.pctSalarial)}
@@ -666,14 +763,23 @@ export default function SimuladorAcordoPage() {
                       </span>
                     )}
                   </div>
-                  {/* Discriminação das parcelas indenizatórias */}
-                  {resultado.parcelasIndenizatorias?.length > 0 && (
+                  {/* Discriminação das parcelas informadas */}
+                  {resultado.parcelas?.length > 0 && (
                     <div className="mt-3 pt-2 border-t border-gray-100">
                       <p className="text-xs font-semibold text-gray-500 mb-2">Parcelas informadas:</p>
                       <div className="space-y-1">
-                        {resultado.parcelasIndenizatorias.map((p, i) => (
+                        {resultado.parcelas.map((p, i) => (
                           <div key={i} className="flex justify-between text-xs text-gray-600">
-                            <span className="truncate mr-2">{p.nome}</span>
+                            <span className="truncate mr-2">
+                              {p.nome}
+                              <span className="ml-1 text-gray-400">
+                                {[
+                                  p.incideInss && 'INSS',
+                                  p.incideIr && 'IR',
+                                  p.incideFgts && 'FGTS',
+                                ].filter(Boolean).join(', ') || 'indeniz.'}
+                              </span>
+                            </span>
                             <span className="font-mono shrink-0">{fmt(p.valor)}</span>
                           </div>
                         ))}

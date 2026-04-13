@@ -27,6 +27,7 @@ const { calcularParcelaGenerica, calcularReflexosParcela } = require('./verbas/p
 const { aplicarCascataOJ394 } = require('./reflexosCascata');
 const { DATA_OJ394, INSS_TABELA_2025, INSS_CONTRIBUICAO_MAXIMA_2025, IR_TABELA_2025 } = require('../../config/constants');
 const db = require('../../config/database');
+const { resolverIncidencias, construirOverridesMap } = require('../../utils/parcelaDefinitions');
 
 /**
  * Motor Central de Cálculo Trabalhista
@@ -323,7 +324,8 @@ async function calcular(dados, modalidade) {
   // Calculado após subtotal abaixo
 
   // ---- MONTA LISTA PLANA DE VERBAS ----
-  const listaVerbas = montarListaVerbas(verbas, reflexos);
+  const overridesMap = construirOverridesMap(dados.parcelasPersonalizadas, dados.verbasOverrides);
+  const listaVerbas = montarListaVerbas(verbas, reflexos, overridesMap);
 
   // ---- MULTA ART. 467 (PÓS-PROCESSAMENTO: 50% das verbas selecionadas) ----
   const idx467 = listaVerbas.findIndex((v) => v.codigo === 'multa_art_467');
@@ -417,20 +419,25 @@ async function calcular(dados, modalidade) {
 }
 
 /**
- * Monta lista plana de verbas com metadados para exibição
+ * Monta lista plana de verbas com metadados para exibição.
+ * As flags de incidência (natureza, incideFgts, incideInss, incideIr) são
+ * resolvidas dinamicamente via resolverIncidencias(), respeitando a cadeia:
+ *   overrides do cálculo > parcela personalizada com templateId > NATIVE_VERBA_DEFAULTS
  */
-function montarListaVerbas(verbas, reflexos) {
+function montarListaVerbas(verbas, reflexos, overridesMap = {}) {
   const lista = [];
   let ordem = 0;
 
-  function add(codigo, nome, categoria, natureza, incideFgts, incideInss, result) {
+  function add(codigo, nome, categoria, result) {
+    const flags = resolverIncidencias(codigo, overridesMap);
     lista.push({
       codigo,
       nome,
       categoria,
-      natureza,
-      incideFgts,
-      incideInss,
+      natureza: flags.natureza,
+      incideFgts: flags.incideFgts,
+      incideInss: flags.incideInss,
+      incideIr: flags.incideIr,
       valor: result?.valor || 0,
       excluida: result?.excluida || false,
       memoria: result?.memoria || {},
@@ -438,75 +445,75 @@ function montarListaVerbas(verbas, reflexos) {
     });
   }
 
-  add('saldo_salarial', 'Saldo Salarial', 'rescisoria', 'salarial', true, true, verbas.saldoSalarial);
-  add('salarios_atrasados', 'Salários Atrasados', 'salarial', 'salarial', true, true, verbas.salariosAtrasados);
-  add('comissoes_atrasadas', 'Comissões Atrasadas', 'salarial', 'salarial', true, true, verbas.comissoesAtrasadas);
-  add('gorjetas_atrasadas', 'Gorjetas Atrasadas', 'salarial', 'salarial', false, false, verbas.gorjetasAtrasadas);
-  add('aviso_previo', 'Aviso Prévio Indenizado', 'rescisoria', 'salarial', true, true, verbas.avisoPrevio);
-  add('ferias_dobradas', 'Férias Vencidas Dobradas + 1/3', 'rescisoria', 'salarial', false, false, verbas.feriasDobradas);
-  add('ferias_integrais', 'Férias Integrais + 1/3', 'rescisoria', 'salarial', false, false, verbas.feriasIntegrais);
-  add('ferias_proporcionais', 'Férias Proporcionais + 1/3', 'rescisoria', 'salarial', false, false, verbas.feriasProporcionais);
-  add('decimo_terceiro_integral', '13º Salário Integral', 'rescisoria', 'salarial', true, true, verbas.decimoTerceiroIntegral);
-  add('decimo_terceiro_proporcional', '13º Salário Proporcional', 'rescisoria', 'salarial', true, true, verbas.decimoTerceiroProporcional);
-  add('fgts_imprescrito', 'FGTS (Período Imprescrito)', 'fgts', 'indenizatoria', false, false, verbas.fgts);
-  add('multa_fgts', `Multa FGTS ${verbas.multaFgts?.percentual ? (verbas.multaFgts.percentual * 100).toFixed(0) : 0}%`, 'fgts', 'indenizatoria', false, false, verbas.multaFgts);
-  add('multa_art_467', 'Multa Art. 467 CLT', 'indenizatoria', 'indenizatoria', false, false, verbas.multaArt467);
-  add('multa_art_477', 'Multa Art. 477 CLT', 'indenizatoria', 'indenizatoria', false, false, verbas.multaArt477);
-  add('horas_extras', 'Horas Extras', 'salarial', 'salarial', true, true, verbas.horasExtras);
-  add('reflexo_he_rsr', 'Reflexo HE no RSR', 'salarial', 'salarial', true, true, reflexos.horasExtras?.rsr);
-  add('reflexo_he_aviso', 'Reflexo HE no Aviso Prévio', 'salarial', 'salarial', true, true, reflexos.horasExtras?.avisoPrevio);
-  add('reflexo_he_ferias', 'Reflexo HE nas Férias', 'salarial', 'salarial', true, true, reflexos.horasExtras?.ferias);
-  add('reflexo_he_13', 'Reflexo HE no 13º', 'salarial', 'salarial', true, true, reflexos.horasExtras?.decimoTerceiro);
-  add('reflexo_he_fgts', 'Reflexo HE no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.horasExtras?.fgts);
-  add('reflexo_he_mul_fgts', 'Reflexo HE na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.horasExtras?.mulFgts);
-  add('intervalo_intrajornada', 'Intervalo Intrajornada', 'indenizatoria', 'indenizatoria', false, false, verbas.intervaloIntrajornada);
-  add('intervalo_interjornada', 'Intervalo Interjornada', 'indenizatoria', 'indenizatoria', false, false, verbas.intervaloInterjornada);
-  add('adicional_noturno', 'Adicional Noturno', 'salarial', 'salarial', true, true, verbas.adicionalNoturno);
-  add('reflexo_an_rsr', 'Reflexo AN no RSR', 'salarial', 'salarial', true, true, reflexos.adicionalNoturno?.rsr);
-  add('reflexo_an_aviso', 'Reflexo AN no Aviso', 'salarial', 'salarial', true, true, reflexos.adicionalNoturno?.avisoPrevio);
-  add('reflexo_an_ferias', 'Reflexo AN nas Férias', 'salarial', 'salarial', true, true, reflexos.adicionalNoturno?.ferias);
-  add('reflexo_an_13', 'Reflexo AN no 13º', 'salarial', 'salarial', true, true, reflexos.adicionalNoturno?.decimoTerceiro);
-  add('reflexo_an_fgts', 'Reflexo AN no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.adicionalNoturno?.fgts);
-  add('reflexo_an_mul_fgts', 'Reflexo AN na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.adicionalNoturno?.mulFgts);
-  add('insalubridade', 'Adicional de Insalubridade', 'salarial', 'salarial', true, true, verbas.insalubridade);
-  add('reflexo_ins_aviso', 'Reflexo Insalub. Aviso', 'salarial', 'salarial', true, true, reflexos.insalubridade?.avisoPrevio);
-  add('reflexo_ins_ferias', 'Reflexo Insalub. Férias', 'salarial', 'salarial', true, true, reflexos.insalubridade?.ferias);
-  add('reflexo_ins_13', 'Reflexo Insalub. 13º', 'salarial', 'salarial', true, true, reflexos.insalubridade?.decimoTerceiro);
-  add('reflexo_ins_fgts', 'Reflexo Insalub. FGTS', 'fgts', 'indenizatoria', false, false, reflexos.insalubridade?.fgts);
-  add('reflexo_ins_mul_fgts', 'Reflexo Insalub. Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.insalubridade?.mulFgts);
-  add('periculosidade', 'Adicional de Periculosidade', 'salarial', 'salarial', true, true, verbas.periculosidade);
-  add('reflexo_per_aviso', 'Reflexo Peric. Aviso', 'salarial', 'salarial', true, true, reflexos.periculosidade?.avisoPrevio);
-  add('reflexo_per_ferias', 'Reflexo Peric. Férias', 'salarial', 'salarial', true, true, reflexos.periculosidade?.ferias);
-  add('reflexo_per_13', 'Reflexo Peric. 13º', 'salarial', 'salarial', true, true, reflexos.periculosidade?.decimoTerceiro);
-  add('reflexo_per_fgts', 'Reflexo Peric. FGTS', 'fgts', 'indenizatoria', false, false, reflexos.periculosidade?.fgts);
-  add('reflexo_per_mul_fgts', 'Reflexo Peric. Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.periculosidade?.mulFgts);
-  add('dano_moral', 'Indenização por Danos Morais', 'indenizatoria', 'indenizatoria', false, false, verbas.danoMoral);
-  add('rsr_nao_concedido', 'RSR Não Concedido', 'salarial', 'salarial', true, true, verbas.rsrNaoConcedido);
-  add('reflexo_rsr_ferias', 'Reflexo RSR nas Férias', 'salarial', 'salarial', true, true, reflexos.rsrNaoConcedido?.ferias);
-  add('reflexo_rsr_13', 'Reflexo RSR no 13º', 'salarial', 'salarial', true, true, reflexos.rsrNaoConcedido?.decimoTerceiro);
-  add('reflexo_rsr_aviso', 'Reflexo RSR no Aviso', 'salarial', 'salarial', true, true, reflexos.rsrNaoConcedido?.avisoPrevio);
-  add('reflexo_rsr_fgts', 'Reflexo RSR no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.rsrNaoConcedido?.fgts);
-  add('reflexo_rsr_mul_fgts', 'Reflexo RSR na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.rsrNaoConcedido?.mulFgts);
-  add('feriados_laborados', 'Feriados Laborados', 'salarial', 'salarial', true, true, verbas.feriadosLaborados);
-  add('reflexo_fer_ferias', 'Reflexo Feriados nas Férias', 'salarial', 'salarial', true, true, reflexos.feriadosLaborados?.ferias);
-  add('reflexo_fer_13', 'Reflexo Feriados no 13º', 'salarial', 'salarial', true, true, reflexos.feriadosLaborados?.decimoTerceiro);
-  add('reflexo_fer_aviso', 'Reflexo Feriados no Aviso', 'salarial', 'salarial', true, true, reflexos.feriadosLaborados?.avisoPrevio);
-  add('reflexo_fer_fgts', 'Reflexo Feriados no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.feriadosLaborados?.fgts);
-  add('reflexo_fer_mul_fgts', 'Reflexo Feriados na Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.feriadosLaborados?.mulFgts);
-  add('intervalo_termico', 'Intervalo Térmico', 'salarial', 'salarial', true, true, verbas.intervaloTermico);
-  add('reflexo_it_rsr', 'Reflexo Interv. Térmico no RSR', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.rsr);
-  add('reflexo_it_ferias', 'Reflexo Interv. Térmico nas Férias', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.ferias);
-  add('reflexo_it_13', 'Reflexo Interv. Térmico no 13º', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.decimoTerceiro);
-  add('reflexo_it_aviso', 'Reflexo Interv. Térmico no Aviso', 'salarial', 'salarial', true, true, reflexos.intervaloTermico?.avisoPrevio);
-  add('reflexo_it_fgts', 'Reflexo Interv. Térmico no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloTermico?.fgts);
-  add('reflexo_it_mul_fgts', 'Reflexo Interv. Térmico Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloTermico?.mulFgts);
-  add('intervalo_digitacao', 'Intervalo por Digitação', 'salarial', 'salarial', true, true, verbas.intervaloDigitacao);
-  add('reflexo_id_rsr', 'Reflexo Interv. Digitação no RSR', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.rsr);
-  add('reflexo_id_ferias', 'Reflexo Interv. Digitação nas Férias', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.ferias);
-  add('reflexo_id_13', 'Reflexo Interv. Digitação no 13º', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.decimoTerceiro);
-  add('reflexo_id_aviso', 'Reflexo Interv. Digitação no Aviso', 'salarial', 'salarial', true, true, reflexos.intervaloDigitacao?.avisoPrevio);
-  add('reflexo_id_fgts', 'Reflexo Interv. Digitação no FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloDigitacao?.fgts);
-  add('reflexo_id_mul_fgts', 'Reflexo Interv. Digitação Multa FGTS', 'fgts', 'indenizatoria', false, false, reflexos.intervaloDigitacao?.mulFgts);
+  add('saldo_salarial', 'Saldo Salarial', 'rescisoria', verbas.saldoSalarial);
+  add('salarios_atrasados', 'Salários Atrasados', 'salarial', verbas.salariosAtrasados);
+  add('comissoes_atrasadas', 'Comissões Atrasadas', 'salarial', verbas.comissoesAtrasadas);
+  add('gorjetas_atrasadas', 'Gorjetas Atrasadas', 'salarial', verbas.gorjetasAtrasadas);
+  add('aviso_previo', 'Aviso Prévio Indenizado', 'rescisoria', verbas.avisoPrevio);
+  add('ferias_dobradas', 'Férias Vencidas Dobradas + 1/3', 'rescisoria', verbas.feriasDobradas);
+  add('ferias_integrais', 'Férias Integrais + 1/3', 'rescisoria', verbas.feriasIntegrais);
+  add('ferias_proporcionais', 'Férias Proporcionais + 1/3', 'rescisoria', verbas.feriasProporcionais);
+  add('decimo_terceiro_integral', '13º Salário Integral', 'rescisoria', verbas.decimoTerceiroIntegral);
+  add('decimo_terceiro_proporcional', '13º Salário Proporcional', 'rescisoria', verbas.decimoTerceiroProporcional);
+  add('fgts_imprescrito', 'FGTS (Período Imprescrito)', 'fgts', verbas.fgts);
+  add('multa_fgts', `Multa FGTS ${verbas.multaFgts?.percentual ? (verbas.multaFgts.percentual * 100).toFixed(0) : 0}%`, 'fgts', verbas.multaFgts);
+  add('multa_art_467', 'Multa Art. 467 CLT', 'indenizatoria', verbas.multaArt467);
+  add('multa_art_477', 'Multa Art. 477 CLT', 'indenizatoria', verbas.multaArt477);
+  add('horas_extras', 'Horas Extras', 'salarial', verbas.horasExtras);
+  add('reflexo_he_rsr', 'Reflexo HE no RSR', 'salarial', reflexos.horasExtras?.rsr);
+  add('reflexo_he_aviso', 'Reflexo HE no Aviso Prévio', 'salarial', reflexos.horasExtras?.avisoPrevio);
+  add('reflexo_he_ferias', 'Reflexo HE nas Férias', 'salarial', reflexos.horasExtras?.ferias);
+  add('reflexo_he_13', 'Reflexo HE no 13º', 'salarial', reflexos.horasExtras?.decimoTerceiro);
+  add('reflexo_he_fgts', 'Reflexo HE no FGTS', 'fgts', reflexos.horasExtras?.fgts);
+  add('reflexo_he_mul_fgts', 'Reflexo HE na Multa FGTS', 'fgts', reflexos.horasExtras?.mulFgts);
+  add('intervalo_intrajornada', 'Intervalo Intrajornada', 'indenizatoria', verbas.intervaloIntrajornada);
+  add('intervalo_interjornada', 'Intervalo Interjornada', 'indenizatoria', verbas.intervaloInterjornada);
+  add('adicional_noturno', 'Adicional Noturno', 'salarial', verbas.adicionalNoturno);
+  add('reflexo_an_rsr', 'Reflexo AN no RSR', 'salarial', reflexos.adicionalNoturno?.rsr);
+  add('reflexo_an_aviso', 'Reflexo AN no Aviso', 'salarial', reflexos.adicionalNoturno?.avisoPrevio);
+  add('reflexo_an_ferias', 'Reflexo AN nas Férias', 'salarial', reflexos.adicionalNoturno?.ferias);
+  add('reflexo_an_13', 'Reflexo AN no 13º', 'salarial', reflexos.adicionalNoturno?.decimoTerceiro);
+  add('reflexo_an_fgts', 'Reflexo AN no FGTS', 'fgts', reflexos.adicionalNoturno?.fgts);
+  add('reflexo_an_mul_fgts', 'Reflexo AN na Multa FGTS', 'fgts', reflexos.adicionalNoturno?.mulFgts);
+  add('insalubridade', 'Adicional de Insalubridade', 'salarial', verbas.insalubridade);
+  add('reflexo_ins_aviso', 'Reflexo Insalub. Aviso', 'salarial', reflexos.insalubridade?.avisoPrevio);
+  add('reflexo_ins_ferias', 'Reflexo Insalub. Férias', 'salarial', reflexos.insalubridade?.ferias);
+  add('reflexo_ins_13', 'Reflexo Insalub. 13º', 'salarial', reflexos.insalubridade?.decimoTerceiro);
+  add('reflexo_ins_fgts', 'Reflexo Insalub. FGTS', 'fgts', reflexos.insalubridade?.fgts);
+  add('reflexo_ins_mul_fgts', 'Reflexo Insalub. Multa FGTS', 'fgts', reflexos.insalubridade?.mulFgts);
+  add('periculosidade', 'Adicional de Periculosidade', 'salarial', verbas.periculosidade);
+  add('reflexo_per_aviso', 'Reflexo Peric. Aviso', 'salarial', reflexos.periculosidade?.avisoPrevio);
+  add('reflexo_per_ferias', 'Reflexo Peric. Férias', 'salarial', reflexos.periculosidade?.ferias);
+  add('reflexo_per_13', 'Reflexo Peric. 13º', 'salarial', reflexos.periculosidade?.decimoTerceiro);
+  add('reflexo_per_fgts', 'Reflexo Peric. FGTS', 'fgts', reflexos.periculosidade?.fgts);
+  add('reflexo_per_mul_fgts', 'Reflexo Peric. Multa FGTS', 'fgts', reflexos.periculosidade?.mulFgts);
+  add('dano_moral', 'Indenização por Danos Morais', 'indenizatoria', verbas.danoMoral);
+  add('rsr_nao_concedido', 'RSR Não Concedido', 'salarial', verbas.rsrNaoConcedido);
+  add('reflexo_rsr_ferias', 'Reflexo RSR nas Férias', 'salarial', reflexos.rsrNaoConcedido?.ferias);
+  add('reflexo_rsr_13', 'Reflexo RSR no 13º', 'salarial', reflexos.rsrNaoConcedido?.decimoTerceiro);
+  add('reflexo_rsr_aviso', 'Reflexo RSR no Aviso', 'salarial', reflexos.rsrNaoConcedido?.avisoPrevio);
+  add('reflexo_rsr_fgts', 'Reflexo RSR no FGTS', 'fgts', reflexos.rsrNaoConcedido?.fgts);
+  add('reflexo_rsr_mul_fgts', 'Reflexo RSR na Multa FGTS', 'fgts', reflexos.rsrNaoConcedido?.mulFgts);
+  add('feriados_laborados', 'Feriados Laborados', 'salarial', verbas.feriadosLaborados);
+  add('reflexo_fer_ferias', 'Reflexo Feriados nas Férias', 'salarial', reflexos.feriadosLaborados?.ferias);
+  add('reflexo_fer_13', 'Reflexo Feriados no 13º', 'salarial', reflexos.feriadosLaborados?.decimoTerceiro);
+  add('reflexo_fer_aviso', 'Reflexo Feriados no Aviso', 'salarial', reflexos.feriadosLaborados?.avisoPrevio);
+  add('reflexo_fer_fgts', 'Reflexo Feriados no FGTS', 'fgts', reflexos.feriadosLaborados?.fgts);
+  add('reflexo_fer_mul_fgts', 'Reflexo Feriados na Multa FGTS', 'fgts', reflexos.feriadosLaborados?.mulFgts);
+  add('intervalo_termico', 'Intervalo Térmico', 'salarial', verbas.intervaloTermico);
+  add('reflexo_it_rsr', 'Reflexo Interv. Térmico no RSR', 'salarial', reflexos.intervaloTermico?.rsr);
+  add('reflexo_it_ferias', 'Reflexo Interv. Térmico nas Férias', 'salarial', reflexos.intervaloTermico?.ferias);
+  add('reflexo_it_13', 'Reflexo Interv. Térmico no 13º', 'salarial', reflexos.intervaloTermico?.decimoTerceiro);
+  add('reflexo_it_aviso', 'Reflexo Interv. Térmico no Aviso', 'salarial', reflexos.intervaloTermico?.avisoPrevio);
+  add('reflexo_it_fgts', 'Reflexo Interv. Térmico no FGTS', 'fgts', reflexos.intervaloTermico?.fgts);
+  add('reflexo_it_mul_fgts', 'Reflexo Interv. Térmico Multa FGTS', 'fgts', reflexos.intervaloTermico?.mulFgts);
+  add('intervalo_digitacao', 'Intervalo por Digitação', 'salarial', verbas.intervaloDigitacao);
+  add('reflexo_id_rsr', 'Reflexo Interv. Digitação no RSR', 'salarial', reflexos.intervaloDigitacao?.rsr);
+  add('reflexo_id_ferias', 'Reflexo Interv. Digitação nas Férias', 'salarial', reflexos.intervaloDigitacao?.ferias);
+  add('reflexo_id_13', 'Reflexo Interv. Digitação no 13º', 'salarial', reflexos.intervaloDigitacao?.decimoTerceiro);
+  add('reflexo_id_aviso', 'Reflexo Interv. Digitação no Aviso', 'salarial', reflexos.intervaloDigitacao?.avisoPrevio);
+  add('reflexo_id_fgts', 'Reflexo Interv. Digitação no FGTS', 'fgts', reflexos.intervaloDigitacao?.fgts);
+  add('reflexo_id_mul_fgts', 'Reflexo Interv. Digitação Multa FGTS', 'fgts', reflexos.intervaloDigitacao?.mulFgts);
 
   // Parcelas calculadas a partir de históricos salariais
   for (const ph of (verbas.parcelasHistorico || [])) {
@@ -517,6 +524,7 @@ function montarListaVerbas(verbas, reflexos) {
       natureza: ph.natureza,
       incideFgts: ph.incideFgts,
       incideInss: ph.incideInss,
+      incideIr: ph.incideIr ?? (ph.natureza === 'salarial'),
       valor: ph.valor,
       excluida: false,
       memoria: ph.memoria,
@@ -533,29 +541,31 @@ function montarListaVerbas(verbas, reflexos) {
       natureza: pc.natureza,
       incideFgts: pc.incideFgts,
       incideInss: pc.incideInss,
+      incideIr: pc.incideIr ?? (pc.natureza === 'salarial'),
       valor: pc.valor,
       excluida: pc.excluida,
       memoria: pc.memoria,
       ordemExibicao: ordem++,
     });
     const r = pc.reflexos || {};
+    // Reflexos de parcelas personalizadas herdam natureza salarial (são reflexos) — resolvem via flags da parcela-mãe
     if (r.rsr?.valor) {
-      lista.push({ codigo: `${pc.codigo}_rsr`, nome: `Reflexo ${pc.nome} no RSR`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, valor: r.rsr.valor, excluida: false, memoria: r.rsr.memoria || {}, ordemExibicao: ordem++ });
+      lista.push({ codigo: `${pc.codigo}_rsr`, nome: `Reflexo ${pc.nome} no RSR`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, incideIr: true, valor: r.rsr.valor, excluida: false, memoria: r.rsr.memoria || {}, ordemExibicao: ordem++ });
     }
     if (r.avisoPrevio?.valor) {
-      lista.push({ codigo: `${pc.codigo}_ap`, nome: `Reflexo ${pc.nome} no Aviso Prévio`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, valor: r.avisoPrevio.valor, excluida: false, memoria: r.avisoPrevio.memoria || {}, ordemExibicao: ordem++ });
+      lista.push({ codigo: `${pc.codigo}_ap`, nome: `Reflexo ${pc.nome} no Aviso Prévio`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, incideIr: true, valor: r.avisoPrevio.valor, excluida: false, memoria: r.avisoPrevio.memoria || {}, ordemExibicao: ordem++ });
     }
     if (r.ferias?.valor) {
-      lista.push({ codigo: `${pc.codigo}_fer`, nome: `Reflexo ${pc.nome} nas Férias`, categoria: 'salarial', natureza: 'salarial', incideFgts: false, incideInss: false, valor: r.ferias.valor, excluida: false, memoria: r.ferias.memoria || {}, ordemExibicao: ordem++ });
+      lista.push({ codigo: `${pc.codigo}_fer`, nome: `Reflexo ${pc.nome} nas Férias`, categoria: 'salarial', natureza: 'salarial', incideFgts: false, incideInss: false, incideIr: false, valor: r.ferias.valor, excluida: false, memoria: r.ferias.memoria || {}, ordemExibicao: ordem++ });
     }
     if (r.decimoTerceiro?.valor) {
-      lista.push({ codigo: `${pc.codigo}_13`, nome: `Reflexo ${pc.nome} no 13º`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, valor: r.decimoTerceiro.valor, excluida: false, memoria: r.decimoTerceiro.memoria || {}, ordemExibicao: ordem++ });
+      lista.push({ codigo: `${pc.codigo}_13`, nome: `Reflexo ${pc.nome} no 13º`, categoria: 'salarial', natureza: 'salarial', incideFgts: true, incideInss: true, incideIr: true, valor: r.decimoTerceiro.valor, excluida: false, memoria: r.decimoTerceiro.memoria || {}, ordemExibicao: ordem++ });
     }
     if (r.fgts?.valor) {
-      lista.push({ codigo: `${pc.codigo}_fgts`, nome: `Reflexo ${pc.nome} no FGTS`, categoria: 'fgts', natureza: 'indenizatoria', incideFgts: false, incideInss: false, valor: r.fgts.valor, excluida: false, memoria: r.fgts.memoria || {}, ordemExibicao: ordem++ });
+      lista.push({ codigo: `${pc.codigo}_fgts`, nome: `Reflexo ${pc.nome} no FGTS`, categoria: 'fgts', natureza: 'indenizatoria', incideFgts: false, incideInss: false, incideIr: false, valor: r.fgts.valor, excluida: false, memoria: r.fgts.memoria || {}, ordemExibicao: ordem++ });
     }
     if (r.mulFgts?.valor) {
-      lista.push({ codigo: `${pc.codigo}_mfgts`, nome: `Reflexo ${pc.nome} na Multa FGTS`, categoria: 'fgts', natureza: 'indenizatoria', incideFgts: false, incideInss: false, valor: r.mulFgts.valor, excluida: false, memoria: r.mulFgts.memoria || {}, ordemExibicao: ordem++ });
+      lista.push({ codigo: `${pc.codigo}_mfgts`, nome: `Reflexo ${pc.nome} na Multa FGTS`, categoria: 'fgts', natureza: 'indenizatoria', incideFgts: false, incideInss: false, incideIr: false, valor: r.mulFgts.valor, excluida: false, memoria: r.mulFgts.memoria || {}, ordemExibicao: ordem++ });
     }
   }
 

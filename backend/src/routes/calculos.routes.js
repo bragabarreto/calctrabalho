@@ -187,6 +187,7 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
       dataAdmissao,
       dataDispensa,
       salario,
+      parcelas = [],
       parcelasIndenizatorias = [],
     } = req.body;
 
@@ -194,12 +195,47 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
       return res.status(400).json({ erro: 'valorAcordo é obrigatório e deve ser positivo' });
     }
 
-    // Total indenizatório
-    const totalIndenizatorio = round2(
-      parcelasIndenizatorias.reduce((sum, p) => sum + (parseFloat(p.valor) || 0), 0)
+    // Novo formato: cada parcela carrega suas próprias flags de incidência
+    // Retrocompatibilidade: se 'parcelas' não veio, converte 'parcelasIndenizatorias' (tudo=false)
+    const parcelasNormalizadas = parcelas.length > 0
+      ? parcelas.map(p => ({
+          nome: p.nome,
+          valor: parseFloat(p.valor) || 0,
+          incideInss: Boolean(p.incideInss),
+          incideIr: Boolean(p.incideIr),
+          incideFgts: Boolean(p.incideFgts),
+        }))
+      : parcelasIndenizatorias.map(p => ({
+          nome: p.nome,
+          valor: parseFloat(p.valor) || 0,
+          incideInss: false,
+          incideIr: false,
+          incideFgts: false,
+        }));
+
+    const totalParcelasListadas = round2(
+      parcelasNormalizadas.reduce((sum, p) => sum + p.valor, 0)
     );
 
-    // Base salarial = acordoTotal - indenizatório
+    // Saldo restante (valor do acordo - parcelas listadas) é considerado salarial (incide tudo)
+    const saldoRestante = round2(Math.max(0, valorAcordo - totalParcelasListadas));
+
+    // Bases por encargo: soma das parcelas onde a flag é true + saldo restante (salarial)
+    const baseInss = round2(
+      parcelasNormalizadas.filter(p => p.incideInss).reduce((sum, p) => sum + p.valor, 0) + saldoRestante
+    );
+    const baseIr = round2(
+      parcelasNormalizadas.filter(p => p.incideIr).reduce((sum, p) => sum + p.valor, 0) + saldoRestante
+    );
+    const baseFgts = round2(
+      parcelasNormalizadas.filter(p => p.incideFgts).reduce((sum, p) => sum + p.valor, 0) + saldoRestante
+    );
+
+    // Total indenizatório (para exibição — parcelas sem nenhuma incidência)
+    const totalIndenizatorio = round2(
+      parcelasNormalizadas.filter(p => !p.incideInss && !p.incideIr && !p.incideFgts)
+        .reduce((sum, p) => sum + p.valor, 0)
+    );
     const baseSalarial = round2(Math.max(0, valorAcordo - totalIndenizatorio));
 
     // Período: meses entre admissão e dispensa
@@ -210,16 +246,16 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
       periodoMeses = Math.max(1, Math.round((fim - ini) / (1000 * 60 * 60 * 24 * 30)));
     }
 
-    // INSS
-    const inssEmpregado = await calcularINSS(baseSalarial);
-    const inssEmpregador = calcularINSSEmpregador(baseSalarial);
+    // INSS (sobre baseInss — respeita flags individuais)
+    const inssEmpregado = await calcularINSS(baseInss);
+    const inssEmpregador = calcularINSSEmpregador(baseInss);
 
-    // IR (RRA)
-    const baseTributavelIR = round2(Math.max(0, baseSalarial - inssEmpregado));
+    // IR (RRA) — sobre baseIr menos INSS (apenas a parcela INSS que efetivamente incide)
+    const baseTributavelIR = round2(Math.max(0, baseIr - inssEmpregado));
     const ir = calcularIR_RRA(baseTributavelIR, periodoMeses);
 
-    // FGTS (informativo)
-    const fgts = round2(baseSalarial * 0.08);
+    // FGTS (informativo — sobre baseFgts)
+    const fgts = round2(baseFgts * 0.08);
 
     // Percentuais
     const pctIndenizatorio = valorAcordo > 0 ? round2(totalIndenizatorio / valorAcordo) : 0;
@@ -234,6 +270,9 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
         pctSalarial,
         pctIndenizatorio,
         periodoMeses,
+        baseInss,
+        baseIr,
+        baseFgts,
         inssEmpregado,
         inssEmpregador,
         baseTributavelIR,
@@ -242,6 +281,7 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
         totalEncargosEmpregado: round2(inssEmpregado + ir.valor),
         totalEncargosEmpregador: round2(inssEmpregador),
         liquidoEmpregado: round2(valorAcordo - inssEmpregado - ir.valor),
+        parcelas: parcelasNormalizadas,
       },
     });
   } catch (err) {
