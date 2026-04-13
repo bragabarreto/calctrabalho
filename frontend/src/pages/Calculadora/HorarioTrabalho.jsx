@@ -911,6 +911,9 @@ function FormPeriodo({ periodo, onChange, onRemover, dataAdmissao, dataDispensa,
                             }
                             if (e.value === '12x36_cycle') {
                               updates.padraoApuracao = '12x36';
+                            } else if (periodo.padraoApuracao === '12x36') {
+                              // Restaurar padrão de apuração ao sair de 12×36
+                              updates.padraoApuracao = 'diario';
                             }
                             onChange({ ...periodo, ...updates });
                           }} />
