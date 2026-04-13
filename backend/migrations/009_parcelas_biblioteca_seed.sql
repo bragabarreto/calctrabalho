@@ -10,6 +10,12 @@ ALTER TABLE parcelas_personalizadas
   ADD COLUMN IF NOT EXISTS eh_biblioteca BOOLEAN DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS descricao TEXT;
 
+-- Antecipar template_id (originalmente na migration 012) para que seeds posteriores funcionem
+ALTER TABLE parcelas_personalizadas
+  ADD COLUMN IF NOT EXISTS template_id VARCHAR(60);
+CREATE INDEX IF NOT EXISTS idx_parcelas_template_id ON parcelas_personalizadas(template_id)
+  WHERE template_id IS NOT NULL;
+
 -- Seed: parcelas pré-definidas da biblioteca trabalhista
 INSERT INTO parcelas_personalizadas (
   nome, descricao, natureza, frequencia, tipo_valor,
