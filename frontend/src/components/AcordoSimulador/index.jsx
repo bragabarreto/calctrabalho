@@ -64,12 +64,13 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
     [parcelas]
   );
 
-  // Saldo salarial remanescente (não pode ser negativo)
-  const saldoSalarial = Math.max(0, valorAcordoNum - totalIndenizatorio);
+  // Saldo salarial remanescente (pode ser negativo — usuário precisa ajustar)
+  const saldoSalarial = valorAcordoNum - totalIndenizatorio;
 
   // Quando não há discriminação manual, usa percentual salarial do cálculo original
+  // Protege INSS/IR: base tributável não pode ser negativa
   const baseSalarialAcordo = modoDiscriminacao
-    ? saldoSalarial
+    ? Math.max(0, saldoSalarial)
     : Math.round(valorAcordoNum * (percentualSalarial || 0) * 100) / 100;
 
   const baseIndenizatoriaAcordo = valorAcordoNum - baseSalarialAcordo;

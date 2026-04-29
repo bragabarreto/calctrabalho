@@ -20,7 +20,6 @@ const TABS = [
   { id: 'legais', label: 'Parâmetros Legais' },
   { id: 'selic', label: 'Selic' },
   { id: 'inss', label: 'INSS' },
-  { id: 'verbas', label: 'Parâmetros das Verbas' },
   { id: 'biblioteca', label: 'Biblioteca de Parcelas' },
 ];
 
@@ -47,23 +46,6 @@ const IPCA_ANUAL = [
 ];
 
 
-const VERBAS_PADRAO = [
-  { nome: 'Saldo Salarial', natureza: 'salarial', fgts: true, inss: true, formula: 'Salário ÷ dias_mês × dias_trabalhados' },
-  { nome: 'Aviso Prévio Indenizado', natureza: 'salarial', fgts: true, inss: true, formula: '30 + 3/ano (máx 90 dias) × salário/30' },
-  { nome: 'Férias Vencidas + 1/3', natureza: 'salarial', fgts: true, inss: false, formula: 'Salário × períodos × 4/3' },
-  { nome: 'Férias Proporcionais + 1/3', natureza: 'salarial', fgts: true, inss: false, formula: 'Salário × (avos/12) × 4/3' },
-  { nome: '13º Salário Integral', natureza: 'salarial', fgts: true, inss: true, formula: 'Salário × 1 (integral por ano)' },
-  { nome: '13º Salário Proporcional', natureza: 'salarial', fgts: true, inss: true, formula: 'Salário ÷ 12 × avos' },
-  { nome: 'Horas Extras', natureza: 'salarial', fgts: true, inss: true, formula: 'Valor-hora × (1 + adicional%) × h/mês × meses' },
-  { nome: 'Adicional Noturno', natureza: 'salarial', fgts: true, inss: true, formula: 'Valor-hora × adicional% × h/mês × meses' },
-  { nome: 'Adicional de Insalubridade', natureza: 'salarial', fgts: true, inss: true, formula: 'Salário-mínimo × grau% (10%/20%/40%)' },
-  { nome: 'Adicional de Periculosidade', natureza: 'salarial', fgts: true, inss: true, formula: 'Salário × 30%' },
-  { nome: 'Intervalo Intrajornada', natureza: 'salarial', fgts: true, inss: true, formula: 'Valor-hora × horas_suprimidas × meses' },
-  { nome: 'Dano Moral / Indenização', natureza: 'indenizatória', fgts: false, inss: false, formula: 'Valor fixo informado' },
-  { nome: 'Multa FGTS (40%/20%)', natureza: 'indenizatória', fgts: false, inss: false, formula: 'FGTS-bruto × 40% (SJC/RI) ou 20% (CR)' },
-  { nome: 'Multa Art. 467 CLT', natureza: 'indenizatória', fgts: false, inss: false, formula: '50% das verbas incontroversas selecionadas' },
-  { nome: 'Multa Art. 477 CLT', natureza: 'indenizatória', fgts: false, inss: false, formula: '1 salário por atraso na rescisão' },
-];
 
 function formatBRL(v) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -979,95 +961,6 @@ function TabLegais() {
   );
 }
 
-// ---- ABA PARÂMETROS DAS VERBAS ----
-function TabVerbas() {
-  const { data: parcelasCustom = [] } = useParcelas();
-
-  return (
-    <div className="space-y-4">
-      <div className="aviso-judicial">
-        Tabela de referência com todas as parcelas calculadas pelo sistema (padrão + biblioteca). Mostra base de cálculo, natureza e incidências conforme CLT/TST.
-      </div>
-
-      {/* Verbas do sistema */}
-      <div className="card p-0 overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-          <h4 className="font-semibold text-sm text-gray-700">Verbas do Sistema (padrão)</h4>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="tabela-memoria">
-            <thead>
-              <tr>
-                <th style={{ width: '30%' }}>Verba</th>
-                <th className="text-center" style={{ width: '12%' }}>Natureza</th>
-                <th className="text-center" style={{ width: '7%' }}>FGTS</th>
-                <th className="text-center" style={{ width: '7%' }}>INSS</th>
-                <th style={{ width: '44%' }}>Fórmula / Base de Cálculo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {VERBAS_PADRAO.map((v) => (
-                <tr key={v.nome}>
-                  <td className="text-sm font-medium">{v.nome}</td>
-                  <td className="text-center">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      v.natureza === 'salarial' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-                    }`}>{v.natureza}</span>
-                  </td>
-                  <td className="text-center text-xs">{v.fgts ? '✓' : '—'}</td>
-                  <td className="text-center text-xs">{v.inss ? '✓' : '—'}</td>
-                  <td className="text-xs text-gray-600 font-mono">{v.formula}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Parcelas da biblioteca */}
-      {parcelasCustom.length > 0 && (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-4 py-3 bg-blue-50 border-b border-blue-200">
-            <h4 className="font-semibold text-sm text-blue-800">Parcelas da Biblioteca (personalizadas)</h4>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="tabela-memoria">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th className="text-center">Natureza</th>
-                  <th className="text-center">Frequência</th>
-                  <th className="text-center">FGTS</th>
-                  <th className="text-center">INSS</th>
-                  <th className="text-right">Valor Base</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parcelasCustom.map((p) => (
-                  <tr key={p.id}>
-                    <td className="text-sm font-medium">{p.nome}</td>
-                    <td className="text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        p.natureza === 'salarial' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-                      }`}>{p.natureza}</span>
-                    </td>
-                    <td className="text-center text-xs">{FREQUENCIA_LABELS[p.frequencia] || p.frequencia}</td>
-                    <td className="text-center text-xs">{p.incide_fgts ? '✓' : '—'}</td>
-                    <td className="text-center text-xs">{p.incide_inss ? '✓' : '—'}</td>
-                    <td className="text-right text-xs font-mono">
-                      {p.valor_base ? formatBRL(Number(p.valor_base)) : p.percentual_base ? `${(p.percentual_base * 100).toFixed(1)}%` : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ---- ABA BIBLIOTECA DE PARCELAS ----
 function TabBiblioteca() {
   const { data: parcelas = [], isLoading } = useParcelas();
@@ -1079,15 +972,26 @@ function TabBiblioteca() {
   const [salvando, setSalvando] = useState(false);
   const [excluindo, setExcluindo] = useState(null);
   const [gruposAbertos, setGruposAbertos] = useState({});
+  // id da parcela/template atualmente em modo "mover para grupo"
+  const [moveModeKey, setMoveModeKey] = useState(null);
+  const [movendo, setMovendo] = useState(false);
 
   function toggleGrupo(grupoId) {
     setGruposAbertos(prev => ({ ...prev, [grupoId]: !prev[grupoId] }));
   }
 
-  // Set de templateIds que já têm versão salva na biblioteca (usada para ocultar template puro)
+  // Resolve grupo efetivo de uma parcela do BD (sem overrides de localStorage)
+  function grupoEfetivoDaParcela(p) {
+    return resolverGrupoParcela(p, {});
+  }
+
+  // templateIds que já têm versão salva no banco (para deduplicar: template puro oculto quando há salvo)
   const templateIdsSalvos = new Set(
     parcelas.map(p => p.template_id).filter(Boolean)
   );
+
+  // Detecta parcelas cujo nome colide com templates, para aviso visual
+  const nomesSalvos = new Set(parcelas.map(p => p.nome.toLowerCase()));
 
   async function handleExcluir(id) {
     if (!window.confirm('Remover esta parcela da biblioteca?')) return;
@@ -1114,51 +1018,70 @@ function TabBiblioteca() {
     }
   }
 
-  // Resolve grupo efetivo de uma parcela do BD (usa resolverGrupoParcela sem overrides de localStorage)
-  function grupoEfetivoDaParcela(p) {
-    return resolverGrupoParcela(p, {});
+  // Mover parcela salva para outro grupo
+  async function handleMoverGrupo(parcelaId, novoGrupo) {
+    setMovendo(true);
+    try {
+      await atualizar({ id: parcelaId, grupoId: novoGrupo });
+      setMoveModeKey(null);
+    } catch (e) {
+      alert('Erro ao mover parcela: ' + e.message);
+    } finally {
+      setMovendo(false);
+    }
+  }
+
+  // Personalizar template e já salvar no grupo escolhido
+  async function handleMoverTemplate(template, novoGrupo) {
+    setMovendo(true);
+    try {
+      await criar({ ...template, templateId: template._templateId, grupoId: novoGrupo });
+      setMoveModeKey(null);
+    } catch (e) {
+      alert('Erro ao mover parcela: ' + e.message);
+    } finally {
+      setMovendo(false);
+    }
   }
 
   // Badge de vínculo com histórico salarial
   function BadgeHistorico({ p }) {
     if (!p.base_historico_id) return null;
-    if (p.base_historico_id === 'reclamante') {
-      return (
-        <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">
-          ↪ hist. reclamante
-        </span>
-      );
-    }
-    return (
-      <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-600">
-        ↪ histórico vinculado
-      </span>
-    );
+    const label = p.base_historico_id === 'reclamante' ? '↪ hist. reclamante' : '↪ histórico vinculado';
+    return <span className="text-xs px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700">{label}</span>;
   }
 
-  // Card unificado — templates e parcelas salvas têm aparência idêntica
+  // Card unificado — templates puro e parcelas salvas com mesma aparência
   function ParcelaCard({ p, isTemplate = false, template = null }) {
-    const nome = isTemplate ? template.nome : p.nome;
-    const descricao = isTemplate ? template.descricao : p.descricao;
-    const natureza = isTemplate ? template.natureza : p.natureza;
-    const frequencia = isTemplate ? template.frequencia : p.frequencia;
-    const geraReflexos = isTemplate ? template.geraReflexos : p.gera_reflexos;
+    const nome       = isTemplate ? template.nome        : p.nome;
+    const descricao  = isTemplate ? template.descricao   : p.descricao;
+    const natureza   = isTemplate ? template.natureza    : p.natureza;
+    const frequencia = isTemplate ? template.frequencia  : p.frequencia;
+    const geraRef    = isTemplate ? template.geraReflexos: p.gera_reflexos;
+    const grupoAtual = isTemplate ? template.grupo       : grupoEfetivoDaParcela(p);
+    const cardKey    = isTemplate ? `tpl_${template._templateId}` : `p_${p.id}`;
+    const emMoveMode = moveModeKey === cardKey;
 
     return (
-      <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+      <div className={`flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors ${
+        isTemplate ? 'border-dashed border-gray-200 bg-gray-50/50' : 'border-gray-200'
+      }`}>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-medium text-sm truncate">{nome}</p>
+            {isTemplate && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 italic">modelo</span>
+            )}
           </div>
           {descricao && <p className="text-xs text-gray-400 mt-0.5 leading-snug line-clamp-2">{descricao}</p>}
           <div className="flex gap-1.5 mt-1 flex-wrap">
-            <span className={`text-xs px-1.5 py-0.5 rounded ${natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600'}`}>
+            <span className={`text-xs px-1.5 py-0.5 rounded ${natureza === 'salarial' ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-700'}`}>
               {natureza}
             </span>
             <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
               {FREQUENCIA_LABELS[frequencia] || frequencia}
             </span>
-            {geraReflexos && <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-600">com reflexos</span>}
+            {geraRef && <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-600">com reflexos</span>}
             {!isTemplate && <BadgeHistorico p={p} />}
             {!isTemplate && p.valor_base && (
               <span className="text-xs text-gray-400">{formatBRL(Number(p.valor_base))}</span>
@@ -1167,7 +1090,51 @@ function TabBiblioteca() {
               <span className="text-xs text-gray-400">{(p.percentual_base * 100).toFixed(1)}%</span>
             )}
           </div>
+
+          {/* Seletor de grupo — aparece só quando em modo "mover" */}
+          {emMoveMode && (
+            <div className="mt-2 flex items-center gap-2">
+              <label className="text-xs text-gray-500">Mover para:</label>
+              <select
+                autoFocus
+                defaultValue={grupoAtual}
+                onChange={e => {
+                  if (e.target.value && e.target.value !== grupoAtual) {
+                    isTemplate
+                      ? handleMoverTemplate(template, e.target.value)
+                      : handleMoverGrupo(p.id, e.target.value);
+                  } else {
+                    setMoveModeKey(null);
+                  }
+                }}
+                onBlur={() => { if (!movendo) setMoveModeKey(null); }}
+                disabled={movendo}
+                className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+              >
+                {GRUPOS_PADRAO.map(g => (
+                  <option key={g.id} value={g.id}>{g.label}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setMoveModeKey(null)}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >✕</button>
+            </div>
+          )}
         </div>
+
+        {/* Botão mover grupo */}
+        <button
+          type="button"
+          onClick={() => setMoveModeKey(emMoveMode ? null : cardKey)}
+          className={`p-1 flex-shrink-0 text-xs rounded ${emMoveMode ? 'text-primaria' : 'text-gray-300 hover:text-gray-500'}`}
+          title="Mover para outro grupo"
+        >
+          ⇄
+        </button>
+
+        {/* Botão editar */}
         <button
           type="button"
           onClick={() => isTemplate
@@ -1179,6 +1146,8 @@ function TabBiblioteca() {
         >
           <Edit2 size={16} />
         </button>
+
+        {/* Botão excluir — apenas para parcelas salvas */}
         {!isTemplate && (
           <button
             type="button"
@@ -1193,6 +1162,15 @@ function TabBiblioteca() {
       </div>
     );
   }
+
+  // Todos os grupos que têm ao menos um item (template ou salvo)
+  const gruposComItens = GRUPOS_PADRAO.filter(grupo => {
+    const temTemplate = TEMPLATES_PADRAO.some(
+      t => t.grupo === grupo.id && !templateIdsSalvos.has(t._templateId)
+    );
+    const temSalva = parcelas.some(p => grupoEfetivoDaParcela(p) === grupo.id);
+    return temTemplate || temSalva;
+  });
 
   return (
     <div className="space-y-4">
@@ -1220,7 +1198,7 @@ function TabBiblioteca() {
       )}
 
       <div className="card p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <BookOpen size={18} className="text-primaria" />
             <h3 className="font-titulo text-lg text-primaria">Biblioteca de Parcelas</h3>
@@ -1234,16 +1212,17 @@ function TabBiblioteca() {
           </button>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Todas as parcelas — modelos e personalizadas — são editáveis. Clique no lápis para configurar os parâmetros.
-          As alterações ficam disponíveis em todos os cálculos futuros.
+          Fonte única de todas as parcelas — modelos do sistema e personalizadas — organizadas por grupo.
+          Clique no lápis para editar parâmetros (permanente). Use <strong>⇄</strong> para mover entre grupos.
+          Modelos <em>(tracejado)</em> ainda não foram personalizados; ao editar, ficam salvos com seus parâmetros.
         </p>
 
         {isLoading ? (
           <p className="text-sm text-gray-400">Carregando...</p>
         ) : (
-          <>
-            {GRUPOS_PADRAO.map((grupo) => {
-              // Templates deste grupo que ainda NÃO têm versão salva no banco
+          <div className="space-y-2">
+            {gruposComItens.map((grupo) => {
+              // Templates sem versão salva neste grupo
               const templatesDoGrupo = TEMPLATES_PADRAO.filter(
                 t => t.grupo === grupo.id && !templateIdsSalvos.has(t._templateId)
               );
@@ -1253,11 +1232,10 @@ function TabBiblioteca() {
               );
 
               const total = templatesDoGrupo.length + parcelasSalvasDoGrupo.length;
-              if (total === 0) return null;
-
               const aberto = Boolean(gruposAbertos[grupo.id]);
+
               return (
-                <div key={grupo.id} className="border border-gray-200 rounded-lg mb-2">
+                <div key={grupo.id} className="border border-gray-200 rounded-lg">
                   <button
                     type="button"
                     onClick={() => toggleGrupo(grupo.id)}
@@ -1265,32 +1243,67 @@ function TabBiblioteca() {
                   >
                     <span className="font-medium text-sm text-gray-700">
                       {grupo.label}
-                      <span className="ml-2 text-xs text-gray-400 font-normal">({total})</span>
+                      <span className="ml-2 text-xs text-gray-400 font-normal">
+                        ({parcelasSalvasDoGrupo.length} personalizadas
+                        {templatesDoGrupo.length > 0 && ` + ${templatesDoGrupo.length} modelos`})
+                      </span>
                     </span>
                     {aberto ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
                   </button>
+
                   {aberto && (
                     <div className="px-4 pb-4 space-y-2">
-                      {/* Templates sem versão salva */}
-                      {templatesDoGrupo.map(t => (
-                        <ParcelaCard key={t._templateId} isTemplate template={t} p={null} />
-                      ))}
-                      {/* Parcelas salvas no banco */}
+                      {/* Parcelas salvas primeiro (têm prioridade e parâmetros definitivos) */}
                       {parcelasSalvasDoGrupo.map(p => (
                         <ParcelaCard key={p.id} p={p} />
+                      ))}
+                      {/* Templates puro — tracejados, sem versão salva */}
+                      {templatesDoGrupo.map(t => (
+                        <ParcelaCard key={t._templateId} isTemplate template={t} p={null} />
                       ))}
                     </div>
                   )}
                 </div>
               );
             })}
-          </>
+
+            {/* Parcelas sem grupo reconhecido (fallback) */}
+            {(() => {
+              const semGrupo = parcelas.filter(p => {
+                const g = grupoEfetivoDaParcela(p);
+                return !GRUPOS_PADRAO.some(gp => gp.id === g);
+              });
+              if (semGrupo.length === 0) return null;
+              const aberto = Boolean(gruposAbertos['__sem_grupo__']);
+              return (
+                <div className="border border-amber-200 rounded-lg">
+                  <button
+                    type="button"
+                    onClick={() => toggleGrupo('__sem_grupo__')}
+                    className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-amber-50 rounded-lg"
+                  >
+                    <span className="font-medium text-sm text-amber-700">
+                      Sem grupo definido
+                      <span className="ml-2 text-xs font-normal">({semGrupo.length}) — clique em ⇄ para organizar</span>
+                    </span>
+                    {aberto ? <ChevronDown size={16} className="text-amber-400" /> : <ChevronRight size={16} className="text-amber-400" />}
+                  </button>
+                  {aberto && (
+                    <div className="px-4 pb-4 space-y-2">
+                      {semGrupo.map(p => <ParcelaCard key={p.id} p={p} />)}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         )}
       </div>
 
       <div className="aviso-judicial">
-        As alterações feitas aqui afetam todos os cálculos futuros. Para alterar uma parcela apenas no cálculo
-        em curso, use o editor dentro da etapa de Parcelas Personalizadas na calculadora.
+        As alterações feitas aqui são permanentes e afetam todos os cálculos futuros.
+        Para alterar parâmetros apenas no cálculo em curso, use o editor de parcelas dentro da etapa
+        de Parcelas Personalizadas na calculadora — as mudanças valem somente para aquele cálculo.
       </div>
     </div>
   );
@@ -1320,7 +1333,6 @@ export default function ConfiguracoesPage() {
         {abaAtiva === 'legais' && <TabLegais />}
         {abaAtiva === 'selic' && <TabSelic />}
         {abaAtiva === 'inss' && <TabInss />}
-        {abaAtiva === 'verbas' && <TabVerbas />}
         {abaAtiva === 'biblioteca' && <TabBiblioteca />}
       </div>
     </div>

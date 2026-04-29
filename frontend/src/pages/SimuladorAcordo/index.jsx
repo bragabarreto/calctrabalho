@@ -327,7 +327,7 @@ export default function SimuladorAcordoPage() {
     [parcelas]
   );
   const valorAcordoNum = evalExpr(valorAcordo) || 0;
-  const restante = Math.max(0, valorAcordoNum - totalParcelas);
+  const restante = valorAcordoNum - totalParcelas;
 
   async function calcular() {
     if (!valorAcordoNum) { setErro('Informe o valor do acordo.'); return; }

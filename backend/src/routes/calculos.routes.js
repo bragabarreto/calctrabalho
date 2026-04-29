@@ -217,18 +217,20 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
       parcelasNormalizadas.reduce((sum, p) => sum + p.valor, 0)
     );
 
-    // Saldo restante (valor do acordo - parcelas listadas) é considerado salarial (incide tudo)
-    const saldoRestante = round2(Math.max(0, valorAcordo - totalParcelasListadas));
+    // Saldo restante (valor do acordo - parcelas listadas) — pode ser negativo para sinalizar excesso
+    const saldoRestante = round2(valorAcordo - totalParcelasListadas);
+    // Para cômputo de bases tributárias, clampeia em zero (base não pode ser negativa)
+    const saldoRestanteBase = Math.max(0, saldoRestante);
 
     // Bases por encargo: soma das parcelas onde a flag é true + saldo restante (salarial)
     const baseInss = round2(
-      parcelasNormalizadas.filter(p => p.incideInss).reduce((sum, p) => sum + p.valor, 0) + saldoRestante
+      parcelasNormalizadas.filter(p => p.incideInss).reduce((sum, p) => sum + p.valor, 0) + saldoRestanteBase
     );
     const baseIr = round2(
-      parcelasNormalizadas.filter(p => p.incideIr).reduce((sum, p) => sum + p.valor, 0) + saldoRestante
+      parcelasNormalizadas.filter(p => p.incideIr).reduce((sum, p) => sum + p.valor, 0) + saldoRestanteBase
     );
     const baseFgts = round2(
-      parcelasNormalizadas.filter(p => p.incideFgts).reduce((sum, p) => sum + p.valor, 0) + saldoRestante
+      parcelasNormalizadas.filter(p => p.incideFgts).reduce((sum, p) => sum + p.valor, 0) + saldoRestanteBase
     );
 
     // Total indenizatório (para exibição — parcelas sem nenhuma incidência)
@@ -236,7 +238,8 @@ router.post('/simular-acordo-externo', async (req, res, next) => {
       parcelasNormalizadas.filter(p => !p.incideInss && !p.incideIr && !p.incideFgts)
         .reduce((sum, p) => sum + p.valor, 0)
     );
-    const baseSalarial = round2(Math.max(0, valorAcordo - totalIndenizatorio));
+    // Base salarial real (pode ser negativa — sinaliza que parcelas indenizatórias excedem o acordo)
+    const baseSalarial = round2(valorAcordo - totalIndenizatorio);
 
     // Período: meses entre admissão e dispensa
     let periodoMeses = 1;
