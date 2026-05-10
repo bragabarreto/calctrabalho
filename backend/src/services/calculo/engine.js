@@ -249,9 +249,11 @@ async function calcular(dados, modalidade) {
   // Parcelas que não usam histórico salarial nem têm calculadora dedicada
   const TEMPLATES_DEDICADOS = new Set([
     'tpl_horas_extras', 'tpl_noturno', 'tpl_feriados', // cálculo via jornada (calcularHorasExtras)
-    'tpl_insalubridade',                                // calcularInsalubridade
+    'tpl_insalubridade', 'tpl_insalubridade_min', 'tpl_insalubridade_med', 'tpl_insalubridade_max',
     'tpl_periculosidade',                               // calcularPericulosidade
     'tpl_intervalo',                                    // calcularIntervaloIntrajornada
+    // Verbas rescisórias nativas — apenas sobrescrevem flags via overridesMap, não geram linha extra
+    'tpl_aviso_indenizado', 'tpl_multa_477', 'tpl_multa_467', 'tpl_dano_moral',
   ]);
 
   // Buscar histórico completo do SM (necessário para parcelas percentual_sm com cálculo mês a mês)

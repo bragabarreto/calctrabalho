@@ -20,10 +20,13 @@ const NATIVE_VERBA_DEFAULTS = {
   salarios_atrasados:          { natureza: 'salarial',      incideFgts: true,  incideInss: true,  incideIr: true  },
   comissoes_atrasadas:         { natureza: 'salarial',      incideFgts: true,  incideInss: true,  incideIr: true  },
   gorjetas_atrasadas:          { natureza: 'salarial',      incideFgts: false, incideInss: false, incideIr: false },
-  aviso_previo:                { natureza: 'salarial',      incideFgts: true,  incideInss: true,  incideIr: true  },
-  ferias_dobradas:             { natureza: 'salarial',      incideFgts: false, incideInss: false, incideIr: false },
-  ferias_integrais:            { natureza: 'salarial',      incideFgts: false, incideInss: false, incideIr: false },
-  ferias_proporcionais:        { natureza: 'salarial',      incideFgts: false, incideInss: false, incideIr: false },
+  // Aviso prévio indenizado: indenizatório (art. 487 CLT). Isento INSS e IR (art. 6°, V, Lei 7.713/88).
+  // FGTS: o período computa para FGTS mas esse depósito está embutido no cálculo de verbas.fgts.
+  aviso_previo:                { natureza: 'indenizatoria', incideFgts: false, incideInss: false, incideIr: false },
+  // Férias pagas na rescisão: indenizatórias. Isentas de INSS e IR (art. 6°, XIV, Lei 7.713/88).
+  ferias_dobradas:             { natureza: 'indenizatoria', incideFgts: false, incideInss: false, incideIr: false },
+  ferias_integrais:            { natureza: 'indenizatoria', incideFgts: false, incideInss: false, incideIr: false },
+  ferias_proporcionais:        { natureza: 'indenizatoria', incideFgts: false, incideInss: false, incideIr: false },
   decimo_terceiro_integral:    { natureza: 'salarial',      incideFgts: true,  incideInss: true,  incideIr: true  },
   decimo_terceiro_proporcional:{ natureza: 'salarial',      incideFgts: true,  incideInss: true,  incideIr: true  },
 
