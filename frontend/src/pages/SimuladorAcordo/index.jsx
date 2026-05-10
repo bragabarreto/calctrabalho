@@ -115,6 +115,7 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
   const verbas = [];
 
   // 1. Aviso Prévio Indenizado (30 + 3 dias/ano, máx 90)
+  // Natureza indenizatória: isento INSS e IR (art. 487 CLT + art. 6°, V, Lei 7.713/88)
   const anos = anosCompletos(admDate, dispDate);
   const diasAviso = Math.min(30 + anos * 3, 90);
   verbas.push({
@@ -122,7 +123,7 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
     nome: `Aviso Prévio Indenizado (${diasAviso} dias — ${anos} ano${anos !== 1 ? 's' : ''} completo${anos !== 1 ? 's' : ''} de serviço)`,
     valor: round2((salNum / 30) * diasAviso),
     grupo: 'rescisoria',
-    incideInss: true, incideIr: true, incideFgts: true,
+    incideInss: false, incideIr: false, incideFgts: false,
   });
 
   // 2. Férias + 1/3 (todos os períodos aquisitivos)
@@ -183,7 +184,7 @@ function calcularVerbasEstimadas(dataAdmissao, dataDispensa, dataAjuizamento, sa
 
 // Cada parcela predefinida carrega suas flags de incidência conforme a legislação/biblioteca
 const PARCELAS_PREDEFINIDAS = [
-  { nome: 'Aviso prévio indenizado',                             incideInss: true,  incideIr: true,  incideFgts: true  },
+  { nome: 'Aviso prévio indenizado',                             incideInss: false, incideIr: false, incideFgts: false },
   { nome: 'Férias + 1/3 constitucional',                         incideInss: false, incideIr: false, incideFgts: false },
   { nome: 'Depósitos de FGTS',                                   incideInss: false, incideIr: false, incideFgts: false },
   { nome: 'Indenização rescisória FGTS (40%)',                    incideInss: false, incideIr: false, incideFgts: false },
