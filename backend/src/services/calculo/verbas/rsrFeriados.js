@@ -1,6 +1,7 @@
 'use strict';
 
 const { round2 } = require('../../../utils/formatacao');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 /**
  * RSR Não Concedido (Súmula 146 TST + OJ 410 SDI-1 TST)
@@ -163,9 +164,10 @@ function calcularReflexosRSRFeriados(resultado, dados, temporal, modalidade) {
   const meses = temporal.lapsoSemAviso.meses - (dados.mesesAfastamento || 0);
   const mediaRSRMensal = meses > 0 ? resultado.valor / meses : 0;
 
-  // Férias: proporcional ao período aquisitivo
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-  const ferias = round2(mediaRSRMensal * (mesesFerias / 12) * (4 / 3));
+  // Férias: proporcional ao período aquisitivo (Súmula 171 TST: indevidas na justa causa)
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
+  const ferias = feriasDevidas ? round2(mediaRSRMensal * (mesesFerias / 12) * (4 / 3)) : 0;
 
   // 13º: proporcional (OJ 82 SDI1 TST: aviso projeta para 13º)
   const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
@@ -186,7 +188,7 @@ function calcularReflexosRSRFeriados(resultado, dados, temporal, modalidade) {
   }
 
   return {
-    ferias: { valor: ferias },
+    ferias: { valor: ferias, memoria: feriasDevidas ? {} : { motivo: MOTIVO_SUMULA_171 } },
     decimoTerceiro: { valor: decimoTerceiro },
     fgts: { valor: fgts },
     mulFgts: { valor: mulFgts },

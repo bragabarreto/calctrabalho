@@ -5,6 +5,18 @@ const { calcularBaseRescisoria } = require('../../../utils/baseRescisoria');
 const { formatarData } = require('../../../utils/datas');
 
 /**
+ * Súmula 171 TST — as férias proporcionais são indevidas apenas quando o
+ * contrato termina por dispensa do empregado por justa causa. Nas demais
+ * modalidades (inclusive pedido de demissão — Súmula 261 TST) são devidas.
+ */
+const MOTIVO_SUMULA_171 =
+  'Súmula 171 TST — férias proporcionais indevidas na dispensa por justa causa';
+
+function feriasProporcionaisDevidas(modalidade) {
+  return modalidade !== 'justa_causa';
+}
+
+/**
  * Filtra períodos integrais de férias a partir do array periodosFerias.
  * Retorna apenas períodos ativos (não excluídos) do tipo 'integral'.
  */
@@ -185,10 +197,15 @@ function calcularFeriasIntegrais(dados, temporal) {
 /**
  * Férias Proporcionais + 1/3
  * Regra dos 15 dias: se diasRestantes >= 15, conta mês a mais
+ * Súmula 171 TST: indevidas na dispensa por justa causa.
  */
-function calcularFeriasProporcionais(dados, temporal) {
+function calcularFeriasProporcionais(dados, temporal, modalidade) {
   if (dados.verbasExcluidas?.includes('ferias_proporcionais')) {
     return { valor: 0, excluida: true, memoria: { motivo: 'Excluída do cálculo' } };
+  }
+
+  if (!feriasProporcionaisDevidas(modalidade)) {
+    return { valor: 0, excluida: true, memoria: { motivo: MOTIVO_SUMULA_171 } };
   }
 
   // Se informadas como integralmente pagas (sem valor de desconto), nada é devido
@@ -232,4 +249,10 @@ function calcularFeriasProporcionais(dados, temporal) {
   };
 }
 
-module.exports = { calcularFeriasDobradas, calcularFeriasIntegrais, calcularFeriasProporcionais };
+module.exports = {
+  calcularFeriasDobradas,
+  calcularFeriasIntegrais,
+  calcularFeriasProporcionais,
+  feriasProporcionaisDevidas,
+  MOTIVO_SUMULA_171,
+};

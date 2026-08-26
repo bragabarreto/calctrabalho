@@ -1,6 +1,7 @@
 'use strict';
 
 const { round2 } = require('../../../utils/formatacao');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 /**
  * Intervalo por Digitação (CLT art. 72 + NR-17)
@@ -107,8 +108,10 @@ function calcularReflexosIntervaloDigitacao(idResult, dados, temporal, modalidad
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-  const ferias = round2(mediaMensal * (mesesFerias / 12) * (4 / 3));
+  // Súmula 171 TST: férias proporcionais indevidas na dispensa por justa causa
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
+  const ferias = feriasDevidas ? round2(mediaMensal * (mesesFerias / 12) * (4 / 3)) : 0;
 
   const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaMensal / 12) * meses13);
@@ -120,7 +123,7 @@ function calcularReflexosIntervaloDigitacao(idResult, dados, temporal, modalidad
   return {
     rsr: { valor: rsr },
     avisoPrevio: { valor: avisoPrevio },
-    ferias: { valor: ferias },
+    ferias: { valor: ferias, memoria: feriasDevidas ? {} : { motivo: MOTIVO_SUMULA_171 } },
     decimoTerceiro: { valor: decimoTerceiro },
     fgts: { valor: fgts },
     mulFgts: { valor: mulFgts },

@@ -2,6 +2,7 @@
 
 const { round2 } = require('../../../utils/formatacao');
 const { calcularPeriodoJornada } = require('./cartaoPontoVirtual');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 /** Deriva qtdeHorasNoturnasMensais ponderado por período */
 function resolverHorasNoturnasPeriodos(dados, feriadosAdicionais) {
@@ -105,8 +106,10 @@ function calcularReflexosAN(anResult, dados, temporal, modalidade) {
   }
 
   const mediaANMensal = meses > 0 ? round2(anResult.valor / meses) : 0;
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-  const ferias = round2(mediaANMensal * (mesesFerias / 12) * (4 / 3));
+  // Súmula 171 TST: férias proporcionais indevidas na dispensa por justa causa
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
+  const ferias = feriasDevidas ? round2(mediaANMensal * (mesesFerias / 12) * (4 / 3)) : 0;
   const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaANMensal / 12) * meses13);
   const fgts = round2((anResult.valor + rsr + ferias + decimoTerceiro) * 0.08);
@@ -135,12 +138,14 @@ function calcularReflexosAN(anResult, dados, temporal, modalidade) {
     },
     ferias: {
       valor: ferias,
-      memoria: {
-        formula: `Média AN R$ ${mediaANMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
-        mediaANMensal,
-        mesesFerias,
-        avos: `${mesesFerias}/12`,
-      },
+      memoria: feriasDevidas
+        ? {
+            formula: `Média AN R$ ${mediaANMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
+            mediaANMensal,
+            mesesFerias,
+            avos: `${mesesFerias}/12`,
+          }
+        : { motivo: MOTIVO_SUMULA_171 },
     },
     decimoTerceiro: {
       valor: decimoTerceiro,

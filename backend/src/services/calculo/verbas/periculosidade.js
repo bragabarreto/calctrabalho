@@ -3,6 +3,7 @@
 const { round2 } = require('../../../utils/formatacao');
 const { differenceInMonths, toDate, toISODate } = require('../../../utils/datas');
 const { calcularComHistoricoMensal } = require('../../../utils/resolverSalarioBase');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 /**
  * Adicional de Periculosidade (30% sobre o salário)
@@ -81,8 +82,10 @@ function calcularReflexosPericulosidade(perResult, dados, temporal, modalidade) 
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-  const ferias = round2(mediaPer * (mesesFerias / 12) * (4 / 3));
+  // Súmula 171 TST: férias proporcionais indevidas na dispensa por justa causa
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
+  const ferias = feriasDevidas ? round2(mediaPer * (mesesFerias / 12) * (4 / 3)) : 0;
   // Fix: OJ 82 SDI-1 TST — aviso prévio indenizado projeta para 13º proporcional (lapsoComAviso)
   const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaPer / 12) * meses13);
@@ -106,12 +109,14 @@ function calcularReflexosPericulosidade(perResult, dados, temporal, modalidade) 
     },
     ferias: {
       valor: ferias,
-      memoria: {
-        formula: `Média per. R$ ${mediaPerMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
-        mediaPerMensal,
-        mesesFerias,
-        avos: `${mesesFerias}/12`,
-      },
+      memoria: feriasDevidas
+        ? {
+            formula: `Média per. R$ ${mediaPerMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
+            mediaPerMensal,
+            mesesFerias,
+            avos: `${mesesFerias}/12`,
+          }
+        : { motivo: MOTIVO_SUMULA_171 },
     },
     decimoTerceiro: {
       valor: decimoTerceiro,

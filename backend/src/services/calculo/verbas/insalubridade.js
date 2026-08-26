@@ -6,6 +6,7 @@ const {
 } = require('../../../utils/datas');
 const { round2 } = require('../../../utils/formatacao');
 const db = require('../../../config/database');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 /**
  * Adicional de Insalubridade
@@ -89,8 +90,10 @@ function calcularReflexosInsalubridade(insResult, dados, temporal, modalidade) {
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-  const ferias = round2(mediaIns * (mesesFerias / 12) * (4 / 3));
+  // Súmula 171 TST: férias proporcionais indevidas na dispensa por justa causa
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
+  const ferias = feriasDevidas ? round2(mediaIns * (mesesFerias / 12) * (4 / 3)) : 0;
   // OJ 82 SDI1 TST: aviso projeta para 13º
   const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaIns / 12) * meses13);
@@ -114,12 +117,14 @@ function calcularReflexosInsalubridade(insResult, dados, temporal, modalidade) {
     },
     ferias: {
       valor: ferias,
-      memoria: {
-        formula: `Média ins. R$ ${mediaInsMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
-        mediaInsMensal,
-        mesesFerias,
-        avos: `${mesesFerias}/12`,
-      },
+      memoria: feriasDevidas
+        ? {
+            formula: `Média ins. R$ ${mediaInsMensal.toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
+            mediaInsMensal,
+            mesesFerias,
+            avos: `${mesesFerias}/12`,
+          }
+        : { motivo: MOTIVO_SUMULA_171 },
     },
     decimoTerceiro: {
       valor: decimoTerceiro,

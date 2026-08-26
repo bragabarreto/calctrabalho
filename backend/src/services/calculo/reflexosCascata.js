@@ -1,6 +1,7 @@
 'use strict';
 
 const { round2 } = require('../../utils/formatacao');
+const { feriasProporcionaisDevidas } = require('./verbas/ferias');
 
 /**
  * OJ 394 SDI-1 TST (IRR-10169-57.2013.5.05.0024, decisão de 20/03/2023)
@@ -29,7 +30,9 @@ function aplicarCascataOJ394(verbas, reflexos, temporal, dados, modalidade) {
   ];
 
   const meses = temporal.lapsoSemAviso?.meses || 1;
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
+  // Súmula 171 TST: sem férias proporcionais na justa causa, não há base para cascatear
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
   const meses13 = temporal.avos13 ?? ((temporal.lapsoComAviso?.mesesRestantes || 0) + ((temporal.lapsoComAviso?.diasRestantes || 0) >= 15 ? 1 : 0));
 
   for (const chave of chavesComRSR) {
@@ -41,7 +44,7 @@ function aplicarCascataOJ394(verbas, reflexos, temporal, dados, modalidade) {
     if (rsrMediaMensal === 0) continue;
 
     // ---- Incremento em Férias: RSR media mensal × (meses/12) × 4/3 ----
-    if (ref.ferias) {
+    if (ref.ferias && feriasDevidas) {
       const incrementoFerias = round2(rsrMediaMensal * (mesesFerias / 12) * (4 / 3));
       const valorAnterior = ref.ferias.valor;
       ref.ferias.valor = round2(valorAnterior + incrementoFerias);
@@ -118,7 +121,7 @@ function aplicarCascataOJ394(verbas, reflexos, temporal, dados, modalidade) {
     const rsrMedia = meses > 0 ? round2(rsrTotal / meses) : 0;
     if (rsrMedia === 0) continue;
 
-    if (pc.reflexos.ferias) {
+    if (pc.reflexos.ferias && feriasDevidas) {
       const inc = round2(rsrMedia * (mesesFerias / 12) * (4 / 3));
       pc.reflexos.ferias.valor = round2(pc.reflexos.ferias.valor + inc);
       pc.reflexos.ferias.memoria = { ...pc.reflexos.ferias.memoria, formulaOJ394: `OJ 394: + R$ ${inc.toFixed(2)}` };

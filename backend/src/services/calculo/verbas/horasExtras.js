@@ -4,6 +4,7 @@ const { round2 } = require('../../../utils/formatacao');
 const { calcularPeriodoJornada } = require('./cartaoPontoVirtual');
 const { encontrarHistoricoPrincipal } = require('../../../utils/resolverSalarioBase');
 const { valorParaCompetencia } = require('../../../utils/historicoSalarial');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 /**
  * Deriva qtdeHorasExtrasMensais, divisorJornada e adicionalHoraExtra a partir de jornadaPeriodos.
@@ -196,10 +197,11 @@ function calcularReflexosHE(heResult, dados, temporal, modalidade) {
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  // Férias (proporcional sobre média das HE)
+  // Férias (proporcional sobre média das HE) — Súmula 171 TST: indevidas na justa causa
   const mediaHeMensal = meses > 0 ? heResult.valor / meses : 0;
-  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-  const ferias = round2(mediaHeMensal * (mesesFerias / 12) * (4 / 3));
+  const feriasDevidas = feriasProporcionaisDevidas(modalidade);
+  const mesesFerias = feriasDevidas ? (temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0))) : 0;
+  const ferias = feriasDevidas ? round2(mediaHeMensal * (mesesFerias / 12) * (4 / 3)) : 0;
 
   // 13º proporcional — OJ 82 SDI1 TST: aviso projeta para 13º
   const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
@@ -237,13 +239,15 @@ function calcularReflexosHE(heResult, dados, temporal, modalidade) {
     },
     ferias: {
       valor: ferias,
-      memoria: {
-        formula: `Média HE R$ ${(meses > 0 ? heResult.valor / meses : 0).toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
-        mediaHeMensal: meses > 0 ? round2(heResult.valor / meses) : 0,
-        mesesFerias,
-        avos: `${mesesFerias}/12`,
-        criterio: 'Reflexo sobre férias proporcionais + 1/3 constitucional',
-      },
+      memoria: feriasDevidas
+        ? {
+            formula: `Média HE R$ ${(meses > 0 ? heResult.valor / meses : 0).toFixed(2)}/mês × (${mesesFerias}/12 avos) × 4/3 = R$ ${ferias.toFixed(2)}`,
+            mediaHeMensal: meses > 0 ? round2(heResult.valor / meses) : 0,
+            mesesFerias,
+            avos: `${mesesFerias}/12`,
+            criterio: 'Reflexo sobre férias proporcionais + 1/3 constitucional',
+          }
+        : { motivo: MOTIVO_SUMULA_171 },
     },
     decimoTerceiro: {
       valor: decimoTerceiro,

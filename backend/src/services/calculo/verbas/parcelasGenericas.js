@@ -4,6 +4,7 @@ const { differenceInMonths } = require('../../../utils/datas');
 const { round2 } = require('../../../utils/formatacao');
 const { deveGerarReflexos, validarNaturezaReflexos } = require('../../../utils/naturezaJuridica');
 const { calcularComHistoricoMensal } = require('../../../utils/resolverSalarioBase');
+const { feriasProporcionaisDevidas, MOTIVO_SUMULA_171 } = require('./ferias');
 
 // ---------------------------------------------------------------------------
 // Helpers internos
@@ -358,16 +359,20 @@ function calcularReflexosParcela(valorTotal, nMeses, parcela, dados, temporal, m
     };
   }
 
-  // Férias + 1/3
+  // Férias + 1/3 — Súmula 171 TST: proporcionais indevidas na dispensa por justa causa
   if (reflexosEm.includes('ferias')) {
-    const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
-    const ferias = round2(mediaValor * (mesesFerias / 12) * (4 / 3));
-    r.ferias = {
-      valor: ferias,
-      memoria: {
-        formula: `R$ ${mediaValor.toFixed(2)} × (${mesesFerias}/12) × 4/3 = R$ ${ferias.toFixed(2)}`,
-      },
-    };
+    if (!feriasProporcionaisDevidas(modalidade)) {
+      r.ferias = { valor: 0, memoria: { motivo: MOTIVO_SUMULA_171 } };
+    } else {
+      const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
+      const ferias = round2(mediaValor * (mesesFerias / 12) * (4 / 3));
+      r.ferias = {
+        valor: ferias,
+        memoria: {
+          formula: `R$ ${mediaValor.toFixed(2)} × (${mesesFerias}/12) × 4/3 = R$ ${ferias.toFixed(2)}`,
+        },
+      };
+    }
   }
 
   // 13º Salário — OJ 82 SDI1 TST: aviso prévio projeta para 13º

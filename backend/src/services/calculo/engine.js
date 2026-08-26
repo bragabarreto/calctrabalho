@@ -130,7 +130,7 @@ async function calcular(dados, modalidade) {
   // ---- FÉRIAS ----
   verbas.feriasDobradas = calcularFeriasDobradas(dados, temporal);
   verbas.feriasIntegrais = calcularFeriasIntegrais(dados, temporal);
-  verbas.feriasProporcionais = calcularFeriasProporcionais(dados, temporal);
+  verbas.feriasProporcionais = calcularFeriasProporcionais(dados, temporal, modalidade);
 
   // ---- 13º SALÁRIO ----
   verbas.decimoTerceiroIntegral = calcularDecimoTerceiroIntegral(dados, temporal);
