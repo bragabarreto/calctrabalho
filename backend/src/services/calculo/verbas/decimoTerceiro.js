@@ -103,13 +103,17 @@ function calcularDecimoTerceiroProporcional(dados, temporal) {
   // Gorjetas integram base do 13º (Súmula 354 TST) — padronizado via baseRescisoria
   const dadosBase13 = dados.mediaSalarial ? { ...dados, ultimoSalario: dados.mediaSalarial } : dados;
   const { valor: base } = calcularBaseRescisoria(dadosBase13, { incluirGorjetas: true });
-  // OJ 82 SDI1 TST: aviso prévio indenizado projeta para o 13º proporcional
-  const meses = temporal.lapsoComAviso.mesesRestantes;
-  const dias = temporal.lapsoComAviso.diasRestantes;
-  const mesesEfetivos = dias >= 15 ? meses + 1 : meses;
+  // Lei 4.090/62: 1/12 por mês CIVIL com 15 dias ou mais de serviço no ano da
+  // rescisão. OJ 82 e Súmula 305 da SDI-1 do TST: o aviso indenizado projeta.
+  const mesesEfetivos = temporal.avos13 ?? (
+    temporal.lapsoComAviso.diasRestantes >= 15
+      ? temporal.lapsoComAviso.mesesRestantes + 1
+      : temporal.lapsoComAviso.mesesRestantes
+  );
+  const detalheAvos = temporal.avos13Detalhe || [];
 
   if (mesesEfetivos === 0) {
-    return { valor: 0, excluida: false, memoria: { motivo: 'Menos de 15 dias no ano — 13º não devido' } };
+    return { valor: 0, excluida: false, memoria: { motivo: 'Nenhum mês civil com 15 dias ou mais — 13º proporcional não devido' } };
   }
 
   const bruto = round2((base / 12) * mesesEfetivos);
@@ -121,14 +125,18 @@ function calcularDecimoTerceiroProporcional(dados, temporal) {
     excluida: false,
     memoria: {
       formula: desconto > 0
-        ? `R$ ${base.toFixed(2)} / 12 × ${mesesEfetivos} meses = R$ ${bruto.toFixed(2)} − R$ ${desconto.toFixed(2)} (pago parcialmente) = R$ ${valor.toFixed(2)}`
-        : `R$ ${base.toFixed(2)} / 12 × ${mesesEfetivos} meses = R$ ${valor.toFixed(2)}`,
-      fundamentoLegal: 'Art. 1º Lei 4.090/62 c/c OJ 82 SDI-1 TST — 13º proporcional com projeção do aviso prévio.',
+        ? `R$ ${base.toFixed(2)} / 12 × ${mesesEfetivos} avos = R$ ${bruto.toFixed(2)} − R$ ${desconto.toFixed(2)} (pago parcialmente) = R$ ${valor.toFixed(2)}`
+        : `R$ ${base.toFixed(2)} / 12 × ${mesesEfetivos} avos = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 1º, §§ 1º e 2º, Lei 4.090/62 c/c OJ 82 e Súmula 305 SDI-1 TST — 1/12 por mês civil com 15 dias ou mais, com projeção do aviso prévio indenizado.',
       base,
-      meses,
-      diasRestantes: dias,
       mesesEfetivos,
-      regraQuinze: dias >= 15 ? 'Aplicada (+1 mês)' : 'Não aplicada',
+      avos: `${mesesEfetivos}/12`,
+      criterioAvos: 'Mês civil com 15 dias ou mais de tempo de serviço = 1/12',
+      ...(detalheAvos.length > 0 && { mesesComputados: detalheAvos }),
+      ...(temporal.avos13AnoSeguinte > 0 && {
+        avosAnoSeguinte: temporal.avos13AnoSeguinte,
+        observacaoAnoSeguinte: 'A projeção do aviso prévio ultrapassa 31/12 — os avos do ano seguinte estão somados nesta parcela.',
+      }),
       ...(desconto > 0 && { descontoPagoParcialmente: desconto }),
     },
   };

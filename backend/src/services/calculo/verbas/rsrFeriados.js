@@ -164,11 +164,11 @@ function calcularReflexosRSRFeriados(resultado, dados, temporal, modalidade) {
   const mediaRSRMensal = meses > 0 ? resultado.valor / meses : 0;
 
   // Férias: proporcional ao período aquisitivo
-  const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
+  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
   const ferias = round2(mediaRSRMensal * (mesesFerias / 12) * (4 / 3));
 
   // 13º: proporcional (OJ 82 SDI1 TST: aviso projeta para 13º)
-  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
+  const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaRSRMensal / 12) * meses13);
 
   // FGTS sobre base salarial (RSR + férias + 13º)

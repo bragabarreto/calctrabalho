@@ -34,3 +34,6 @@ coverage/
 # Temporários
 *.tmp
 *.temp
+
+# Worktrees temporários do Claude Code
+.claude/worktrees/

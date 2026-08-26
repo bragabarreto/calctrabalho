@@ -15,8 +15,12 @@ function calcularFGTS(dados, temporal) {
 
   const dadosBase = dados.mediaSalarial ? { ...dados, ultimoSalario: dados.mediaSalarial } : dados;
   const { valor: base } = calcularBaseRescisoria(dadosBase, { incluirGorjetas: true });
-  const meses = temporal.lapsoComAviso.meses;
+  // Meses efetivamente REMUNERADOS: mês civil integral vale 1, mês parcial vale
+  // dias/30, e o aviso indenizado entra pela sua proporção. Truncar para meses
+  // inteiros (differenceInMonths) descartava os meses de admissão e de dispensa.
+  const meses = temporal.mesesRemunerados ?? temporal.lapsoComAviso.meses;
   const fgtsBruto = round2(base * FGTS_ALIQUOTA * meses);
+  const mesesTexto = Number.isInteger(meses) ? String(meses) : meses.toFixed(2).replace('.', ',');
   const depositado = dados.fgtsIntegralizado ? fgtsBruto : (dados.fgtsDepositado || 0);
   const valor = nonNegative(round2(fgtsBruto - depositado));
 
@@ -27,11 +31,12 @@ function calcularFGTS(dados, temporal) {
     depositado,
     memoria: {
       formula: dados.fgtsIntegralizado
-        ? `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) — FGTS integralizado (depositado = R$ ${depositado.toFixed(2)}) = R$ ${valor.toFixed(2)}`
-        : `R$ ${base.toFixed(2)} × 8% × ${meses} meses = R$ ${fgtsBruto.toFixed(2)} (bruto) − R$ ${depositado.toFixed(2)} (depositado) = R$ ${valor.toFixed(2)}`,
-      fundamentoLegal: 'Art. 18 Lei 8.036/90 — FGTS 8% sobre remuneração + multa rescisória 40%.',
+        ? `R$ ${base.toFixed(2)} × 8% × ${mesesTexto} meses remunerados = R$ ${fgtsBruto.toFixed(2)} (bruto) — FGTS integralizado (depositado = R$ ${depositado.toFixed(2)}) = R$ ${valor.toFixed(2)}`
+        : `R$ ${base.toFixed(2)} × 8% × ${mesesTexto} meses remunerados = R$ ${fgtsBruto.toFixed(2)} (bruto) − R$ ${depositado.toFixed(2)} (depositado) = R$ ${valor.toFixed(2)}`,
+      fundamentoLegal: 'Art. 15 e 18 Lei 8.036/90 — FGTS 8% sobre a remuneração de cada mês + multa rescisória 40%.',
       base,
       meses,
+      criterioMeses: 'Mês civil integral = 1; mês parcial = dias/30; aviso indenizado = dias/30',
       aliquota: '8%',
       ...(dados.fgtsIntegralizado && { integralizado: true }),
     },

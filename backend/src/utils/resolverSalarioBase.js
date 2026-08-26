@@ -1,6 +1,7 @@
 'use strict';
 
 const { valorParaCompetencia, calcularTotalPorHistorico } = require('./historicoSalarial');
+const { toISODate } = require('./datas');
 
 /**
  * Encontra o histórico salarial principal (fixo=true ou o primeiro).
@@ -43,15 +44,18 @@ function resolverSalarioCompetencia(dados, competencia) {
 function calcularComHistoricoMensal(dados, dataInicio, dataFim, fator = 1.0) {
   const hist = encontrarHistoricoPrincipal(dados.historicosSalariais);
 
-  const inicio = typeof dataInicio === 'string' ? dataInicio : dataInicio.toISOString().split('T')[0];
-  const fim = typeof dataFim === 'string' ? dataFim : dataFim.toISOString().split('T')[0];
+  const inicio = typeof dataInicio === 'string' ? dataInicio : toISODate(dataInicio);
+  const fim = typeof dataFim === 'string' ? dataFim : toISODate(dataFim);
 
   if (hist) {
-    const resultado = calcularTotalPorHistorico(hist, inicio, fim, fator);
+    // Rateia por dias os meses de início e fim do período (art. 64 CLT):
+    // um contrato de 04/06 a 21/07 não gera dois meses cheios de adicional.
+    const resultado = calcularTotalPorHistorico(hist, inicio, fim, fator, null, { proporcionalPorDias: true });
     if (resultado.total > 0 || resultado.meses > 0) {
       return {
         total: resultado.total,
         meses: resultado.meses,
+        mesesEquivalentes: resultado.mesesEquivalentes,
         distribuicaoMensal: resultado.memoria,
         usouHistorico: true,
       };
@@ -77,6 +81,7 @@ function calcularComHistoricoMensal(dados, dataInicio, dataFim, fator = 1.0) {
   return {
     total,
     meses,
+    mesesEquivalentes: meses,
     distribuicaoMensal: [],
     usouHistorico: false,
   };

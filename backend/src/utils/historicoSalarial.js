@@ -74,6 +74,14 @@ function valorParaCompetencia(historico, competencia, parcelaId = null) {
 }
 
 /**
+ * Extrai o dia de uma data 'YYYY-MM-DD'. Retorna null se só houver mês/ano.
+ */
+function diaDe(data) {
+  const s = String(data);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? Number(s.substring(8, 10)) : null;
+}
+
+/**
  * Calcula o total de uma parcela mensal ao longo de um período usando o histórico.
  * Itera mês a mês entre dataInicio e dataFim (formato 'YYYY-MM' ou 'YYYY-MM-DD').
  *
@@ -82,29 +90,56 @@ function valorParaCompetencia(historico, competencia, parcelaId = null) {
  * @param {string} dataFim    - fim do período ('YYYY-MM' ou 'YYYY-MM-DD')
  * @param {number} percentual - fator aplicado sobre o valor (padrão 1.0)
  * @param {string|null} parcelaId - ID da parcela específica (opcional)
- * @returns {{ total: number, memoria: Array, meses: number }}
+ * @param {Object} opcoes - { proporcionalPorDias: boolean }
+ *   Quando true, os meses de início e fim do período são rateados por dias/30
+ *   (art. 64 CLT). Sem isso, um contrato de 04/06 a 21/07 era apurado como dois
+ *   meses cheios de salário.
+ * @returns {{ total: number, memoria: Array, meses: number, mesesEquivalentes: number }}
  */
-function calcularTotalPorHistorico(historico, dataInicio, dataFim, percentual = 1.0, parcelaId = null) {
+function calcularTotalPorHistorico(historico, dataInicio, dataFim, percentual = 1.0, parcelaId = null, opcoes = {}) {
   // Normaliza para 'YYYY-MM'
   const compInicio = String(dataInicio).substring(0, 7);
   const compFim = String(dataFim).substring(0, 7);
+
+  const proporcional = opcoes.proporcionalPorDias === true;
+  const diaInicio = proporcional ? (diaDe(dataInicio) ?? 1) : 1;
+  const diaFim = proporcional ? diaDe(dataFim) : null;
 
   const memoria = [];
   let total = 0;
   let comp = compInicio;
   let meses = 0;
+  let mesesEquivalentes = 0;
 
   while (comp <= compFim) {
+    const [y, m] = comp.split('-').map(Number);
+    const diasNoMes = new Date(y, m, 0).getDate();
+
+    // Fração do mês efetivamente coberta pelo período
+    let fator = 1;
+    let diasCobertos = diasNoMes;
+    if (proporcional) {
+      const de = comp === compInicio ? diaInicio : 1;
+      const ate = comp === compFim ? (diaFim ?? diasNoMes) : diasNoMes;
+      diasCobertos = Math.max(0, ate - de + 1);
+      if (diasCobertos < diasNoMes) fator = diasCobertos / 30;
+    }
+
     const valor = valorParaCompetencia(historico, comp, parcelaId);
-    const valorComPercentual = Math.round((valor * percentual) * 100) / 100;
+    const valorComPercentual = Math.round((valor * percentual * fator) * 100) / 100;
     if (valor > 0) {
-      memoria.push({ competencia: comp, valor, valorComPercentual });
+      memoria.push({
+        competencia: comp,
+        valor,
+        valorComPercentual,
+        ...(fator !== 1 && { diasCobertos, diasNoMes, proporcional: true }),
+      });
     }
     total += valorComPercentual;
     meses++;
+    mesesEquivalentes += fator;
 
     // Avança um mês
-    const [y, m] = comp.split('-').map(Number);
     comp = m === 12
       ? `${y + 1}-01`
       : `${y}-${String(m + 1).padStart(2, '0')}`;
@@ -113,6 +148,7 @@ function calcularTotalPorHistorico(historico, dataInicio, dataFim, percentual = 
   return {
     total: Math.round(total * 100) / 100,
     meses,
+    mesesEquivalentes: Math.round(mesesEquivalentes * 10000) / 10000,
     memoria,
   };
 }

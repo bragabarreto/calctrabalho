@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
-import HistoricoSalarial from './HistoricoSalarial.jsx';
+import HistoricoSalarial, {
+  RUBRICA_SALARIO_UNICO_ID,
+  aplicarSalarioReplicado,
+  removerSalarioReplicado,
+} from './HistoricoSalarial.jsx';
 
 const MODALIDADES = [
   { value: 'sem_justa_causa', label: 'Dispensa sem Justa Causa' },
@@ -37,6 +41,41 @@ export default function DadosContrato() {
       setCarregandoSM(false);
     }
   }
+
+  // ---- Replicar o último salário como histórico de todo o contrato ----
+  const salarioNumerico = Number(dados.ultimoSalario);
+  const podeReplicarSalario =
+    Boolean(dados.dataAdmissao) && Boolean(dados.dataDispensa) && salarioNumerico > 0;
+
+  // Mantém a rubrica sincronizada quando o salário ou as datas mudam.
+  useEffect(() => {
+    if (!dados.replicarSalarioHistorico || !podeReplicarSalario) return;
+    setDados({
+      historicosSalariais: aplicarSalarioReplicado(dados.historicosSalariais, {
+        inicio: dados.dataAdmissao.slice(0, 7),
+        fim: dados.dataDispensa.slice(0, 7),
+        valor: salarioNumerico,
+      }),
+    });
+    // Reage apenas às entradas que definem a rubrica — não ao próprio histórico,
+    // para não sobrescrever edições manuais nas demais rubricas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dados.replicarSalarioHistorico, dados.dataAdmissao, dados.dataDispensa, salarioNumerico]);
+
+  function toggleReplicarSalario(marcado) {
+    if (marcado) {
+      setDados({ replicarSalarioHistorico: true });
+      return;
+    }
+    setDados({
+      replicarSalarioHistorico: false,
+      historicosSalariais: removerSalarioReplicado(dados.historicosSalariais),
+    });
+  }
+
+  const rubricaReplicada = (dados.historicosSalariais || [])
+    .find((h) => h.id === 'reclamante')?.parcelas
+    ?.find((p) => p.id === RUBRICA_SALARIO_UNICO_ID);
 
   const periodosAfastamento = dados.periodosAfastamento || [];
 
@@ -170,6 +209,29 @@ export default function DadosContrato() {
             {smInfo && (
               <p className="text-xs text-gray-400 mt-0.5">SM de {smInfo.mes_ano}: R$ {Number(smInfo.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
             )}
+
+            {/* Replicar o último salário como histórico de todo o contrato */}
+            <label
+              className={`flex items-start gap-2 mt-2 ${podeReplicarSalario ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={Boolean(dados.replicarSalarioHistorico)}
+                disabled={!podeReplicarSalario}
+                onChange={(e) => toggleReplicarSalario(e.target.checked)}
+              />
+              <span className="text-xs text-gray-600">
+                Repetir este valor como histórico salarial de todo o contrato
+                <span className="block text-gray-400">
+                  {!podeReplicarSalario
+                    ? 'Informe as datas de admissão e dispensa e o salário para habilitar.'
+                    : dados.replicarSalarioHistorico && rubricaReplicada
+                      ? `Rubrica "Salário Base" do Reclamante: ${dados.dataAdmissao.slice(0, 7).split('-').reverse().join('/')} a ${dados.dataDispensa.slice(0, 7).split('-').reverse().join('/')} — atualiza sozinha se você mudar o salário ou as datas.`
+                      : 'Cria a rubrica "Salário Base" do Reclamante com o mesmo valor em todos os meses, servindo de base para os cálculos mês a mês.'}
+                </span>
+              </span>
+            </label>
           </div>
           <div>
             <label className="campo-label">Média de Comissões Mensais (R$)</label>

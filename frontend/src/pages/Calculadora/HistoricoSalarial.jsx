@@ -527,6 +527,57 @@ function FormParcela({ onAdicionar }) {
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * Salário único replicado por todo o contrato
+ *
+ * Materializa o "último salário" como uma rubrica de salário base do
+ * histórico do Reclamante, com uma única faixa cobrindo admissão→dispensa.
+ * É o que alimenta os cálculos mês a mês (periculosidade, parcelas
+ * percentuais etc.) quando não há evolução salarial a registrar.
+ * ------------------------------------------------------------------ */
+
+export const RUBRICA_SALARIO_UNICO_ID = 'parc_salario_unico';
+export const RUBRICA_SALARIO_NOME = 'Salário Base';
+
+const HISTORICO_RECLAMANTE = { id: 'reclamante', titulo: 'Reclamante', fixo: true, parcelas: [] };
+
+/**
+ * Insere (ou atualiza) a rubrica de salário único no histórico do Reclamante.
+ * @param {Array} historicos
+ * @param {{inicio: string, fim: string, valor: number}} faixa — meses 'YYYY-MM'
+ */
+export function aplicarSalarioReplicado(historicos, { inicio, fim, valor }) {
+  const lista = historicos?.length ? historicos : [HISTORICO_RECLAMANTE];
+  const base = lista.some((h) => h.id === 'reclamante') ? lista : [HISTORICO_RECLAMANTE, ...lista];
+  const rubrica = {
+    id: RUBRICA_SALARIO_UNICO_ID,
+    nome: RUBRICA_SALARIO_NOME,
+    faixas: [{ inicio, fim, valor }],
+  };
+  return base.map((h) =>
+    h.id !== 'reclamante'
+      ? h
+      : {
+          ...h,
+          parcelas: [
+            // Substitui qualquer salário base anterior (manual ou gerado pelo SM)
+            ...(h.parcelas || []).filter(
+              (p) => p.id !== RUBRICA_SALARIO_UNICO_ID && p.nome !== RUBRICA_SALARIO_NOME
+            ),
+            rubrica,
+          ],
+        }
+  );
+}
+
+/** Remove a rubrica gerada automaticamente, preservando as demais. */
+export function removerSalarioReplicado(historicos) {
+  return (historicos || []).map((h) => ({
+    ...h,
+    parcelas: (h.parcelas || []).filter((p) => p.id !== RUBRICA_SALARIO_UNICO_ID),
+  }));
+}
+
 /** Consolida array de {mesAno, valor} em faixas com períodos de mesmo valor */
 function consolidarFaixas(registros) {
   if (!registros.length) return [];
@@ -598,12 +649,17 @@ export default function HistoricoSalarial({ dataAdmissao, dataDispensa }) {
       const reclamante = historicos.find(h => h.id === 'reclamante');
       if (!reclamante) return;
       const parcelasAtualizadas = [
-        ...(reclamante.parcelas || []).filter(p => p.nome !== 'Salário Base'),
+        ...(reclamante.parcelas || []).filter(p => p.nome !== RUBRICA_SALARIO_NOME),
         novaParcela,
       ];
-      setHistoricos(historicos.map(h =>
-        h.id === 'reclamante' ? { ...h, parcelas: parcelasAtualizadas } : h
-      ));
+      // O salário mínimo substitui o salário único replicado — desliga a opção
+      // para que ela não sobrescreva as faixas recém-geradas.
+      setDados({
+        replicarSalarioHistorico: false,
+        historicosSalariais: historicos.map(h =>
+          h.id === 'reclamante' ? { ...h, parcelas: parcelasAtualizadas } : h
+        ),
+      });
       setExpandido('reclamante');
     } catch (e) {
       alert('Erro: ' + e.message);

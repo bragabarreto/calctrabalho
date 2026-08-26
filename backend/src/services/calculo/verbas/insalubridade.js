@@ -2,7 +2,7 @@
 
 const {
   isSameMonth, getDate, getDaysInMonth, startOfMonth, addMonths,
-  differenceInMonths, toDate: _toDate,
+  differenceInMonths, toDate, toISODate,
 } = require('../../../utils/datas');
 const { round2 } = require('../../../utils/formatacao');
 const db = require('../../../config/database');
@@ -21,10 +21,10 @@ async function calcularInsalubridade(dados, temporal) {
   if (!percentual) return { valor: 0, excluida: false, memoria: { motivo: 'Percentual de insalubridade = 0' } };
 
   const inicio = dados.dataInicioInsalubridade
-    ? new Date(dados.dataInicioInsalubridade)
+    ? toDate(dados.dataInicioInsalubridade)
     : temporal.marcoPrescricional;
   const fim = dados.dataFimInsalubridade
-    ? new Date(dados.dataFimInsalubridade)
+    ? toDate(dados.dataFimInsalubridade)
     : temporal.dataDispensa;
 
   // Buscar histórico do salário mínimo
@@ -33,14 +33,14 @@ async function calcularInsalubridade(dados, temporal) {
      WHERE mes_ano >= DATE_TRUNC('month', $1::date)
        AND mes_ano <= DATE_TRUNC('month', $2::date)
      ORDER BY mes_ano ASC`,
-    [inicio.toISOString().split('T')[0], fim.toISOString().split('T')[0]]
+    [toISODate(inicio), toISODate(fim)]
   );
 
   let totalInsalubridade = 0;
   const detalhes = [];
 
   for (const row of result.rows) {
-    const mesAno = new Date(row.mes_ano);
+    const mesAno = toDate(row.mes_ano);
     const salMin = parseFloat(row.valor);
     const adicionalMes = salMin * percentual;
     const diasNoMes = getDaysInMonth(mesAno);
@@ -56,7 +56,7 @@ async function calcularInsalubridade(dados, temporal) {
 
     const valorMes = round2((adicionalMes / diasNoMes) * diasCobertos);
     totalInsalubridade += valorMes;
-    detalhes.push({ mes: mesAno.toISOString().split('T')[0], salMin, adicionalMes, diasCobertos, valorMes });
+    detalhes.push({ mes: toISODate(mesAno), salMin, adicionalMes, diasCobertos, valorMes });
   }
 
   const valor = round2(totalInsalubridade);
@@ -69,7 +69,7 @@ async function calcularInsalubridade(dados, temporal) {
       formula: `Σ (salário mínimo × ${(percentual * 100).toFixed(0)}% × dias/mês) para cada mês`,
       fundamentoLegal: 'Art. 192 CLT c/c Súmula 228 TST — adicional de insalubridade sobre o salário mínimo.',
       percentual,
-      periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0] },
+      periodo: { inicio: toISODate(inicio), fim: toISODate(fim) },
       detalhes,
     },
   };
@@ -89,10 +89,10 @@ function calcularReflexosInsalubridade(insResult, dados, temporal, modalidade) {
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
+  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
   const ferias = round2(mediaIns * (mesesFerias / 12) * (4 / 3));
   // OJ 82 SDI1 TST: aviso projeta para 13º
-  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
+  const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaIns / 12) * meses13);
   const fgts = round2((insResult.valor + ferias + decimoTerceiro) * 0.08);
   const pctMul = { sem_justa_causa: 0.40, rescisao_indireta: 0.40, culpa_reciproca: 0.20 }[modalidade] || 0;

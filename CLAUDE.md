@@ -109,6 +109,11 @@ calctrabalho/
 - **Divisor de jornada** padrão: 220h mensais (verificar CCT — Súmula 431 TST para bancários)
 - **Prescrição:** marco de 5 anos (EC 45/2004, Súmula 308 TST)
 - **Reflexos de horas extras** incidem em RSR, férias + 1/3, 13º e FGTS
+- **Avos de 13º:** contagem por **mês civil** do ano da rescisão — cada mês com 15 dias ou mais vale 1/12 (Lei 4.090/62, art. 1º §§ 1º e 2º). Não se conta a partir do aniversário do contrato
+- **Avos de férias proporcionais:** meses do período aquisitivo (a partir do aniversário do contrato); fração final ≥ 15 dias vale mês inteiro (art. 146 § único CLT)
+- **Aviso indenizado projeta** o tempo de serviço para 13º, férias e FGTS (Súmula 305 e OJ 82 SDI-1 TST)
+- **Meses de FGTS:** mês civil integral = 1; mês parcial = dias/30; aviso indenizado = dias/30. Nunca truncar para meses inteiros
+- **Datas:** sempre converter com `toDate()` de `utils/datas.js` (ancora ao meio-dia local). `new Date('YYYY-MM-DD')` e `Joi.date().iso()` sem `.raw()` criam a data em meia-noite UTC, o que retrocede um dia em fuso negativo
 - **Multa art. 467 CLT:** 50% sobre verbas incontroversas não pagas na rescisão
 - **Multa art. 477 CLT:** 1 salário por atraso nas verbas rescisórias
 
@@ -150,6 +155,7 @@ Suite Jest em `backend/__tests__/` com os seguintes módulos testados:
 
 | Arquivo de teste | Módulo testado | O que valida |
 |---|---|---|
+| `datas.test.js` | `src/utils/datas.js` | Datas imunes a fuso horário, avos de 13o por mês civil (Lei 4.090/62), avos de férias (art. 146 § único CLT), meses remunerados do FGTS |
 | `baseRescisoria.test.js` | `src/utils/baseRescisoria.js` | Base rescisória (OJ 181), remuneração mensal (art. 457 §1o CLT), inclusão/exclusão de gorjetas |
 | `naturezaJuridica.test.js` | `src/utils/naturezaJuridica.js` | Guard salarial/indenizatória, validação de coerência parcela vs. reflexos |
 | `periculosidade.test.js` | `src/services/calculo/verbas/periculosidade.js` | Cálculo proporcional de 30%, reflexos com OJ 82 SDI-1 (13o usa lapsoComAviso) |

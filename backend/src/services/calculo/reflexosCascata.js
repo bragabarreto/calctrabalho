@@ -29,8 +29,8 @@ function aplicarCascataOJ394(verbas, reflexos, temporal, dados, modalidade) {
   ];
 
   const meses = temporal.lapsoSemAviso?.meses || 1;
-  const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
-  const meses13 = (temporal.lapsoComAviso?.mesesRestantes || 0) + ((temporal.lapsoComAviso?.diasRestantes || 0) >= 15 ? 1 : 0);
+  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
+  const meses13 = temporal.avos13 ?? ((temporal.lapsoComAviso?.mesesRestantes || 0) + ((temporal.lapsoComAviso?.diasRestantes || 0) >= 15 ? 1 : 0));
 
   for (const chave of chavesComRSR) {
     const ref = reflexos[chave];

@@ -107,10 +107,10 @@ function calcularReflexosIntervaloDigitacao(idResult, dados, temporal, modalidad
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
+  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
   const ferias = round2(mediaMensal * (mesesFerias / 12) * (4 / 3));
 
-  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
+  const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaMensal / 12) * meses13);
 
   const fgts = round2((idResult.valor + rsr + ferias + decimoTerceiro) * 0.08);

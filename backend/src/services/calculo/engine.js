@@ -52,7 +52,7 @@ async function calcular(dados, modalidade) {
 
   // Helper: get last N months before dataDispensa (excluding dispensa month)
   function getUltimosMeses(n) {
-    const d = new Date(dados.dataDispensa);
+    const d = toDate(dados.dataDispensa);
     const resultado = [];
     for (let i = 1; i <= n; i++) {
       const m = new Date(d.getFullYear(), d.getMonth() - i, 1);
@@ -223,7 +223,10 @@ async function calcular(dados, modalidade) {
     const periodoInicio = parcela.periodoInicio || dados.dataAdmissao;
     const periodoFim = parcela.periodoFim || dados.dataDispensa;
     const percentual = parcela.percentualBase ? (parcela.percentualBase / 100) : 1;
-    const { total, meses, memoria } = calcularTotalPorHistorico(historico, periodoInicio, periodoFim, percentual, parcelaId);
+    // Rateio por dias nos meses de início/fim do período (art. 64 CLT)
+    const { total, meses, memoria } = calcularTotalPorHistorico(
+      historico, periodoInicio, periodoFim, percentual, parcelaId, { proporcionalPorDias: true }
+    );
     verbas.parcelasHistorico.push({
       codigo: `hist_parcela_${parcela.id || parcela.nome}`,
       nome: parcela.nome,

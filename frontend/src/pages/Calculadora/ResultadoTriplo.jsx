@@ -330,6 +330,22 @@ export default function ResultadoTriplo() {
                         <p className="font-mono text-xs">{resultadoAtivo.temporal.lapsoComAviso?.meses} meses</p>
                       </div>
                     )}
+                    {resultadoAtivo.temporal?.mesesRemunerados != null && (
+                      <div>
+                        <p className="campo-label">Meses remunerados (FGTS)</p>
+                        <p className="font-mono text-xs">
+                          {Number(resultadoAtivo.temporal.mesesRemunerados).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                    )}
+                    {resultadoAtivo.temporal?.avos13 != null && (
+                      <div>
+                        <p className="campo-label">Avos 13º / férias prop.</p>
+                        <p className="font-mono text-xs">
+                          {resultadoAtivo.temporal.avos13}/12 · {resultadoAtivo.temporal.avosFerias}/12
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

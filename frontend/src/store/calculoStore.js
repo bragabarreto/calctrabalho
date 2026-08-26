@@ -11,6 +11,10 @@ const dadosIniciais = {
 
   // Remuneração
   ultimoSalario: '',
+  // Quando true, o último salário é replicado como rubrica "Salário Base"
+  // no histórico do Reclamante, cobrindo todo o contrato (campo só do frontend —
+  // o backend recebe o resultado já materializado em historicosSalariais).
+  replicarSalarioHistorico: false,
   mediaSalarial: '',
   comissoes: '',
   gorjetas: '',

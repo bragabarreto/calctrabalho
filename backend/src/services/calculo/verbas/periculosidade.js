@@ -1,7 +1,7 @@
 'use strict';
 
 const { round2 } = require('../../../utils/formatacao');
-const { differenceInMonths, isSameMonth, getDaysInMonth, getDate } = require('../../../utils/datas');
+const { differenceInMonths, toDate, toISODate } = require('../../../utils/datas');
 const { calcularComHistoricoMensal } = require('../../../utils/resolverSalarioBase');
 
 /**
@@ -19,10 +19,10 @@ function calcularPericulosidade(dados, temporal) {
   if (!percentual) return { valor: 0, excluida: false, memoria: { motivo: 'Periculosidade não informada' } };
 
   const inicio = dados.dataInicioPericulosidade
-    ? new Date(dados.dataInicioPericulosidade)
+    ? toDate(dados.dataInicioPericulosidade)
     : temporal.marcoPrescricional;
   const fim = dados.dataFimPericulosidade
-    ? new Date(dados.dataFimPericulosidade)
+    ? toDate(dados.dataFimPericulosidade)
     : temporal.dataDispensa;
 
   // Tenta cálculo mês a mês via histórico salarial
@@ -38,7 +38,7 @@ function calcularPericulosidade(dados, temporal) {
         formula: `Σ salário(mês) × ${(percentual * 100).toFixed(0)}% ao longo de ${resultado.meses} meses = R$ ${valor.toFixed(2)}`,
         fundamentoLegal: 'Art. 193 CLT — adicional de periculosidade de 30% sobre o salário-base.',
         componentes: { percentualPericulosidade: `${(percentual * 100).toFixed(0)}%` },
-        periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0], meses: resultado.meses },
+        periodo: { inicio: toISODate(inicio), fim: toISODate(fim), meses: resultado.meses },
         percentual,
         mesesCompletos: resultado.meses,
         usouHistorico: true,
@@ -60,7 +60,7 @@ function calcularPericulosidade(dados, temporal) {
       formula: `R$ ${salario.toFixed(2)} × ${(percentual * 100).toFixed(0)}% × ${mesesCompletos} meses = R$ ${valor.toFixed(2)}`,
       fundamentoLegal: 'Art. 193 CLT — adicional de periculosidade de 30% sobre o salário-base.',
       componentes: { salarioBase: round2(salario), percentualPericulosidade: `${(percentual * 100).toFixed(0)}%` },
-      periodo: { inicio: inicio.toISOString().split('T')[0], fim: fim.toISOString().split('T')[0], meses: mesesCompletos },
+      periodo: { inicio: toISODate(inicio), fim: toISODate(fim), meses: mesesCompletos },
       percentual,
       mesesCompletos,
     },
@@ -81,10 +81,10 @@ function calcularReflexosPericulosidade(perResult, dados, temporal, modalidade) 
     if (modalidade === 'culpa_reciproca') avisoPrevio = round2(avisoPrevio / 2);
   }
 
-  const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
+  const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
   const ferias = round2(mediaPer * (mesesFerias / 12) * (4 / 3));
   // Fix: OJ 82 SDI-1 TST — aviso prévio indenizado projeta para 13º proporcional (lapsoComAviso)
-  const meses13 = temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
+  const meses13 = temporal.avos13 ?? (temporal.lapsoComAviso.mesesRestantes + (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
   const decimoTerceiro = round2((mediaPer / 12) * meses13);
   const fgts = round2((perResult.valor + ferias + decimoTerceiro) * 0.08);
   const pctMul = { sem_justa_causa: 0.40, rescisao_indireta: 0.40, culpa_reciproca: 0.20 }[modalidade] || 0;

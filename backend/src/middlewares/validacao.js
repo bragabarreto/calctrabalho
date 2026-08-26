@@ -4,10 +4,10 @@ const Joi = require('joi');
 
 const schemaDadosContrato = Joi.object({
   // Datas
-  dataAdmissao: Joi.date().iso().required().messages({ 'any.required': 'Data de admissão é obrigatória' }),
-  dataDispensa: Joi.date().iso().min(Joi.ref('dataAdmissao')).required(),
-  dataAjuizamento: Joi.date().iso().required(),
-  dataPgtoRescisorio: Joi.date().iso().allow(null, '').optional(),
+  dataAdmissao: Joi.date().iso().raw().required().messages({ 'any.required': 'Data de admissão é obrigatória' }),
+  dataDispensa: Joi.date().iso().raw().min(Joi.ref('dataAdmissao')).required(),
+  dataAjuizamento: Joi.date().iso().raw().required(),
+  dataPgtoRescisorio: Joi.date().iso().raw().allow(null, '').optional(),
   avisoPrevioTrabalhado: Joi.boolean().default(false),
 
   // Remuneração
@@ -34,11 +34,11 @@ const schemaDadosContrato = Joi.object({
 
   // Adicionais
   adicionalInsalubridadePercentual: Joi.number().min(0).max(1).default(0),
-  dataInicioInsalubridade: Joi.date().iso().allow(null, '').optional(),
-  dataFimInsalubridade: Joi.date().iso().allow(null, '').optional(),
+  dataInicioInsalubridade: Joi.date().iso().raw().allow(null, '').optional(),
+  dataFimInsalubridade: Joi.date().iso().raw().allow(null, '').optional(),
   adicionalPericulosidadePercentual: Joi.number().min(0).max(1).default(0),
-  dataInicioPericulosidade: Joi.date().iso().allow(null, '').optional(),
-  dataFimPericulosidade: Joi.date().iso().allow(null, '').optional(),
+  dataInicioPericulosidade: Joi.date().iso().raw().allow(null, '').optional(),
+  dataFimPericulosidade: Joi.date().iso().raw().allow(null, '').optional(),
 
   valorDanoMoral: Joi.number().min(0).default(0),
 
@@ -56,8 +56,8 @@ const schemaDadosContrato = Joi.object({
 
   // Afastamentos (array de períodos)
   periodosAfastamento: Joi.array().items(Joi.object({
-    inicio: Joi.date().iso().required(),
-    fim: Joi.date().iso().required(),
+    inicio: Joi.date().iso().raw().required(),
+    fim: Joi.date().iso().raw().required(),
   })).default([]),
 
   // Saldo de salário pago
@@ -83,8 +83,8 @@ const schemaDadosContrato = Joi.object({
     nome: Joi.string().required(),
     natureza: Joi.string().valid('salarial', 'indenizatoria').required(),
     periodoTipo: Joi.string().valid('contrato', 'especifico').default('contrato'),
-    periodoInicio: Joi.date().iso().allow(null, '').optional(),
-    periodoFim: Joi.date().iso().allow(null, '').optional(),
+    periodoInicio: Joi.date().iso().raw().allow(null, '').optional(),
+    periodoFim: Joi.date().iso().raw().allow(null, '').optional(),
     frequencia: Joi.string().valid('horaria', 'diaria_6d', 'diaria_5d', 'mensal', 'semestral', 'anual', 'calculada', 'unica').required(),
     tipoValor: Joi.string().valid('fixo', 'percentual_salario', 'percentual_sm', 'percentual_historico').default('fixo'),
     valorBase: Joi.number().min(0).allow(null).optional(),
@@ -138,8 +138,8 @@ const schemaDadosContrato = Joi.object({
   // Jornada multi-período
   jornadaPeriodos: Joi.array().items(Joi.object({
     id: Joi.string().required(),
-    dataInicio: Joi.date().iso().allow(null, '').optional(),
-    dataFim: Joi.date().iso().allow(null, '').optional(),
+    dataInicio: Joi.date().iso().raw().allow(null, '').optional(),
+    dataFim: Joi.date().iso().raw().allow(null, '').optional(),
     padraoApuracao: Joi.string().valid('diario', 'semanal', 'misto', '12x36').default('diario'),
     divisorJornada: Joi.number().positive().default(220),
     adicionalHoraExtra: Joi.number().min(0).default(0.5),

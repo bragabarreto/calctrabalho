@@ -360,7 +360,7 @@ function calcularReflexosParcela(valorTotal, nMeses, parcela, dados, temporal, m
 
   // Férias + 1/3
   if (reflexosEm.includes('ferias')) {
-    const mesesFerias = temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0);
+    const mesesFerias = temporal.avosFerias ?? (temporal.mesesUltimoAno + (temporal.diasUltimoAno >= 15 ? 1 : 0));
     const ferias = round2(mediaValor * (mesesFerias / 12) * (4 / 3));
     r.ferias = {
       valor: ferias,
@@ -373,8 +373,9 @@ function calcularReflexosParcela(valorTotal, nMeses, parcela, dados, temporal, m
   // 13º Salário — OJ 82 SDI1 TST: aviso prévio projeta para 13º
   if (reflexosEm.includes('decimo_terceiro')) {
     const meses13 =
-      temporal.lapsoComAviso.mesesRestantes +
-      (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0);
+      temporal.avos13 ??
+      (temporal.lapsoComAviso.mesesRestantes +
+        (temporal.lapsoComAviso.diasRestantes >= 15 ? 1 : 0));
     const dt = round2((mediaValor / 12) * meses13);
     r.decimoTerceiro = {
       valor: dt,

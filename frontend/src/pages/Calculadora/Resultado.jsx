@@ -236,6 +236,18 @@ export default function Resultado() {
                   <p className="font-mono">{t.lapsoSemAviso?.meses} meses</p></div>
                 <div><p className="campo-label">Término c/ aviso</p>
                   <p className="font-mono">{t.dataEncerramentoComAviso ? new Date(t.dataEncerramentoComAviso).toLocaleDateString('pt-BR') : '—'}</p></div>
+                {t.mesesRemunerados != null && (
+                  <div><p className="campo-label">Meses remunerados (FGTS)</p>
+                    <p className="font-mono">{Number(t.mesesRemunerados).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</p></div>
+                )}
+                {t.avos13 != null && (
+                  <div><p className="campo-label">Avos de 13º</p>
+                    <p className="font-mono">{t.avos13}/12</p></div>
+                )}
+                {t.avosFerias != null && (
+                  <div><p className="campo-label">Avos de férias prop.</p>
+                    <p className="font-mono">{t.avosFerias}/12</p></div>
+                )}
               </>}
               {(dados.comissoes > 0 || dados.gorjetas > 0) && (
                 <div className="col-span-2 sm:col-span-4"><p className="campo-label">Composição Salarial</p>

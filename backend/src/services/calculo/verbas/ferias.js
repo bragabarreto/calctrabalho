@@ -2,6 +2,7 @@
 
 const { round2, nonNegative } = require('../../../utils/formatacao');
 const { calcularBaseRescisoria } = require('../../../utils/baseRescisoria');
+const { formatarData } = require('../../../utils/datas');
 
 /**
  * Filtra períodos integrais de férias a partir do array periodosFerias.
@@ -196,9 +197,10 @@ function calcularFeriasProporcionais(dados, temporal) {
   }
 
   const { valor: base } = calcularBaseRescisoria(dados, { incluirGorjetas: true });
-  const meses = temporal.mesesUltimoAno;
-  const diasRestantes = temporal.diasUltimoAno;
-  const mesesEfetivos = diasRestantes >= 15 ? meses + 1 : meses;
+  const meses = temporal.avosFeriasDetalhe?.mesesCompletos ?? temporal.mesesUltimoAno;
+  const diasRestantes = temporal.avosFeriasDetalhe?.diasFracao ?? temporal.diasUltimoAno;
+  // Art. 146, § único, CLT — fração igual ou superior a 15 dias conta mês inteiro.
+  const mesesEfetivos = temporal.avosFerias ?? (diasRestantes >= 15 ? meses + 1 : meses);
 
   if (mesesEfetivos === 0) {
     return { valor: 0, excluida: false, memoria: { motivo: 'Período aquisitivo < 15 dias — férias não devidas' } };
@@ -219,8 +221,12 @@ function calcularFeriasProporcionais(dados, temporal) {
       mesesTrabalhados: meses,
       diasRestantes,
       mesesEfetivos,
+      avos: `${mesesEfetivos}/12`,
+      periodoAquisitivo: temporal.ultimoAniversario && temporal.dataEncerramentoComAviso
+        ? `${formatarData(temporal.ultimoAniversario)} a ${formatarData(temporal.dataEncerramentoComAviso)}`
+        : undefined,
       regraQuinze: diasRestantes >= 15 ? 'Aplicada (+1 mês)' : 'Não aplicada',
-      fundamentoLegal: 'Art. 146 parágrafo único CLT — férias proporcionais na rescisão.',
+      fundamentoLegal: 'Art. 146 parágrafo único CLT — férias proporcionais na rescisão; fração igual ou superior a 15 dias conta como mês inteiro.',
       ...(desconto > 0 && { descontoPagoParcialmente: desconto }),
     },
   };
