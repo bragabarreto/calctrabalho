@@ -3,7 +3,7 @@ import { Settings, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
 
 // Templates que requerem configuração de jornada (parâmetros tratados na aba Jornada)
-const PARCELAS_JORNADA_IDS = ['tpl_horas_extras', 'tpl_noturno', 'tpl_intervalo'];
+const PARCELAS_JORNADA_IDS = ['tpl_horas_extras', 'tpl_noturno', 'tpl_intervalo', 'tpl_feriados'];
 
 // Templates de insalubridade e periculosidade que populam campos especiais do store
 const TEMPLATE_INSALUBRIDADE = 'tpl_insalubridade';

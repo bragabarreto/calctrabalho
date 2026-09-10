@@ -32,6 +32,23 @@ const schemaDadosContrato = Joi.object({
   adicionalHoraNoturna: Joi.number().min(0).default(0.2),
   qtdeHorasNoturnasMensais: Joi.number().min(0).default(0),
 
+  // Jornada — verbas configuradas na etapa "Horário de Trabalho"
+  adicionalNoturnoOJ97: Joi.boolean().default(false),
+  intrajornadaModo: Joi.string().valid('automatico', 'manual', 'desabilitado').default('automatico'),
+  intervaloInterjornada: Joi.boolean().default(false),
+  mediaInterjornadaMinsMensais: Joi.number().min(0).default(0),
+  rsrNaoConcedido: Joi.boolean().default(false),
+  mediaRsrDiasMensais: Joi.number().min(0).default(0),
+  feriadosLaborados: Joi.boolean().default(false),
+  mediaFeriadosDiasMensais: Joi.number().min(0).default(0),
+  feriadosAdicionais: Joi.array().items(Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+  intervaloTermico: Joi.boolean().default(false),
+  tipoAmbienteTermico: Joi.string().valid('calor', 'frio').default('calor'),
+  minIntervaloTermicoConcedido: Joi.number().min(0).default(0),
+  intervaloDigitacao: Joi.boolean().default(false),
+  regimeDigitacao: Joi.string().valid('90min', '50min').default('90min'),
+  horasIntervaloDigitacaoConcedido: Joi.number().min(0).default(0),
+
   // Adicionais
   adicionalInsalubridadePercentual: Joi.number().min(0).max(1).default(0),
   dataInicioInsalubridade: Joi.date().iso().raw().allow(null, '').optional(),

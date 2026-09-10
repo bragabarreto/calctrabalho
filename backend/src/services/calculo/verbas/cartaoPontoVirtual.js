@@ -377,10 +377,15 @@ function calcularPeriodoJornada(periodo, dataAdm, dataDisp, feriadosAdicionais =
       });
     } else if (padraoApuracao === '12x36') {
       const heTurno = periodo.mediaHorasExtrasPorTurno || 0;
+      // AN por turno (mediaHorasNoturnasDiarias = média por dia trabalhado/turno) × ~15 turnos/mês
+      const hnTurno = periodo.mediaHorasNoturnasDiarias || 0;
+      const turnosMes = 15;
       meses.forEach(mes => {
-        const he = +(heTurno * 15).toFixed(2);
+        const he = +(heTurno * turnosMes).toFixed(2);
+        const hn = +(hnTurno * turnosMes).toFixed(2);
         heTotal += he;
-        distArray.push({ mes, horasExtras: he, horasNoturnas: 0 });
+        hnTotal += hn;
+        distArray.push({ mes, horasExtras: he, horasNoturnas: hn });
       });
     }
 

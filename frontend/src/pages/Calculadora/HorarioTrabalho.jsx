@@ -1239,8 +1239,10 @@ export default function HorarioTrabalho() {
       })();
       const anDia = (() => {
         const raw = toH(p.mediaHorasNoturnasDiarias || 0, p.mediaANUnidade);
-        if ((p.mediaANPeriodo || 'diario') === 'semanal') return raw / 5;
-        if ((p.mediaANPeriodo || 'diario') === 'mensal') return raw / 21.75;
+        // 12x36: ~15 turnos/mês (~3.5/semana); demais padrões: 21.75 dias úteis/mês (5/semana)
+        const is12x36 = p.padraoApuracao === '12x36';
+        if ((p.mediaANPeriodo || 'diario') === 'semanal') return raw / (is12x36 ? 3.5 : 5);
+        if ((p.mediaANPeriodo || 'diario') === 'mensal') return raw / (is12x36 ? 15 : 21.75);
         return raw;
       })();
       return { ...p, mediaHorasExtrasDiarias: +heDia.toFixed(4), mediaHorasExtrasSemanais: +heSem.toFixed(4), mediaHorasNoturnasDiarias: +anDia.toFixed(4) };

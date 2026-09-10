@@ -36,6 +36,28 @@ export function prepararDadosContrato(dados) {
     adicionalHoraNoturna: toNum(dados.adicionalHoraNoturna, 0.2),
     qtdeHorasNoturnasMensais: toNum(dados.qtdeHorasNoturnasMensais, 0),
 
+    // Jornada — verbas configuradas na etapa "Horário de Trabalho" (HorarioTrabalho.jsx)
+    // Sem estes campos o backend trata as verbas como "não habilitadas" e elas somem do resumo.
+    adicionalNoturnoOJ97: Boolean(dados.adicionalNoturnoOJ97),
+    intrajornadaModo: dados.intrajornadaModo || 'automatico',
+    intervaloInterjornada: Boolean(dados.intervaloInterjornada),
+    mediaInterjornadaMinsMensais: toNum(dados.mediaInterjornadaMinsMensais, 0),
+    rsrNaoConcedido: Boolean(dados.rsrNaoConcedido),
+    mediaRsrDiasMensais: (() => {
+      if (dados.mediaRsrDiasMensais != null && dados.mediaRsrDiasMensais !== '') return Number(dados.mediaRsrDiasMensais);
+      const dias = toNum(dados.mediaRsrDias, 0);
+      return (dados.mediaRsrPeriodo || 'semanal') === 'semanal' ? dias * 4.33 : dias;
+    })(),
+    feriadosLaborados: Boolean(dados.feriadosLaborados),
+    mediaFeriadosDiasMensais: toNum(dados.mediaFeriadosDiasMensais ?? dados.mediaFeriadosDias, 0),
+    feriadosAdicionais: (dados.feriadosAdicionais || []).filter(Boolean),
+    intervaloTermico: Boolean(dados.intervaloTermico),
+    tipoAmbienteTermico: dados.tipoAmbienteTermico || 'calor',
+    minIntervaloTermicoConcedido: toNum(dados.minIntervaloTermicoConcedido, 0),
+    intervaloDigitacao: Boolean(dados.intervaloDigitacao),
+    regimeDigitacao: dados.regimeDigitacao || '90min',
+    horasIntervaloDigitacaoConcedido: toNum(dados.horasIntervaloDigitacaoConcedido, 0),
+
     // Adicionais
     adicionalInsalubridadePercentual: toNum(dados.adicionalInsalubridadePercentual, 0),
     dataInicioInsalubridade: toDate(dados.dataInicioInsalubridade),

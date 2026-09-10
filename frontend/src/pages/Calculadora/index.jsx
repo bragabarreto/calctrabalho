@@ -28,10 +28,10 @@ import ResultadoTriplo from './ResultadoTriplo.jsx';
  *   verbas_e_parcelas:   1→2→3→5→11→[6]→7→8→9
  *   apenas_parcelas:     1→2→5→11→[6]→7→8→9
  *
- * [6] = somente se alguma parcela requer jornada (tpl_horas_extras, tpl_noturno, tpl_intervalo)
+ * [6] = somente se alguma parcela requer jornada (tpl_horas_extras, tpl_noturno, tpl_intervalo, tpl_feriados)
  */
 
-const PARCELAS_JORNADA_IDS = ['tpl_horas_extras', 'tpl_noturno', 'tpl_intervalo'];
+const PARCELAS_JORNADA_IDS = ['tpl_horas_extras', 'tpl_noturno', 'tpl_intervalo', 'tpl_feriados'];
 
 function getStepsPorFluxo(tipoFluxo, precisaJornada) {
   const jornadaStep = { num: 6, label: 'Jornada' };
