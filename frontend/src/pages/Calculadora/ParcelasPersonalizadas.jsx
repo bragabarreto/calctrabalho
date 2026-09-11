@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Plus, Trash2, Edit2, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCalculoStore } from '../../store/calculoStore.js';
 import { useParcelas, useCriarParcela, useAtualizarParcela, useExcluirParcela } from '../../hooks/useParcelas.js';
@@ -26,6 +26,9 @@ export default function ParcelasPersonalizadas() {
   function onBack() { setStep(tipoFluxo === 'apenas_parcelas' ? 2 : 3); }
 
   const [parcelasDoCalculo, setParcelasDoCalculo] = useState(dados.parcelasPersonalizadas || []);
+  // Espelho síncrono da lista: evita que atualizações em sequência rápida (ex.: dois "Usar"
+  // no mesmo tick) partam de uma cópia antiga do estado e sobrescrevam uma à outra.
+  const parcelasRef = useRef(parcelasDoCalculo);
 
   /**
    * editor: null
@@ -66,7 +69,10 @@ export default function ParcelasPersonalizadas() {
     parcelasSalvas.map(p => p.template_id).filter(Boolean)
   );
 
-  function atualizarStore(lista) {
+  /** Aceita a lista pronta ou uma função (listaAtual) => novaLista. */
+  function atualizarStore(listaOuFn) {
+    const lista = typeof listaOuFn === 'function' ? listaOuFn(parcelasRef.current) : listaOuFn;
+    parcelasRef.current = lista;
     setParcelasDoCalculo(lista);
     setDados({ parcelasPersonalizadas: lista });
   }
@@ -88,11 +94,11 @@ export default function ParcelasPersonalizadas() {
     // Remove campos exclusivamente de UI
     // eslint-disable-next-line no-unused-vars
     const { opcoesPercentual, campoPercentual, rotulosPercentual, grupo, ...parcelaSemUI } = nova;
-    atualizarStore([...parcelasDoCalculo, parcelaSemUI]);
+    atualizarStore(prev => [...prev, parcelaSemUI]);
   }
 
   function removerDoCalculo(idx) {
-    atualizarStore(parcelasDoCalculo.filter((_, i) => i !== idx));
+    atualizarStore(prev => prev.filter((_, i) => i !== idx));
   }
 
   function toggleGrupo(grupoId) {
@@ -132,17 +138,13 @@ export default function ParcelasPersonalizadas() {
         // Editar parcela salva: persiste no BD (PUT) + atualiza no cálculo se presente
         await atualizarNaBiblioteca({ id: editorCtx.parcela.id, ...form });
         const idOrig = editorCtx.parcela.id;
-        const jaNoCalculo = parcelasDoCalculo.findIndex(p => p.id === idOrig);
-        if (jaNoCalculo >= 0) {
-          atualizarStore(parcelasDoCalculo.map((p, i) =>
-            i === jaNoCalculo ? { ...p, ...form } : p
-          ));
-        }
+        // Lê a lista atual via updater: o estado pode ter mudado durante o await acima
+        atualizarStore(prev => prev.map(p => (p.id === idOrig ? { ...p, ...form } : p)));
 
       } else if (editorCtx.mode === 'editar_local') {
         // Editar item já presente no cálculo — apenas local
         const { idx } = editorCtx;
-        atualizarStore(parcelasDoCalculo.map((p, i) => i === idx ? { ...p, ...form } : p));
+        atualizarStore(prev => prev.map((p, i) => i === idx ? { ...p, ...form } : p));
 
       } else {
         // Nova parcela: salva na biblioteca (POST) + adiciona ao cálculo
@@ -425,7 +427,7 @@ export default function ParcelasPersonalizadas() {
                         value={p.historicoIdCalculo || 'reclamante'}
                         onChange={(e) => {
                           const val = e.target.value;
-                          atualizarStore(parcelasDoCalculo.map((pc, i) =>
+                          atualizarStore(prev => prev.map((pc, i) =>
                             i === idx
                               ? { ...pc, historicoIdCalculo: val === 'reclamante' ? undefined : val }
                               : pc
