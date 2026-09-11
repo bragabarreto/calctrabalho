@@ -8,6 +8,8 @@ const fmt = (v) =>
 
 const pct = (v) => `${((v || 0) * 100).toFixed(1)}%`;
 
+const round2 = (v) => Math.round((v || 0) * 100) / 100;
+
 const PARCELAS_PREDEFINIDAS = [
   'Aviso prévio indenizado',
   'Férias + 1/3 constitucional',
@@ -58,14 +60,16 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
 
   const valorAcordoNum = evalExpr(valorAcordo) || 0;
 
-  // Soma das parcelas indenizatórias discriminadas
+  // Soma das parcelas indenizatórias discriminadas (round2 evita resíduo binário)
   const totalIndenizatorio = useMemo(
-    () => parcelas.reduce((acc, p) => acc + evalExpr(p.valorRaw), 0),
+    () => round2(parcelas.reduce((acc, p) => acc + evalExpr(p.valorRaw), 0)),
     [parcelas]
   );
 
   // Saldo salarial remanescente (pode ser negativo — usuário precisa ajustar)
-  const saldoSalarial = valorAcordoNum - totalIndenizatorio;
+  const saldoSalarial = round2(valorAcordoNum - totalIndenizatorio);
+  // Só há excesso real quando ultrapassa em pelo menos 1 centavo
+  const excedeAcordo = saldoSalarial <= -0.01;
 
   // Quando não há discriminação manual, usa percentual salarial do cálculo original
   // Protege INSS/IR: base tributável não pode ser negativa
@@ -235,7 +239,7 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
                             className="campo-input w-full text-right font-mono text-sm py-1"
                             placeholder="0,00 ou 1000+500"
                           />
-                          {saldoSalarial > 0 && !evalExpr(p.valorRaw) && (
+                          {saldoSalarial >= 0.01 && !evalExpr(p.valorRaw) && (
                             <button
                               type="button"
                               onClick={() => updateParcela(p.id, 'valorRaw', saldoSalarial.toFixed(2))}
@@ -261,7 +265,7 @@ export default function AcordoSimulador({ percentualSalarial, verbas, lapsoMeses
                     <tr className="border-t-2 border-blue-200 bg-blue-50">
                       <td className="px-3 py-2 font-semibold text-blue-800">Saldo Salarial Remanescente</td>
                       <td className="px-3 py-2 text-right font-mono font-bold text-blue-800">
-                        {saldoSalarial < 0
+                        {excedeAcordo
                           ? <span className="text-red-600">{fmt(saldoSalarial)} (parcelas excedem o acordo!)</span>
                           : fmt(saldoSalarial)}
                       </td>

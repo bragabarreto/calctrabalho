@@ -315,20 +315,22 @@ export default function SimuladorAcordoPage() {
     return p.seletor === NOME_PERSONALIZADA ? p.nomeCustom : p.seletor;
   }
 
-  // Total de todas as parcelas listadas
+  // Total de todas as parcelas listadas (round2 evita resíduo binário na soma)
   const totalParcelas = useMemo(
-    () => parcelas.reduce((sum, p) => sum + evalExpr(p.valorRaw), 0),
+    () => round2(parcelas.reduce((sum, p) => sum + evalExpr(p.valorRaw), 0)),
     [parcelas]
   );
   // Total das parcelas sem nenhuma incidência (puramente indenizatórias)
   const totalIndenizatorio = useMemo(
-    () => parcelas
+    () => round2(parcelas
       .filter(p => !p.incideInss && !p.incideIr && !p.incideFgts)
-      .reduce((sum, p) => sum + evalExpr(p.valorRaw), 0),
+      .reduce((sum, p) => sum + evalExpr(p.valorRaw), 0)),
     [parcelas]
   );
   const valorAcordoNum = evalExpr(valorAcordo) || 0;
-  const restante = valorAcordoNum - totalParcelas;
+  const restante = round2(valorAcordoNum - totalParcelas);
+  // Só há excesso real quando ultrapassa em pelo menos 1 centavo
+  const excedeAcordo = round2(totalIndenizatorio - valorAcordoNum) >= 0.01;
 
   async function calcular() {
     if (!valorAcordoNum) { setErro('Informe o valor do acordo.'); return; }
@@ -590,7 +592,7 @@ export default function SimuladorAcordoPage() {
                         className="campo-input w-full text-right font-mono text-sm"
                         placeholder="0,00"
                       />
-                      {valorAcordoNum > 0 && restante > 0 && !evalExpr(p.valorRaw) && (
+                      {valorAcordoNum > 0 && restante >= 0.01 && !evalExpr(p.valorRaw) && (
                         <button
                           type="button"
                           onClick={() => updateParcela(idx, 'valorRaw', restante.toFixed(2))}
@@ -662,12 +664,12 @@ export default function SimuladorAcordoPage() {
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
                     className={`h-2 rounded-full transition-all ${
-                      totalIndenizatorio > valorAcordoNum ? 'bg-red-500' : 'bg-amber-400'
+                      excedeAcordo ? 'bg-red-500' : 'bg-amber-400'
                     }`}
                     style={{ width: `${Math.min(100, valorAcordoNum > 0 ? (totalIndenizatorio / valorAcordoNum) * 100 : 0)}%` }}
                   />
                 </div>
-                {totalIndenizatorio > valorAcordoNum && (
+                {excedeAcordo && (
                   <p className="text-xs text-red-600 mt-1">⚠ Parcelas indenizatórias superam o valor do acordo.</p>
                 )}
               </div>
